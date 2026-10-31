@@ -260,7 +260,7 @@
         "temcoLearn.siteRepo": {
           "type": "string",
           "default": "",
-          "description": "The clone of the site repository (temcocontrols/temco-learn): React, Fluent UI and Markdown, built by Vite. Empty means `~/Temco/temco-learn`."
+          "description": "The clone of the site repository (temcocontrols/temco-learn): React, Fluent UI and Markdown, built by Vite. Empty means `~/temco/temco-learn`."
         }
       }
     }

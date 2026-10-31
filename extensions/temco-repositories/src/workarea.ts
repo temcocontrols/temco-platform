@@ -7,7 +7,7 @@
 //   <root>/<project>/<source>/     the clone — one branch, full history
 //   <root>/<project>/work/         what we make: drafts, notes. Files, not state.
 //
-// `<root>` is the `temcoRepositories.workspaceFolder` setting, or `~/Temco`, visible on purpose so it can
+// `<root>` is the `temcoRepositories.workspaceFolder` setting, or `~/temco`, visible on purpose so it can
 // be looked at, moved and deleted with the file manager. The catalog stays the single index of what was read; it
 // is SQLite in the extension's own storage and is never duplicated here.
 //
@@ -32,7 +32,7 @@ export function workRoot(): string {
   const configured = vscode.workspace.getConfiguration('temcoRepositories').get<string>('workspaceFolder');
   return configured !== undefined && configured.trim().length > 0
     ? expandHome(configured.trim())
-    : path.join(os.homedir(), 'Temco');
+    : path.join(os.homedir(), 'temco');
 }
 
 /** The folder one project owns: its clones and what we make from them. */

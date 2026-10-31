@@ -19,6 +19,10 @@ interface UiApi {
 	fileColumn(): vscode.ViewColumn;
 	rowSlug(target: unknown): string | undefined;
 	page(body: string, options?: { title?: string; script?: string; extraCss?: string }): string;
+	icon(name: string, cls?: string): string;
+	hero(options: { title: string; mark?: string; desc?: string; descWide?: boolean; actions?: readonly unknown[] }): string;
+	section(options: { title: string; desc?: string; actions?: string }): string;
+	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
 }
 
 const extension = vscode.extensions.getExtension<UiApi>(UI_EXTENSION_ID);
@@ -39,3 +43,15 @@ export const rowSlug = ui.rowSlug;
 
 /** A document around `body`, carrying the application's page vocabulary. */
 export const page = ui.page;
+
+/** One glyph from the page's own sprite. */
+export const icon = ui.icon;
+
+/** The title block at the top of a page: the wash, the page's only h1, one line of why, and the ways in. */
+export const hero = ui.hero;
+
+/** A section heading: the page's parts, told apart by the brand rule before the title. */
+export const section = ui.section;
+
+/** The one tinted callout a page is allowed. */
+export const callout = ui.callout;

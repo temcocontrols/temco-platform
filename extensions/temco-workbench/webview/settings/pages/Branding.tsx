@@ -3,10 +3,10 @@
 // Two of the three rows are this profile's register and one is the editor's own colour theme, so the page says which is
 // which: the mark is compiled into the build and cannot be replaced from inside it, and this page does not pretend to try.
 
-import { Dropdown, Input, Option, Radio, RadioGroup } from '@fluentui/react-components';
+import { Dropdown, Input, Option } from '@fluentui/react-components';
 import { ArrowSyncRegular, ColorRegular, FolderOpenRegular, StarRegular, TextFontRegular } from '@fluentui/react-icons';
 import { Action, Callout, Entries, Entry, Hero, ICON, Page, Section } from '../chrome';
-import { Ask, BrandingState, ThemeChoice } from '../state';
+import { Ask, BrandingState } from '../state';
 
 interface Props {
 	state: BrandingState;
@@ -62,25 +62,8 @@ export function Branding({ state, ask }: Props): React.ReactElement {
 				</Entries>
 			</Section>
 
-			<Section title="Theme" desc="A theme changes colour roles, never layout: every surface here is drawn from the five roles below.">
+			<Section title="Colour Roles" desc="A theme changes colour roles, never layout: every surface here is drawn from the five roles below. Which theme is worn is set in General.">
 				<Entries>
-					<Entry
-						glyph={<ColorRegular fontSize={15} />}
-						title="Shell theme"
-						desc="Dark ships by default; Light exists because a print shop and a projector are not dark rooms."
-						control={
-							<RadioGroup
-								layout="horizontal"
-								aria-label="Shell theme"
-								value={state.theme}
-								onChange={(_event, data) => set('theme', data.value as ThemeChoice)}
-							>
-								<Radio value="System" label="System" />
-								<Radio value="Dark" label="Dark" />
-								<Radio value="Light" label="Light" />
-							</RadioGroup>
-						}
-					/>
 					<Entry
 						glyph={<ColorRegular fontSize={15} />}
 						title="Colour roles"
@@ -152,8 +135,8 @@ export function Branding({ state, ask }: Props): React.ReactElement {
 			</Section>
 
 			<Callout
-				title="One of these is the editor's setting"
-				desc="The shell theme is the editor's colour theme, so this row and Appearance in the command palette are the same setting. The mark and the identity are this profile's register: the window's icon is compiled into the build and cannot be replaced from inside it."
+				title="The mark and the identity are this profile's register"
+				desc="The window's icon is compiled into the build and cannot be replaced from inside it. The theme is not here: it is General's row, because it is the window's look rather than the product's identity."
 			/>
 		</Page>
 	);

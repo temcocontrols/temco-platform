@@ -241,7 +241,7 @@ ${card({
 </div>
 <div class="mt-24 grid grid--3">
 ${card({ title: 'Runtime', mark: 'activity', desc: 'llama.cpp · CPU, 6 threads', body: '<div class="cell-muted" style="font-size:12px">12.4 tokens/s · 2.1 GB resident</div>' })}
-${card({ title: 'Storage', mark: 'package', desc: 'Models live in ~/Temco/models, outside every repository.', body: barRow(48, '2.4 GB', 'ok') })}
+${card({ title: 'Storage', mark: 'package', desc: 'Models live in ~/temco/models, outside every repository.', body: barRow(48, '2.4 GB', 'ok') })}
 ${card({ title: 'Privacy', mark: 'check', desc: 'No network calls once a model is loaded. Prompts stay in the platform database.', body: badge('Offline', 'ok') })}
 </div>`;
 }

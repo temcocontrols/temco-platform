@@ -227,7 +227,7 @@
         "temcoRepositories.workspaceFolder": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Where local copies of sources are downloaded, and where what we make from them is written. Empty means `~/Temco`. It is outside every repository on purpose: **nothing is ever written to a source, and nothing is ever pushed**."
+          "markdownDescription": "Where local copies of sources are downloaded, and where what we make from them is written. Empty means `~/temco`. It is outside every repository on purpose: **nothing is ever written to a source, and nothing is ever pushed**."
         }
       }
     }

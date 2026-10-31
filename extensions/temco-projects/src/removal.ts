@@ -1,7 +1,7 @@
 // Removing a project also removes what it left on this machine.
 //
 // A project is a row in the catalog, and the row is all the rest of the platform reads — which is why removing it
-// used to be the whole act. But the project also owns a folder in the working area (`~/Temco/<slug>` by default):
+// used to be the whole act. But the project also owns a folder in the working area (`~/temco/<slug>` by default):
 // the clones it fetched and what we made from them. Leaving that behind means the Library forgets a project while
 // the disk keeps it, and the next project with the same name inherits a stranger's clones.
 //

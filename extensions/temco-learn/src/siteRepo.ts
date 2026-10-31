@@ -23,7 +23,7 @@ export function siteRepo(): string {
 	if (typeof configured === 'string' && configured.trim().length > 0) {
 		return expandHome(configured.trim());
 	}
-	return path.join(os.homedir(), 'Temco', 'temco-learn');
+	return path.join(os.homedir(), 'temco', 'temco-learn');
 }
 
 /** Whether a folder is the site: its own manifest, and the content the catalog is built from. */

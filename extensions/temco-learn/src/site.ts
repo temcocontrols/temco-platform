@@ -84,7 +84,7 @@ export function workRoot(): string {
 	const configured = vscode.workspace.getConfiguration('temcoRepositories').get<string>('workspaceFolder');
 	const value = typeof configured === 'string' ? configured.trim() : '';
 	if (value === '') {
-		return path.join(os.homedir(), 'Temco');
+		return path.join(os.homedir(), 'temco');
 	}
 	if (value === '~') {
 		return os.homedir();

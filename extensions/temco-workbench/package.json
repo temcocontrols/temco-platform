@@ -139,14 +139,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "temcoWorkbench.settings.themeDark",
-        "title": "Use the Dark Theme"
-      },
-      {
-        "command": "temcoWorkbench.settings.themeLight",
-        "title": "Use the Light Theme"
-      },
-      {
         "command": "temcoWorkbench.settings.replaceIcon",
         "title": "Replace the Application Mark"
       },

@@ -1514,7 +1514,7 @@ async function draftMaterial(page: PageEntry, root: DocsRoot | undefined, curren
  *
  * It used to fall back to `workspaceFolders[0]`, and that made two mistakes at once. A project's folder is added
  * to the workspace so Explorer can show its `docs/`, so the *next* project created itself a folder **inside the
- * previous one** (`~/Temco/test1/test2`, `/test3`…). And because `temco-repositories` deletes `~/Temco/<slug>`,
+ * previous one** (`~/temco/test1/test2`, `/test3`…). And because `temco-repositories` deletes `~/temco/<slug>`,
  * those nested folders were never the path it looked at, so removing the projects left them on disk.
  *
  * One working area, one owner: the repositories module owns it and names it in `temcoRepositories.workspaceFolder`.
@@ -1523,7 +1523,7 @@ function workingFolder(): string {
   const configured = vscode.workspace.getConfiguration('temcoRepositories').get<string>('workspaceFolder');
   return typeof configured === 'string' && configured.trim().length > 0
     ? expandHome(configured.trim())
-    : path.join(os.homedir(), 'Temco');
+    : path.join(os.homedir(), 'temco');
 }
 
 /** `~` written by hand means the home folder, the same rule the working area uses. */

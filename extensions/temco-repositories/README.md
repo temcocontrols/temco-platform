@@ -28,7 +28,7 @@ src/repositoriesPage.ts the page that lists what is there and what has been read
 
 ## The one act that writes
 
-Reading a source writes to the **store**, never to a source: the pages it found, the branch it read, the state it concluded. Nothing is ever pushed, and the working area is a folder of its own (`~/Temco` by default) — outside every repository on purpose.
+Reading a source writes to the **store**, never to a source: the pages it found, the branch it read, the state it concluded. Nothing is ever pushed, and the working area is a folder of its own (`~/temco` by default) — outside every repository on purpose.
 
 The one exception is `temcoRepositories.applyToSource`, and it is not a write anybody gets by accident. It takes a file and the text a draft produced, finds the innermost clone the catalog holds around that file, **asks first** in a modal question that names the clone, the file and the fact that the result is uncommitted, then lands the change as a `git apply` of a whole-file patch. The notification that follows carries **Undo**, which applies the same patch in reverse; if the file is in no clone the command refuses, because that tree belongs to the window a person is looking at and its editor undo is the right handle. Commits, pushes and branch changes are not this module's business, and no command here does them.
 

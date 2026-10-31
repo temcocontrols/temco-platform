@@ -39,7 +39,7 @@ export interface PinnedRepository {
 }
 
 /** What the flow offers when it opens. The mock's defaults, over whatever sources the catalog has. */
-const DEFAULTS = { name: 'Test1', version: '1.0', folder: '~/Temco' };
+const DEFAULTS = { name: 'Test1', version: '1.0', folder: '~/temco' };
 
 /** What a project can build. One build produces every one of them, so they are ticks, not a choice. */
 export const TARGETS = [

@@ -43,7 +43,7 @@ const PAGES: { id: SettingsPage; viewType: string; title: string }[] = [
 /* ------------------------------------------------------------------ what each page is told */
 
 /** Every row on the General page, and which of them write an editor setting. The two counts come from here. */
-const GENERAL_ROWS = ['theme', 'start', 'breadcrumbs', 'workingFolder', 'telemetry', 'updateChannel'] as const;
+const GENERAL_ROWS = ['theme', 'start', 'breadcrumbs', 'telemetry', 'updateChannel'] as const;
 const EDITOR_SETTINGS = new Set(['theme', 'start', 'breadcrumbs', 'telemetry']);
 
 /** The startup views the manifest declares, in the order a person meets them. */
@@ -153,7 +153,6 @@ function stateFor(page: SettingsPage): unknown {
 					productName: settings.productName,
 					accent: settings.accent,
 					welcomePage: settings.welcomePage,
-					theme: themeChoice(),
 					roles: ROLES
 				}
 			};
@@ -173,8 +172,6 @@ function stateFor(page: SettingsPage): unknown {
 			return {
 				page,
 				publishing: {
-					site: settings.site,
-					path: settings.path,
 					channel: settings.channel,
 					probe: settings.publishProbe,
 					artifacts: ARTIFACTS.map((artifact) => ({
@@ -192,7 +189,6 @@ function stateFor(page: SettingsPage): unknown {
 					start: startChoice(),
 					breadcrumbs: breadcrumbsOn(),
 					telemetry: telemetryOn(),
-					workingFolder: settings.workingFolder,
 					channel: settings.updateChannel,
 					lastChanged: settings.lastChanged,
 					realSettings: GENERAL_ROWS.filter((row) => EDITOR_SETTINGS.has(row)).length,
@@ -373,21 +369,6 @@ async function receive(
 		await vscode.commands.executeCommand(message.command, ...args);
 		return;
 	}
-	if (message.type === 'pick-folder') {
-		const chosen = await vscode.window.showOpenDialog({
-			canSelectFiles: false,
-			canSelectFolders: true,
-			canSelectMany: false,
-			openLabel: 'Use This Folder',
-			title: 'Where repositories are cloned and captures are written'
-		});
-		const folder = chosen?.[0]?.fsPath;
-		if (folder !== undefined) {
-			await applySetting('workingFolder', folder);
-			pages.refresh();
-		}
-		return;
-	}
 	if (message.type === 'setting' && typeof message.key === 'string') {
 		await applySetting(message.key, message.value, message.name);
 		pages.refresh();
@@ -427,13 +408,6 @@ async function applySetting(key: string, value: unknown, name?: string): Promise
 		case 'telemetry':
 			await configuration('telemetry').update('telemetryLevel', value ? 'all' : 'off', vscode.ConfigurationTarget.Global);
 			break;
-		case 'workingFolder': {
-			const folder = String(value).trim();
-			if (folder.length > 0) {
-				set('workingFolder', folder);
-			}
-			break;
-		}
 		case 'updateChannel':
 			set('updateChannel', (value === 'Preview' ? 'Preview' : 'Stable') as UpdateChannel);
 			break;
@@ -468,20 +442,6 @@ async function applySetting(key: string, value: unknown, name?: string): Promise
 		case 'offlineOnly':
 			set('offlineOnly', Boolean(value));
 			break;
-		case 'site': {
-			const site = String(value).trim();
-			if (/^https?:\/\//.test(site)) {
-				set('site', site);
-			}
-			break;
-		}
-		case 'path': {
-			const target = String(value).trim();
-			if (target.startsWith('/')) {
-				set('path', target);
-			}
-			break;
-		}
 		case 'publishChannel':
 			set('channel', (value === 'Preview' ? 'Preview' : 'Stable') as UpdateChannel);
 			break;
@@ -510,7 +470,8 @@ export function registerSettings(context: vscode.ExtensionContext): { pages: Set
 	const disposables: vscode.Disposable[] = [
 		// ---- General
 		vscode.commands.registerCommand('temcoWorkbench.settings.reset', async () => {
-			resetKeys(['workingFolder', 'updateChannel']);
+			// The working folder is not this page's row: it is Repositories', and a reset here leaves it alone.
+			resetKeys(['updateChannel']);
 			await configuration('window').update('autoDetectColorScheme', false, vscode.ConfigurationTarget.Global);
 			await configuration('workbench').update('colorTheme', 'Default Dark Modern', vscode.ConfigurationTarget.Global);
 			await configuration('workbench').update('breadcrumbs.enabled', undefined, vscode.ConfigurationTarget.Global);
@@ -518,7 +479,7 @@ export function registerSettings(context: vscode.ExtensionContext): { pages: Set
 			await configuration('temcoWorkbench').update('start.open', undefined, vscode.ConfigurationTarget.Global);
 			changed();
 			await vscode.window.showInformationMessage(
-				'Temco Workbench: these five settings are back to their defaults — both the editor’s own and this profile’s register.'
+				'Temco Workbench: these rows are back to their defaults — both the editor’s own settings and this profile’s register.'
 			);
 		}),
 
@@ -545,16 +506,6 @@ export function registerSettings(context: vscode.ExtensionContext): { pages: Set
 		}),
 
 		// ---- Branding
-		vscode.commands.registerCommand('temcoWorkbench.settings.themeDark', async () => {
-			await applySetting('theme', 'Dark');
-			changed();
-		}),
-
-		vscode.commands.registerCommand('temcoWorkbench.settings.themeLight', async () => {
-			await applySetting('theme', 'Light');
-			changed();
-		}),
-
 		vscode.commands.registerCommand('temcoWorkbench.settings.replaceIcon', async () => {
 			await vscode.window.showInformationMessage(
 				'Temco Workbench: the application mark is compiled into the build and is drawn before any extension runs. A profile cannot replace it, and this page will not pretend to have tried.'
@@ -563,9 +514,8 @@ export function registerSettings(context: vscode.ExtensionContext): { pages: Set
 
 		vscode.commands.registerCommand('temcoWorkbench.settings.resetBranding', async () => {
 			resetKeys(['productName', 'accent', 'welcomePage']);
-			await applySetting('theme', 'Dark');
 			changed();
-			await vscode.window.showInformationMessage('Temco Workbench: the identity and the shell theme are back to what the build ships.');
+			await vscode.window.showInformationMessage('Temco Workbench: the identity is back to what the build ships.');
 		}),
 
 		// ---- Publishing

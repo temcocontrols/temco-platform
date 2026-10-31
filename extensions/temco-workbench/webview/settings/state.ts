@@ -14,7 +14,6 @@ export interface GeneralState {
 	start: string;
 	breadcrumbs: boolean;
 	telemetry: boolean;
-	workingFolder: string;
 	channel: ChannelChoice;
 	lastChanged: string;
 	realSettings: number;
@@ -42,7 +41,6 @@ export interface BrandingState {
 	productName: string;
 	accent: string;
 	welcomePage: string;
-	theme: ThemeChoice;
 	roles: { colour: string; name: string }[];
 }
 
@@ -62,8 +60,6 @@ export interface ArtifactFact {
 }
 
 export interface PublishingState {
-	site: string;
-	path: string;
 	channel: ChannelChoice;
 	artifacts: ArtifactFact[];
 	probe: string;
@@ -88,9 +84,8 @@ export const START_OPTIONS: { value: string; label: string }[] = [
 	{ value: 'none', label: 'Nothing' }
 ];
 
-/** What a page asks the host to do. Narrow on purpose: four kinds of message and no fifth. */
+/** What a page asks the host to do. Narrow on purpose: three kinds of message and no fourth. */
 export type Ask =
 	| { type: 'ready' }
 	| { type: 'setting'; key: string; value: unknown; name?: string }
-	| { type: 'pick-folder' }
 	| { type: 'command'; command: string };

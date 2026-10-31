@@ -3,8 +3,8 @@
 // Publishing never edits a page: it copies artifacts Build Center already built, so every row here is about a copy that
 // already exists and the address it would be handed to.
 
-import { Checkbox, Input, Radio, RadioGroup } from '@fluentui/react-components';
-import { ArrowSyncRegular, CloudArrowUpRegular, DocumentRegular, GlobeRegular, LinkRegular } from '@fluentui/react-icons';
+import { Checkbox, Radio, RadioGroup } from '@fluentui/react-components';
+import { ArrowSyncRegular, CloudArrowUpRegular, DocumentRegular, GlobeRegular } from '@fluentui/react-icons';
 import { Action, Callout, Entries, Entry, Facts, Foot, Hero, ICON, Page, Section } from '../chrome';
 import { Ask, ChannelChoice, PublishingState } from '../state';
 
@@ -22,7 +22,7 @@ export function Publishing({ state, ask }: Props): React.ReactElement {
 			<Hero
 				title="Publishing"
 				mark={<CloudArrowUpRegular fontSize={17} />}
-				desc="Where a release goes and what it is allowed to overwrite. Publishing never edits a page; it copies artifacts that Build Center already built."
+				desc="What a release takes with it and which channel it goes out on. Publishing never edits a page; it copies artifacts that Build Center already built, and the site's own address is Temco Learn's to set."
 				note={<span className="az-note__text">{`${String(on)} of ${String(state.artifacts.length)} artifacts · ${state.channel.toLowerCase()} channel`}</span>}
 				actions={
 					<Action
@@ -34,28 +34,12 @@ export function Publishing({ state, ask }: Props): React.ReactElement {
 				}
 			/>
 
-			<Section title="Target" desc="The origin and the path every published version is served from — 3 settings.">
+			<Section title="Channel" desc="Where a release goes out — one setting, and it decides whether a search engine may see it.">
 				<Entries>
-					<Entry
-						glyph={<GlobeRegular fontSize={15} />}
-						title="Site"
-						desc="The origin every published version is served from."
-						control={
-							<Input size="small" aria-label="Site" defaultValue={state.site} onBlur={(event) => set('site', event.target.value)} />
-						}
-					/>
-					<Entry
-						glyph={<LinkRegular fontSize={15} />}
-						title="Path"
-						desc="Where under the site a version is written. The {version} token is replaced at publish time."
-						control={
-							<Input size="small" aria-label="Path" defaultValue={state.path} onBlur={(event) => set('path', event.target.value)} />
-						}
-					/>
 					<Entry
 						glyph={<DocumentRegular fontSize={15} />}
 						title="Channel"
-						desc="Preview publishes with noindex, so a search engine never sees a draft."
+						desc="Preview publishes with noindex, so a search engine never sees a draft; Stable is the release readers get."
 						control={
 							<RadioGroup
 								layout="horizontal"
@@ -97,10 +81,9 @@ export function Publishing({ state, ask }: Props): React.ReactElement {
 			<Section title="This Target" desc={`What Test Connection last read back: ${state.probe}.`}>
 				<Facts
 					items={[
-						{ title: 'Site', value: state.site, mono: true },
-						{ title: 'Path', value: state.path, mono: true },
 						{ title: 'Channel', value: state.channel },
-						{ title: 'Artifacts', value: `${String(on)} of ${String(state.artifacts.length)}` }
+						{ title: 'Artifacts', value: `${String(on)} of ${String(state.artifacts.length)}` },
+						{ title: 'Site', value: 'Temco Learn · Site', mono: true }
 					]}
 				/>
 				<Foot>

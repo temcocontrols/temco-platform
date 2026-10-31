@@ -75,6 +75,6 @@ export const LOG_TAIL = [
 export const ISSUE_INCLUDES = [
 	{ name: 'Version and commit', detail: '1.143.0 · a5b5009', on: true },
 	{ name: 'The last 200 log lines', detail: 'main.log and renderer.log', on: true },
-	{ name: 'Workspace settings', detail: '2 overrides in ~/Temco/t3000', on: true },
+	{ name: 'Workspace settings', detail: '2 overrides in ~/temco/t3000', on: true },
 	{ name: 'A screen recording', detail: 'not available in the mock', on: false }
 ];

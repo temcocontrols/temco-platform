@@ -9,7 +9,7 @@
 
 import * as vscode from 'vscode';
 import { tokenOf } from './read';
-import { page, pageColumn } from './ui';
+import { callout, hero, icon, page, pageColumn, section } from './ui';
 import { workRoot } from './workarea';
 
 export const REPOSITORY_SETTINGS_VIEW_TYPE = 'temcoRepositories.settings';
@@ -100,77 +100,67 @@ export class RepositorySettingsPage {
   }
 }
 
+/**
+ * The page, in the house language.
+ *
+ * The vocabulary is the kit's — the brand wash with a title, a section heading with the rule before it, an entry row with its
+ * control at the right-hand end, and links at the foot of the block — because a settings page of this module and a settings
+ * page of the workbench module are the same kind of thing and should not look like two applications.
+ */
 function html(): string {
   const style = `
-    .form-wide { max-width: none; }
-    .form-wide .field > .input { width: 100%; max-width: 46em; }
-    .row-actions { display: flex; gap: .5em; align-items: center; flex-wrap: wrap; }
-    .note { color: var(--fg-muted); font-size: var(--fs-sm); margin: .2em 0 0; }
-    .footer { display: flex; gap: .6em; align-items: center; flex-wrap: wrap; margin: 1.4em 0 0;
-              padding-top: 1em; border-top: 1px solid var(--border); }
-    .footer__state { color: var(--fg-muted); font-size: var(--fs-sm); }
+    .az-section__title { position: relative; padding-left: 10px; }
+    .az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+      width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
+    .az-entry__desc { display: block; margin-top: 1px; color: var(--ink-3); font-size: 12px; line-height: 16px; }
+    .setting-control { display: flex; grid-column: 3; align-items: center; justify-content: flex-end;
+      gap: var(--sp-2); min-width: 232px; font-size: 12px; line-height: 16px; }
+    .setting-input { min-width: 220px; max-width: 260px; height: 24px; font-size: 12px; }
+    .az-block__foot { display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: center;
+      margin: var(--sp-4) 0 0; padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+    .footer-state { color: var(--fg-muted); font-size: var(--fs-sm); }
+    .footer-state:empty { display: none; }
+    @media (max-width: 640px) {
+      .az-entry { grid-template-columns: 26px minmax(0, 1fr); }
+      .az-entry .setting-control { grid-column: 1 / -1; justify-content: flex-start; margin-left: 38px; }
+    }
   `;
 
+  /** One setting, as an entry row: the glyph, the name, the sentence, and the control at the right-hand end. */
+  const row = (mark: string, title: string, desc: string, control: string): string =>
+    `<div class="az-entry"><span class="az-entry__icon">${icon(mark)}</span><div class="az-entry__main"><span class="az-entry__title">${title}</span><span class="az-entry__desc">${desc}</span></div><div class="setting-control">${control}</div></div>`;
+
   const body = `
-  <div class="page-head">
-    <div class="page-head__main">
-      <div class="eyebrow">Repositories</div>
-      <h1 class="page-head__title">Repository settings</h1>
-      <p class="page-head__desc">Which enterprise the page opens on, where a download lands, and the token that reaches
-        a private repository.</p>
-    </div>
-    <div class="page-head__actions">
-      <button type="button" class="btn btn--ghost" id="json">Open the settings JSON</button>
-    </div>
-  </div>
-
-  <div class="split__section">
-    <div class="split__section-title">Default enterprise</div>
-    <p class="split__section-note">The list the Repositories page opens on. <code>temcocontrols</code> is the one the
-      platform ships its own documentation from; any organisation or account works.</p>
-    <div class="form form-wide">
-      <div class="field">
-        <label>Organisation</label>
-        <input class="input" id="organisation" spellcheck="false" placeholder="temcocontrols">
-        <div class="field__hint">Written to <code>temcoRepositories.organisation</code>.</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="split__section">
-    <div class="split__section-title">Downloads and drafts</div>
-    <p class="split__section-note">Every local copy is cloned here, and a draft written from a repository is written
-      here. It is deliberately outside every repository: nothing is ever written to a source, and nothing is pushed.</p>
-    <div class="form form-wide">
-      <div class="field">
-        <label>Folder</label>
-        <input class="input" id="workspaceFolder" spellcheck="false" placeholder="~/Temco">
-        <div class="row-actions" style="margin-top:8px">
-          <button type="button" class="btn btn--sm" id="pick">Choose a folder…</button>
-          <span class="note" id="where"></span>
-        </div>
-        <div class="field__hint">Written to <code>temcoRepositories.workspaceFolder</code>. Empty means
-          <code>~/Temco</code>.</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="split__section">
-    <div class="split__section-title">GitHub token</div>
-    <p class="split__section-note">A private repository needs one, and so does the anonymous allowance running out
-      early. The token is kept in the editor's secret storage, never in a file.</p>
-    <div class="row-actions">
-      <button type="button" class="btn btn--sm" id="token">Set a GitHub token</button>
-      <button type="button" class="btn btn--sm btn--ghost" id="test">Test it</button>
-      <span class="note" id="token-state"></span>
-    </div>
-  </div>
-
-  <div class="footer">
-    <span class="footer__state" id="state"></span>
-    <span style="flex:1"></span>
-    <button type="button" class="btn btn--primary" id="save">Save</button>
-  </div>
+${hero({
+    title: 'Repository settings',
+    mark: 'repo',
+    desc: 'Which enterprise the page opens on, where a download lands, and the token that reaches a private repository.',
+    descWide: true
+  })}
+${section({ title: 'Default enterprise', desc: 'The list the Repositories page opens on — one setting.' })}
+<div class="az-entries">
+  ${row('repo', 'Organisation', 'temcocontrols is the one the platform ships its own documentation from; any organisation or account works.', '<input class="input setting-input" id="organisation" spellcheck="false" placeholder="temcocontrols" aria-label="Organisation">')}
+</div>
+${section({ title: 'Downloads and drafts', desc: 'Every local copy is cloned here, and a draft written from a repository is written here — one setting.' })}
+<div class="az-entries">
+  ${row('folder', 'Folder', 'Deliberately outside every repository: nothing is ever written to a source, and nothing is pushed. Empty means <code>~/temco</code>.', '<input class="input setting-input" id="workspaceFolder" spellcheck="false" placeholder="~/temco" aria-label="Working folder"><button type="button" class="az-btn az-btn--sm" id="pick">Choose</button>')}
+  ${row('info', 'Where copies land', 'Read from this profile, not from the field above — the dialog writes the setting the moment it closes.', '<span class="footer-state" id="where"></span>')}
+</div>
+${section({ title: 'GitHub token', desc: 'A private repository needs one, and so does the anonymous allowance running out early.' })}
+<div class="az-entries">
+  ${row('key', 'Token', 'Kept in the editor\'s secret storage, never in a file.', '<button type="button" class="az-btn az-btn--sm" id="token">Set a GitHub Token</button><button type="button" class="az-btn az-btn--sm" id="test">Test It</button>')}
+  ${row('account', 'Token state', 'Whether the list this profile reaches is read with a token or anonymously.', '<span class="footer-state" id="token-state"></span>')}
+</div>
+${callout({
+    title: 'Saved to your user settings, not to the workspace',
+    desc: 'These two settings are the editor\'s own (temcoRepositories.organisation and .workspaceFolder), so the page, the settings JSON and the command palette all write the same place.'
+  })}
+<div class="az-block__foot">
+  <button type="button" class="az-btn az-btn--link" id="json">${icon('code')}<span>Open the settings JSON</span></button>
+  <span style="flex:1"></span>
+  <span class="footer-state" id="state"></span>
+  <button type="button" class="az-btn az-btn--primary" id="save">Save</button>
+</div>
   `;
 
   return page(body, { title: 'Repository Settings', extraCss: style, script: CLIENT });

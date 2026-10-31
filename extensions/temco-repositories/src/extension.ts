@@ -17,8 +17,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { REPOSITORY_FILE_SCHEME, RepositoryFileProvider, languageOf, repositoryFileUri } from './fileView';
-import { registerReadCommands } from './read';
-import { tokenOf } from './read';
+import { registerReadCommands, tokenOf } from './read';
 import { applyToSource } from './apply';
 import { CodeFile, Material, RepositorySource, codeFiles, readMaterials, sourceTree } from './repository';
 import { RepositoryDetailPage } from './repositoryPage';
@@ -28,8 +27,7 @@ import { RepositorySettingsPage } from './settingsPage';
 import { OFFERED_SCRIPTS, OfferedScript } from './scripts';
 import { registerSourcesView } from './sourcesView';
 import { Catalog, selection, slugOf } from './store';
-import { registerWorkareaCommands } from './workarea';
-import { cloneFolder, hasClone } from './workarea';
+import { cloneFolder, hasClone, registerWorkareaCommands } from './workarea';
 
 /** What this module offers the rest of the platform. */
 export interface TemcoRepositoriesApi {

@@ -4,15 +4,12 @@
 // register. A control asks the host to write a key and then draws whatever state comes back, so nothing here can claim a
 // change it did not make.
 
-import { useEffect, useState } from 'react';
-import { Checkbox, Dropdown, Input, Option, Radio, RadioGroup } from '@fluentui/react-components';
+import { Checkbox, Dropdown, Option, Radio, RadioGroup } from '@fluentui/react-components';
 import {
 	ArrowDownloadRegular,
 	ArrowSyncRegular,
 	ClockRegular,
 	CodeRegular,
-	FolderOpenRegular,
-	FolderRegular,
 	InfoRegular,
 	NavigationRegular,
 	PaintBrushRegular,
@@ -30,20 +27,6 @@ interface Props {
 export function General({ state, ask }: Props): React.ReactElement {
 	const set = (key: string, value: unknown): void => ask({ type: 'setting', key, value });
 
-	// The working folder is typed as well as chosen, so the field keeps its own text until the host has written it: a value
-	// driven straight from the state would fight the person typing.
-	const [folder, setFolder] = useState(state.workingFolder);
-	useEffect(() => {
-		setFolder(state.workingFolder);
-	}, [state.workingFolder]);
-
-	const commitFolder = (): void => {
-		const trimmed = folder.trim();
-		if (trimmed !== '' && trimmed !== state.workingFolder) {
-			set('workingFolder', trimmed);
-		}
-	};
-
 	const openJson = (): void => ask({ type: 'command', command: 'workbench.action.openSettingsJson' });
 	const restore = (): void => ask({ type: 'command', command: 'temcoWorkbench.settings.reset' });
 	const startLabel = START_OPTIONS.find((option) => option.value === state.start)?.label ?? 'Welcome';
@@ -53,7 +36,7 @@ export function General({ state, ask }: Props): React.ReactElement {
 			<Hero
 				title="General"
 				mark={<SettingsRegular fontSize={17} />}
-				desc={`Settings this profile owns. ${String(state.realSettings)} of the ${String(state.totalSettings)} rows write the editor's own configuration, so a change here changes the whole window at once; the rest are kept in this profile's register.`}
+				desc={`The window itself. ${String(state.realSettings)} of its ${String(state.totalSettings)} rows write the editor's own configuration and take effect at once; the update channel is kept in this profile's register. Where work is kept is Repositories' business, and the identity is Branding's.`}
 				note={
 					<>
 						<span className="az-note__mark">
@@ -72,7 +55,7 @@ export function General({ state, ask }: Props): React.ReactElement {
 
 			<Callout
 				title={`${String(state.realSettings)} of these ${String(state.totalSettings)} rows are the editor's own settings`}
-				desc="Theme, Startup view, Breadcrumbs and Telemetry write the configuration and take effect at once. The working folder and the update channel have no setting behind them yet — they are kept in this profile's register, and the band under Where These Live says so."
+				desc="Theme, Startup view, Breadcrumbs and Telemetry write the configuration and take effect at once. The update channel has no setting behind it yet — it is kept in this profile's register, and the band under Where These Live says so."
 			/>
 
 			<Section title="Window" desc="What the window looks like, and what it opens with — 3 settings.">
@@ -133,33 +116,6 @@ export function General({ state, ask }: Props): React.ReactElement {
 				</Entries>
 			</Section>
 
-			<Section title="Files" desc="One folder holds every repository, capture and build the platform writes.">
-				<Entries>
-					<Entry
-						glyph={<FolderRegular fontSize={15} />}
-						title="Working folder"
-						desc="Where repositories are cloned and captures are written."
-						control={
-							<>
-								<Input
-									size="small"
-									aria-label="Working folder"
-									value={folder}
-									onChange={(_event, data) => setFolder(data.value)}
-									onBlur={commitFolder}
-									onKeyDown={(event) => {
-										if (event.key === 'Enter') {
-											commitFolder();
-										}
-									}}
-								/>
-								<Action label="Choose" small glyph={<FolderOpenRegular fontSize={ICON} />} onClick={() => ask({ type: 'pick-folder' })} />
-							</>
-						}
-					/>
-				</Entries>
-			</Section>
-
 			<Section title="Diagnostics and Updates" desc="What leaves this machine, and which channel a new version comes from.">
 				<Entries>
 					<Entry
@@ -201,7 +157,7 @@ export function General({ state, ask }: Props): React.ReactElement {
 				/>
 				<p className="az-note az-note--foot">
 					A row with no setting behind it is kept in this profile&rsquo;s register, which is written beside settings.json and read
-					by the platform&rsquo;s own modules.
+					by the platform&rsquo;s own modules. The working folder lives in Repositories, next to where copies are cloned from.
 				</p>
 				<Foot>
 					<Action label="Open settings.json" kind="link" glyph={<CodeRegular fontSize={ICON} />} onClick={openJson} />
