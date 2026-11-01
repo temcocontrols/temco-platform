@@ -44,17 +44,17 @@
         },
         {
           "id": "temcoLearn.browse",
-          "name": "Browse",
+          "name": "Site",
           "initialSize": 6
         },
         {
           "id": "temcoLearn.download",
-          "name": "Download",
+          "name": "Build Output",
           "initialSize": 2
         },
         {
           "id": "temcoLearn.todo",
-          "name": "Next steps",
+          "name": "To do",
           "initialSize": 3
         }
       ]
@@ -70,12 +70,6 @@
         "command": "temcoLearn.site.preview",
         "title": "Preview the Site",
         "icon": "$(open-preview)",
-        "category": "Temco Learn"
-      },
-      {
-        "command": "temcoLearn.site.dev",
-        "title": "Start the Development Server",
-        "icon": "$(code)",
         "category": "Temco Learn"
       },
       {
@@ -97,6 +91,18 @@
         "category": "Temco Learn"
       },
       {
+        "command": "temcoLearn.site.start",
+        "title": "Start the Site",
+        "icon": "$(play)",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.port",
+        "title": "Change the Site's Port",
+        "icon": "$(plug)",
+        "category": "Temco Learn"
+      },
+      {
         "command": "temcoLearn.stopArtifact",
         "title": "Stop Serving This Build Output",
         "icon": "$(debug-stop)",
@@ -106,6 +112,51 @@
         "command": "temcoLearn.site.folder",
         "title": "Open the Site Folder",
         "icon": "$(folder-opened)",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.page",
+        "title": "Open the Site Page",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.clone",
+        "title": "Clone temco-learn",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.useExisting",
+        "title": "Use an Existing Clone",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.pull",
+        "title": "Pull the Latest",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.terminal",
+        "title": "Open a Terminal in the Site",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.clearLog",
+        "title": "Clear the Site Log",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.showLog",
+        "title": "Show the Full Site Log",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.site.remote",
+        "title": "Open the Site Repository",
+        "category": "Temco Learn"
+      },
+      {
+        "command": "temcoLearn.publishNow",
+        "title": "Publish Now",
         "category": "Temco Learn"
       },
       {
@@ -128,13 +179,7 @@
       },
       {
         "command": "temcoLearn.addBuilds",
-        "title": "Add a Build to the Website",
-        "icon": "$(add)",
-        "category": "Temco Learn"
-      },
-      {
-        "command": "temcoLearn.assemble",
-        "title": "Add to Site",
+        "title": "Add a Build to the Site",
         "icon": "$(add)",
         "category": "Temco Learn"
       },
@@ -188,7 +233,7 @@
       },
       {
         "command": "temcoLearn.downloads",
-        "title": "Downloads",
+        "title": "Build Output",
         "icon": "$(cloud-download)",
         "category": "Temco Learn"
       }
@@ -261,6 +306,13 @@
           "type": "string",
           "default": "",
           "description": "The clone of the site repository (temcocontrols/temco-learn): React, Fluent UI and Markdown, built by Vite. Empty means `~/temco/temco-learn`."
+        },
+        "temcoLearn.sitePort": {
+          "type": "number",
+          "default": 1025,
+          "minimum": 1025,
+          "maximum": 65535,
+          "description": "The port the site is served on, whether it is running the built pages or Vite. Above 1024, so it binds without root on macOS and Linux. A change takes effect the next time the server starts."
         }
       }
     }
@@ -272,7 +324,9 @@
     "check-publish": "node --experimental-strip-types scripts/check-publish.mts",
     "check-overview": "node --experimental-strip-types scripts/check-overview.mts",
     "check-artifacts": "node --experimental-strip-types scripts/check-artifacts.mts",
-    "check-panel": "node --experimental-strip-types scripts/check-panel.mts"
+    "check-panel": "node --experimental-strip-types scripts/check-panel.mts",
+    "check-preview": "node --experimental-strip-types scripts/check-preview.mts",
+    "check-downloads": "node --experimental-strip-types scripts/check-downloads.mts"
   },
   "extensionDependencies": [
     "temcocontrols.temco-ui"

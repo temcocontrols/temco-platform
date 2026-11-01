@@ -1,4 +1,4 @@
-// The panel's own contract: five views, names only, and the number at the row's right edge.
+﻿// The panel's own contract: five views, names only, and the number at the row's right edge.
 //
 // A tree row has two slots — the label and the thing pushed to its right edge — and this module promised to use them the
 // way Home does: never a sentence in a row, and the one extra fact is a number, drawn as a badge. Each case below is that
@@ -15,11 +15,15 @@ interface Row {
 	label?: string;
 	description?: string;
 	collapsibleState?: number;
-	iconPath?: { id: string };
-	resourceUri?: { toString(): string };
+	iconPath?: { id: string; color?: unknown };
+	resourceUri?: { scheme?: string; path?: string; query?: string; toString(): string };
 	command?: { command: string; arguments?: unknown[] };
 	tooltip?: unknown;
 	contextValue?: string;
+}
+
+interface Decorations {
+	provideFileDecoration(uri: { scheme: string; path: string }): { badge?: string; color?: unknown } | undefined;
 }
 
 interface Views {
@@ -28,14 +32,16 @@ interface Views {
 	BrowseTree: new (reads: unknown, site: () => { state: string; mode?: string; url?: string; reason?: string }) => { getChildren(item?: Row): Promise<Row[]> };
 	DownloadTree: new (reads: unknown) => { getChildren(item?: Row): Promise<Row[]> };
 	TodoTree: new (reads: unknown) => { getChildren(item?: Row): Promise<Row[]> };
+	badgeRow(text: string, key: string, tone?: 'ok' | 'warn' | 'err' | 'info'): Row['resourceUri'];
+	badgeDecoration(uri: { scheme: string; path: string; query?: string }): { badge?: string; color?: unknown } | undefined;
 	VIEWS: Record<string, string>;
 }
 
 class TreeItem {
 	label?: string;
 	collapsibleState?: number;
-	iconPath?: { id: string };
-	resourceUri?: { toString(): string };
+	iconPath?: { id: string; color?: unknown };
+	resourceUri?: { scheme?: string; path?: string; query?: string; toString(): string };
 	command?: { command: string };
 	id?: string;
 	tooltip?: string;
@@ -60,8 +66,19 @@ const vscode = {
 	TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
 	ThemeIcon: class {
 		id: string;
+		color: unknown;
+		constructor(id: string, color?: unknown) {
+			this.id = id;
+			this.color = color;
+		}
+	},
+	ThemeColor: class {
+		id: string;
 		constructor(id: string) {
 			this.id = id;
+		}
+		toString(): string {
+			return this.id;
 		}
 	},
 	EventEmitter: class {
@@ -70,10 +87,17 @@ const vscode = {
 		dispose() { }
 	},
 	Uri: {
-		parse: (value: string) => ({
-			scheme: 'temco-learn-count',
-			toString: () => value
-		})
+		parse: (value: string) => {
+			const [withoutQuery, query] = value.split('?');
+			const colon = withoutQuery.indexOf(':');
+			return {
+				scheme: withoutQuery.slice(0, colon),
+				path: withoutQuery.slice(colon + 1),
+				query: query ?? '',
+				toString: () => value
+			};
+		},
+		from: (parts: { scheme: string; path: string }) => ({ ...parts, query: '', toString: () => `${parts.scheme}:${parts.path}` })
 	},
 	workspace: {
 		workspaceFolders: [],
@@ -140,86 +164,101 @@ test('the Overview view is one row, and it opens the page', async () => {
 });
 
 const stopped = { state: 'stopped' };
-const running = { state: 'running', mode: 'preview', url: 'http://localhost:1011/' };
+const running = { state: 'running', mode: 'built', url: 'http://localhost:1025/' };
 
-test('the Browse view answers the site first, then the projects on it', async () => {
+/** What a row says at its right-hand end: the badge the decoration supplies for that row's own URI. */
+const textOfEnd = (row: Row): string => {
+	const uri = row.resourceUri;
+	if (uri === undefined) {
+		return '';
+	}
+	return String(views.badgeDecoration({ scheme: uri.scheme as string, path: uri.path as string, query: uri.query })?.badge ?? '');
+};
+
+test('the Browse view answers the site first, then the library it serves', async () => {
 	const provider = new views.BrowseTree(newReads(snapshot), () => stopped);
 	const roots = await provider.getChildren();
 	assert.deepEqual(
-		roots.map((row) => [row.label, count(row), row.command?.command ?? '']),
+		roots.map((row) => [row.label, row.command?.command ?? '']),
 		[
-			['Site', 'stopped', ''],
-			['Projects', '2 projects', '']
+			['Preview the Site', 'temcoLearn.site.page'],
+			['Library', '']
 		]
 	);
+	assert.deepEqual(roots.map(textOfEnd), ['Stopped', '2 projects'], 'the two rows say nothing at their end');
 });
 
-test('the Site group runs the site two ways, and says what it is doing', async () => {
+test('the site is a group whose heading opens the page, with the acts a panel owns', async () => {
 	const provider = new views.BrowseTree(newReads(snapshot), () => running);
 	const [site] = await provider.getChildren();
-	assert.equal(site.iconPath?.id, 'library', 'the group lost its own glyph');
-	assert.equal(count(site), 'running · 1011', 'the group does not say the server is up');
-	const rows = await provider.getChildren(site);
 	assert.deepEqual(
-		rows.map((row) => [row.label, count(row), row.command?.command]),
+		[site.iconPath?.id, String(site.iconPath?.color), textOfEnd(site)],
+		['circle-filled', 'charts.green', 'Running'],
+		'the heading does not say the server is up, in a colour'
+	);
+	assert.equal(site.command?.command, 'temcoLearn.site.page', 'the heading does not open the page');
+	assert.deepEqual(
+		(await provider.getChildren(site)).map((row) => [row.label, row.command?.command]),
 		[
-			['Preview', 'localhost:1011', 'temcoLearn.site.preview'],
-			['Development', 'localhost:3003', 'temcoLearn.site.dev'],
-			['Open in Browser', 'localhost:1011', 'temcoLearn.site.open'],
-			['Build', '', 'temcoLearn.site.build'],
-			['Install Dependencies', '', 'temcoLearn.site.install'],
-			['Stop', 'running', 'temcoLearn.site.stop'],
-			['Source Folder', path.basename(siteClone), 'temcoLearn.site.folder']
+			['Stop', 'temcoLearn.site.stop'],
+			['Open', 'temcoLearn.site.preview'],
+			['Open in Browser', 'temcoLearn.site.open']
 		]
 	);
+
+	const [idle] = await new views.BrowseTree(newReads(snapshot), () => stopped).getChildren();
+	assert.deepEqual(
+		[idle.iconPath?.id, String(idle.iconPath?.color), textOfEnd(idle)],
+		['circle-outline', 'undefined', 'Stopped'],
+		'a stopped server does not read as stopped'
+	);
+	const [start] = await provider.getChildren(idle);
+	assert.deepEqual([start.label, start.command?.command], ['Start', 'temcoLearn.site.start'], 'a stopped server is not offered Start');
 });
 
-test('a server that failed says why, and a stopped one says stopped', async () => {
-	const [failed] = await new views.BrowseTree(newReads(snapshot), () => ({ state: 'failed', reason: 'no answer at 1011' })).getChildren();
-	assert.equal(count(failed), 'failed', 'a failure reads as anything but a failure');
-	assert.equal(failed.tooltip, 'no answer at 1011', 'the reason is not the tooltip');
+test('the dot is the state: green while it runs, spinning while it starts, red when it failed, blue with no clone', async () => {
+	const icon = async (status: { state: string; reason?: string }): Promise<[string, string]> => {
+		const [site] = await new views.BrowseTree(newReads(snapshot), () => status).getChildren();
+		return [String(site.iconPath?.id), String(site.iconPath?.color)];
+	};
+	assert.deepEqual(await icon({ state: 'starting' }), ['sync~spin', 'undefined'], 'starting is not drawn as starting');
+	assert.deepEqual(await icon({ state: 'failed', reason: 'no answer at 1025' }), ['error', 'charts.red'], 'a failure is not red');
+	assert.equal(textOfEnd((await new views.BrowseTree(newReads(snapshot), () => ({ state: 'failed', reason: 'no answer at 1025' })).getChildren())[0]), 'Failed');
 
-	const [stoppedSite] = await new views.BrowseTree(newReads(snapshot), () => stopped).getChildren();
-	assert.equal(count(stoppedSite), 'stopped', 'a stopped server is not called stopped');
-});
-
-test('a clone that is not there is one row that asks for it', async () => {
 	repoSetting = path.join(siteClone, 'gone');
 	try {
-		const provider = new views.BrowseTree(newReads(snapshot), () => stopped);
-		const [site] = await provider.getChildren();
-		assert.equal(count(site), 'not configured', 'a clone that is not there reads as anything but not configured');
-		assert.deepEqual(
-			(await provider.getChildren(site)).map((row) => [row.label, row.command?.command]),
-			[['Choose the Site Folder…', 'temcoLearn.site.choose']]
-		);
+		assert.deepEqual(await icon(stopped), ['cloud-download', 'charts.blue'], 'a missing clone is not drawn as one');
+		assert.equal(textOfEnd((await new views.BrowseTree(newReads(snapshot), () => stopped).getChildren())[0]), 'Not set up');
 	} finally {
 		repoSetting = siteClone;
 	}
 });
 
-test('Projects lists the projects, opens the first, and counts versions and pages', async () => {
+test('the library is one row per project, at its newest version', async () => {
 	const provider = new views.BrowseTree(newReads(snapshot), () => stopped);
-	const [, projects] = await provider.getChildren();
-	const [t3000, bacnet] = await provider.getChildren(projects);
-	assert.deepEqual([t3000.label, count(t3000)], ['T3000', '2 versions']);
-	assert.equal(t3000.iconPath?.id, 'book', 'a project lost its own glyph');
-	assert.deepEqual([bacnet.label, count(bacnet)], ['BACnet', '1 version']);
-	assert.equal(t3000.collapsibleState, 2, 'the first project is not open');
-	assert.equal(bacnet.collapsibleState, 1, 'every project opens at once');
-	assert.equal(t3000.command?.command, 'temcoLearn.site.preview', 'a project row does not open its page on the site');
-	assert.deepEqual(t3000.command?.arguments, [{ project: 't3000' }], 'a project row does not say which project');
-	const versions = await provider.getChildren(t3000);
-	assert.deepEqual(versions.map((row) => [row.label, count(row)]), [['13.0', '2 pages'], ['12.9', '1 page']], 'a version does not count its pages');
-	assert.ok(versions.every((row) => row.command?.command === 'temcoLearn.site.preview'));
-	assert.deepEqual(versions[0].command?.arguments, [{ project: 't3000', version: '13.0' }], 'a version row does not say which version');
+	const [, library] = await provider.getChildren();
+	const rows = await provider.getChildren(library);
+	assert.deepEqual(
+		rows.map((row) => [row.label, count(row), row.iconPath?.id, row.command?.command]),
+		[
+			['T3000 · 13.0', '', 'library', 'temcoLearn.site.preview'],
+			['BACnet · 4.2', '', 'library', 'temcoLearn.site.preview']
+		],
+		'the library is not one row per project at its newest version'
+	);
+	assert.deepEqual(rows[0].command?.arguments, [{ project: 't3000', version: '13.0' }], 'a library row does not say which page it opens');
 });
 
-test('a site with nothing on it says so instead of showing an empty group', async () => {
+test('a site with nothing on it offers to add a build instead of only saying so', async () => {
 	const provider = new views.BrowseTree(newReads({ ...snapshot, site: { projects: [] } }), () => stopped);
-	const [, projects] = await provider.getChildren();
-	assert.deepEqual((await provider.getChildren(projects)).map((row) => row.label), ['Nothing on the site yet']);
-	assert.equal(count(projects), '0 projects');
+	const [, library] = await provider.getChildren();
+	assert.deepEqual(
+		(await provider.getChildren(library)).map((row) => [row.label, row.command?.command]),
+		[['Add a Build to the Site…', 'temcoLearn.addBuilds']]
+	);
+	const empty = new views.BrowseTree(newReads({ ...snapshot, site: { projects: [] } }), () => stopped);
+	const [, emptyLibrary] = await empty.getChildren();
+	assert.equal(textOfEnd(emptyLibrary), '0 projects', 'an empty site does not say it is empty at the row end');
 });
 
 test('Download is the project name as the category, and its rows carry the size', async () => {
@@ -238,13 +277,29 @@ test('Next steps holds the acts, and Publish opens the page that explains it', a
 	const provider = new views.TodoTree(newReads(snapshot));
 	const rows = await provider.getChildren();
 	assert.deepEqual(rows.map((row) => [row.label, count(row), row.command?.command ?? '']), [
-		['Waiting to be added', '1 build', ''],
+		['Add to the site', '1 build', ''],
 		['Publish', '3 changes', 'temcoLearn.publishing'],
 		['Build a project', '', 'temcoDocs.builds']
 	]);
 	const builds = await provider.getChildren(rows[0]);
-	assert.deepEqual(builds.map((row) => [row.label, row.command?.command]), [['NetTools', 'temcoLearn.addBuild']]);
+	assert.deepEqual(
+		builds.map((row) => [row.label, count(row), row.command?.command]),
+		[['NetTools', 'not on the site', 'temcoLearn.addBuild']],
+		'a build in the queue does not say why it is there'
+	);
 	assert.match(String(rows[1].tooltip), /last publish 6f2c1ab/u);
+});
+
+test('a build newer than the version the site serves says so, instead of "not on the site"', async () => {
+	const newer = {
+		...snapshot,
+		builds: [{ ...snapshot.builds[0], id: 't3000', title: 'T3000', at: Date.now() }]
+	};
+	const rows = await new views.TodoTree(newReads(newer)).getChildren();
+	assert.deepEqual(
+		(await new views.TodoTree(newReads(newer)).getChildren(rows[0])).map((row) => [row.label, count(row)]),
+		[['T3000', 'newer than 13.0']]
+	);
 });
 
 test('Next steps says when there is nothing to do, and still offers to publish', async () => {
@@ -263,6 +318,14 @@ test('the four views are declared, and Projects and Preview do not survive as vi
 		'temcoLearn.download',
 		'temcoLearn.todo'
 	]);
+	const manifest = createRequire(import.meta.url)('../package.json') as {
+		contributes: { views: Record<string, { id: string }[]> };
+	};
+	assert.deepEqual(
+		(manifest.contributes.views.temcoLearn ?? []).map((entry) => entry.id),
+		['temcoLearn.overviewView', 'temcoLearn.browse', 'temcoLearn.download', 'temcoLearn.todo'],
+		'the manifest declares a view the code does not, or the other way round'
+	);
 });
 
 test('every menu names a view that exists and a command the manifest declares', () => {
@@ -300,9 +363,44 @@ test('a project is written by its name, without the "docs" its page title ends w
 	};
 	const browse = new views.BrowseTree(newReads(named), () => stopped);
 	const [, byProject] = await browse.getChildren();
-	assert.deepEqual((await browse.getChildren(byProject)).map((row) => row.label), ['Test1']);
+	assert.deepEqual((await browse.getChildren(byProject)).map((row) => row.label), ['Test1 · 1.0']);
 	const download = new views.DownloadTree(newReads(named));
 	assert.deepEqual((await download.getChildren()).map((row) => row.label), ['Test1']);
+});
+
+test('the right-hand end of a row is a badge, and the words travel in the URI', () => {
+	const read = (text: string, key: string, tone?: 'ok' | 'warn' | 'err' | 'info'): [string, string] => {
+		const decoration = views.badgeDecoration(views.badgeRow(text, key, tone));
+		return [String(decoration?.badge), decoration?.color === undefined ? 'none' : String(decoration.color)];
+	};
+	assert.deepEqual(read('Running', 'site', 'ok'), ['Running', 'charts.green'], 'a running server is not green at the row\u2019s end');
+	assert.deepEqual(read('Starting…', 'site', 'warn'), ['Starting…', 'charts.yellow'], 'a starting server is not amber');
+	assert.deepEqual(read('Failed', 'site', 'err'), ['Failed', 'charts.red'], 'a failure is not red');
+	assert.deepEqual(read('Stopped', 'site'), ['Stopped', 'none'], 'a stopped server is coloured anyway');
+	assert.deepEqual(read(':1025', 'port'), [':1025', 'none'], 'the port is not the port');
+	assert.deepEqual(read('2 projects', 'library'), ['2 projects', 'none'], 'the count is not the count');
+
+	assert.equal(views.badgeDecoration({ scheme: 'file', path: '/1/x' }), undefined, 'a file URI is decorated too');
+	assert.equal(views.badgeDecoration(views.badgeRow('', 'site')), undefined, 'an empty badge is drawn');
+});
+
+test('every row that says something at its end carries its own words there', async () => {
+	const textOf = (row: Row): string => {
+		const uri = row.resourceUri;
+		if (uri === undefined) {
+			return '';
+		}
+		const decoration = views.badgeDecoration({ scheme: uri.scheme as string, path: uri.path as string, query: uri.query });
+		return String(decoration?.badge ?? '');
+	};
+
+	const tree = new views.BrowseTree(newReads(snapshot), () => running);
+	const [site, library] = await tree.getChildren();
+	assert.deepEqual([textOf(site), count(site)], ['Running', ''], 'the state is not at the row\u2019s end, once');
+	assert.deepEqual([textOf(library), count(library)], ['2 projects', ''], 'the count is not at the row\u2019s end, once');
+
+	const [, , browser] = await tree.getChildren(site);
+	assert.deepEqual([textOf(browser), count(browser)], [':1025', ''], 'the port is not at the row\u2019s end, once');
 });
 
 let failed = 0;

@@ -2,7 +2,7 @@
 //
 // The site is its own repository (`temcocontrols/temco-learn`): React, Fluent UI and Markdown, built by Vite, published
 // to GitHub Pages. This module is a client of it, not its owner — so everything here is a fact about that checkout: the
-// folder it sits in, whether the folder really is the site, and the addresses the two ways of running it answer at.
+// folder it sits in, whether the folder really is the site, and the one address it answers at when it runs.
 
 import * as fs from 'fs';
 import * as os from 'os';
@@ -35,11 +35,27 @@ export function repoReady(folder = siteRepo()): boolean {
 	}
 }
 
-/** The address the built site answers at, once it is running. */
-export const PREVIEW_URL = 'http://localhost:1011/';
+/**
+ * The port the site answers at.
+ *
+ * One port, whichever way the site is being run: the built pages and the development server are two ways of serving the
+ * same site, and two addresses for it only invited the question of which one was current. Above 1024, so it binds without
+ * root on macOS and Linux as well.
+ */
+export const DEFAULT_PORT = 1025;
 
-/** The address the development server answers at, once it is running. */
-export const DEV_URL = 'http://localhost:3003/';
+/** The port, from the setting. Anything that cannot be a port is the default, so a typo never strands the server. */
+export function sitePort(): number {
+	const configured = vscode.workspace.getConfiguration('temcoLearn').get<number>('sitePort');
+	return typeof configured === 'number' && Number.isInteger(configured) && configured > 1024 && configured < 65536
+		? configured
+		: DEFAULT_PORT;
+}
+
+/** The address the site answers at, once it is running. */
+export function siteUrl(port = sitePort()): string {
+	return `http://localhost:${String(port)}/`;
+}
 
 /**
  * One page of the site, as an address.

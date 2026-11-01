@@ -43,14 +43,15 @@ function noteMessage(note: Note | undefined): NoteMessage | undefined {
 export interface Status {
 	/** `running`, `starting`, `failed` or `stopped` — also the class of the dot. */
 	tone: string;
-	/** The words: `running · 1011`. */
+	/** The words: `running · localhost:1025`. */
 	text: string;
 }
 
-/** The panel's own document: what is running, the answer strip, and the site below them. */
-function document(url: string | undefined, note: Note | undefined, nonce: string, title: string, status: Status): string {
+/** The panel's own document: what is running, the answer strip, and the site below them. Exported for the preview gate. */
+export function panelDocument(url: string | undefined, note: Note | undefined, nonce: string, title: string, status: Status): string {
 	const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 	const address = url === undefined ? '' : escape(url);
+	const addressTitle = url === undefined ? '' : `Open ${address} in your browser`;
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -59,16 +60,26 @@ function document(url: string | undefined, note: Note | undefined, nonce: string
 <style>
 * { box-sizing: border-box; }
 body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: var(--vscode-editor-background); color: var(--vscode-foreground); font: 13px var(--vscode-font-family); }
-.bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--vscode-panel-border); background: var(--vscode-panel-background); }
-.addr { flex: 1; min-width: 0; font: 12px var(--vscode-editor-font-family); color: var(--vscode-descriptionForeground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; background: var(--vscode-sideBar-background, var(--vscode-panel-background)); border-bottom: 1px solid var(--vscode-panel-border); }
 .state { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--vscode-descriptionForeground); }
 .state::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--vscode-descriptionForeground); }
 .state--running::before { background: var(--vscode-testing-iconPassed, #388a34); }
 .state--starting::before { background: var(--vscode-charts-yellow, #cca700); }
 .state--failed::before { background: var(--vscode-testing-iconFailed, #f14c4c); }
-button { padding: 4px 10px; color: var(--vscode-button-secondaryForeground, var(--vscode-foreground)); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-radius: 2px; cursor: pointer; font: inherit; }
-button:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground)); }
-button[disabled] { opacity: .5; cursor: default; }
+/* The address and the three acts are links, not buttons: the bar is a caption over the site, not a toolbar in front of it. */
+.addr { flex: 1; min-width: 0; padding: 3px 6px; border: 0; border-radius: 3px; background: none; text-align: left; color: var(--vscode-textLink-foreground); font: 12px var(--vscode-editor-font-family); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.addr:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+.addr[disabled] { color: var(--vscode-descriptionForeground); text-decoration: none; cursor: default; }
+.acts { flex: none; display: inline-flex; align-items: center; gap: 2px; }
+.lnk { padding: 3px 6px; border: 0; border-radius: 3px; background: none; color: var(--vscode-textLink-foreground); font: inherit; cursor: pointer; }
+.lnk:hover { color: var(--vscode-textLink-activeForeground); background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); text-decoration: underline; }
+.lnk[disabled] { color: var(--vscode-disabledForeground); background: none; text-decoration: none; cursor: default; }
+.lnk--stop { color: var(--vscode-descriptionForeground); }
+.lnk--stop:hover { color: var(--vscode-errorForeground); }
+.addr:focus-visible, .lnk:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.rule { width: 1px; height: 14px; margin: 0 4px; background: var(--vscode-panel-border); }
+.note__act { padding: 4px 10px; color: var(--vscode-button-secondaryForeground, var(--vscode-foreground)); background: var(--vscode-button-secondaryBackground, transparent); border: 1px solid var(--vscode-panel-border); border-radius: 2px; cursor: pointer; font: inherit; }
+.note__act:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground)); }
 .note { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--vscode-panel-border); line-height: 1.45; }
 .note[hidden] { display: none; }
 .note__mark { flex: none; width: 12px; }
@@ -88,15 +99,18 @@ iframe { flex: 1; border: 0; width: 100%; background: #fff; }
 <body>
 <div class="bar">
 	<span class="state state--${escape(status.tone)}" id="state">${escape(status.text)}</span>
-	<span class="addr" id="addr" title="${address}">${address}</span>
-	<button id="reload" type="button"${url === undefined ? ' disabled' : ''}>Reload</button>
-	<button id="open" type="button"${url === undefined ? ' disabled' : ''}>Browser</button>
-	<button id="stop" type="button">Stop</button>
+	<button class="addr" id="addr" type="button" title="${addressTitle}"${url === undefined ? ' disabled' : ''}>${address}</button>
+	<span class="acts" id="acts">
+		<button class="lnk" id="reload" type="button" title="Reload the frame"${url === undefined ? ' disabled' : ''}>Reload</button>
+		<button class="lnk" id="open" type="button" title="Open the same address in your browser"${url === undefined ? ' disabled' : ''}>Open in Browser</button>
+		<span class="rule" aria-hidden="true"></span>
+		<button class="lnk lnk--stop" id="stop" type="button" title="Stop the server: the port is free afterwards">Stop</button>
+	</span>
 </div>
 <div class="note" id="note" hidden role="status" aria-live="polite">
 	<span class="note__mark" id="note-mark"></span>
 	<span class="note__text" id="note-text"></span>
-	<button id="note-action" type="button" hidden></button>
+	<button class="note__act" id="note-action" type="button" hidden></button>
 	<button class="note__x" id="note-close" type="button" title="Dismiss" aria-label="Dismiss">✕</button>
 </div>
 ${url === undefined ? '<div class="nothing">The site is not running. Start it from the Temco Learn panel, or choose a project and version.</div>' : `<iframe id="page" title="${escape(title)}" src="${address}"></iframe>`}
@@ -155,6 +169,8 @@ ${url === undefined ? '<div class="nothing">The site is not running. Start it fr
 		frame.setAttribute('src', 'about:blank');
 		setTimeout(() => frame.setAttribute('src', src), 20);
 	});
+	// The address is a link to the same place Open in Browser goes: what a person does with a URL is click it.
+	document.getElementById('addr').addEventListener('click', () => api.postMessage({ type: 'open' }));
 	document.getElementById('open').addEventListener('click', () => api.postMessage({ type: 'open' }));
 	document.getElementById('stop').addEventListener('click', () => api.postMessage({ type: 'stop' }));
 	action.addEventListener('click', () => api.postMessage({ type: 'action' }));
@@ -270,7 +286,7 @@ export class Preview implements vscode.Disposable {
 			this.panel.reveal(vscode.ViewColumn.Active, false);
 		}
 		const nonce = Array.from({ length: 16 }, () => Math.floor(Math.random() * 36).toString(36)).join('');
-		this.panel.webview.html = document(this.url, this.strip, nonce, title, this.state);
+		this.panel.webview.html = panelDocument(this.url, this.strip, nonce, title, this.state);
 	}
 
 	private async openExternally(): Promise<void> {

@@ -4,16 +4,15 @@
 // row pretending to be a heading. A row is a name and a glyph, and what it holds is `description`: the grey words the
 // Explorer writes beside a folder, never a badge of our own. Sentences belong on the Overview page, never in a row.
 //
-// Four views: the module's page as one row, **Browse** (the site's own servers, and the projects on the site),
-// **Download** (the files a build wrote) and **Next steps** (the acts, publishing among them).
+// Four views: the module's page as one row, **Site** (the site, and the library it serves), **Download** (the files a
+// build wrote) and **Next steps** (the acts, publishing among them).
 
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { Artifact, ArtifactKind, formatSize, isDownloadable, isPreviewable, nameOf } from './artifacts';
 import { Build } from './builds';
-import { shortName, SiteProject } from './site';
-import { repoReady, siteRepo } from './siteRepo';
-import { describe, SiteStatus } from './siteRunner';
+import { shortName } from './site';
+import { repoReady, sitePort, siteRepo, siteUrl } from './siteRepo';
+import { SiteStatus } from './siteRunner';
 import { Snapshot } from './snapshot';
 import { ago } from './state';
 
@@ -43,14 +42,18 @@ const ICON: Record<ArtifactKind, string> = {
 	docx: 'file-text'
 };
 
-/** `3 versions` — how many things a row holds, in the words the Explorer writes beside a folder. */
+/** `3 versions` —how many things a row holds, in the words the Explorer writes beside a folder. */
 const plural = (count: number, one: string, many?: string): string =>
 	`${count} ${count === 1 ? one : many === undefined ? `${one}s` : many}`;
 
 /** A row: the name, its glyph, and the grey words beside it that say what it holds. */
-function row(label: string, icon: string, options: { description?: string; command?: vscode.Command; tooltip?: string } = {}): Row {
+function row(
+	label: string,
+	icon: string | vscode.ThemeIcon,
+	options: { description?: string; command?: vscode.Command; tooltip?: string } = {}
+): Row {
 	const item: Row = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
-	item.iconPath = new vscode.ThemeIcon(icon);
+	item.iconPath = typeof icon === 'string' ? new vscode.ThemeIcon(icon) : icon;
 	if (options.description !== undefined) {
 		item.description = options.description;
 	}
@@ -66,7 +69,7 @@ function row(label: string, icon: string, options: { description?: string; comma
 /** A row that holds rows: a heading, the grey words beside it, and what hangs under it. */
 function group(
 	label: string,
-	icon: string,
+	icon: string | vscode.ThemeIcon,
 	options: {
 		kids: Row[];
 		description?: string;
@@ -76,7 +79,7 @@ function group(
 	}
 ): Row {
 	const item: Row = new vscode.TreeItem(label, options.state ?? vscode.TreeItemCollapsibleState.Collapsed);
-	item.iconPath = new vscode.ThemeIcon(icon);
+	item.iconPath = typeof icon === 'string' ? new vscode.ThemeIcon(icon) : icon;
 	item.kids = options.kids;
 	if (options.description !== undefined) {
 		item.description = options.description;
@@ -150,7 +153,99 @@ export class OverviewTree implements vscode.TreeDataProvider<Row> {
 	}
 }
 
-/* ---- Browse: the site's own processes, and the projects on it ------------------------------------------------- */
+/* ---- Site: the site's own process, and the library it serves -------------------------------------------------- */
+
+/**
+ * The state of the server, drawn the way VS Code's own Ports view draws a running process: a coloured dot.
+ *
+ * The dot answers *is it up?* before a word is read —green while it serves, spinning while it comes up, red when it
+ * failed —and the state coloured is a codicon's colour, so it follows the theme rather than a hex of ours.
+ */
+function stateIcon(status: SiteStatus, ready: boolean): vscode.ThemeIcon {
+	if (!ready) {
+		return new vscode.ThemeIcon('cloud-download', new vscode.ThemeColor('charts.blue'));
+	}
+	switch (status.state) {
+		case 'running':
+			return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green'));
+		case 'starting':
+			return new vscode.ThemeIcon('sync~spin');
+		case 'failed':
+			return new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
+		default:
+			return new vscode.ThemeIcon('circle-outline');
+	}
+}
+
+/** The state in one word beside the dot: the dot says whether, the word says what. */
+function stateWord(status: SiteStatus, ready: boolean): string {
+	if (!ready) {
+		return 'Not set up';
+	}
+	switch (status.state) {
+		case 'running':
+			return 'Running';
+		case 'starting':
+			return 'Starting…';
+		case 'failed':
+			return 'Failed';
+		default:
+			return 'Stopped';
+	}
+}
+
+/** The colour of that word, and of the row: nothing for a server that is simply not running, because quiet is not a state. */
+function stateTone(status: SiteStatus, ready: boolean): 'ok' | 'warn' | 'err' | 'info' | undefined {
+	if (!ready) {
+		return 'info';
+	}
+	switch (status.state) {
+		case 'running':
+			return 'ok';
+		case 'starting':
+			return 'warn';
+		case 'failed':
+			return 'err';
+		default:
+			return undefined;
+	}
+}
+
+/** The scheme the panel's badges live in: the words are in the URI, so a decoration is a pure function of it. */
+const BADGE_SCHEME = 'temco-learn-badge';
+
+/**
+ * A row's right-hand end: the words, the row it belongs to, and a tone.
+ *
+ * A tree row can only say something at its right-hand end through a file decoration's badge, and the badge's words travel
+ * in the URI —so the row is rebuilt with new words when they change, and the provider needs no state of its own. This is
+ * the shape `temco-docs` already ships its counts in.
+ */
+export function badgeRow(text: string, key: string, tone?: 'ok' | 'warn' | 'err' | 'info'): vscode.Uri {
+	return vscode.Uri.parse(`${BADGE_SCHEME}:/${encodeURIComponent(text)}/${encodeURIComponent(key)}${tone === undefined ? '' : `?${tone}`}`);
+}
+
+/** The badge for one of those URIs: the words back out of the path, the colour out of the query. */
+export function badgeDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
+	if (uri.scheme !== BADGE_SCHEME) {
+		return undefined;
+	}
+	const text = decodeURIComponent(uri.path.split('/')[1] ?? '');
+	if (text.length === 0) {
+		return undefined;
+	}
+	const tone = uri.query === 'ok' ? 'charts.green' : uri.query === 'warn' ? 'charts.yellow' : uri.query === 'err' ? 'charts.red' : uri.query === 'info' ? 'charts.blue' : undefined;
+	return { badge: text, tooltip: text, color: tone === undefined ? undefined : new vscode.ThemeColor(tone) };
+}
+
+/** Register the provider once per window; the rows carry their own words, so nothing here has to be refreshed. */
+export function registerBadges(context: vscode.ExtensionContext): void {
+	context.subscriptions.push(
+		vscode.window.registerFileDecorationProvider({
+			provideFileDecoration: badgeDecoration
+		})
+	);
+}
 
 export class BrowseTree implements vscode.TreeDataProvider<Row> {
 	private readonly changed = new vscode.EventEmitter<void>();
@@ -171,135 +266,127 @@ export class BrowseTree implements vscode.TreeDataProvider<Row> {
 			return item.kids ?? [];
 		}
 		const data = await this.reads.data();
-		return [this.theSite(), this.projects(data)];
+		return [this.theSite(), this.library(data)];
 	}
 
-	/** The site itself: the two ways of running it, the acts that keep it up to date, and where the source is. */
+	/**
+	 * The site itself: a group whose heading is the page.
+	 *
+	 * The acts a clone needs —clone, pull, install, build, read the log —are the page's, and keeping a second copy of them
+	 * here is how a panel and a page come to disagree. What a panel is good for is the state and the two acts that go with
+	 * it, so the heading says what the server is doing as a coloured dot and one word, opens the page when it is clicked,
+	 * and holds `Start`/`Stop` and the two ways to read the site underneath.
+	 */
 	private theSite(): Row {
 		const status = this.site();
 		const ready = repoReady(siteRepo());
-		const entry = group('Site', 'library', {
-			description: ready ? describe(status) : 'not configured',
+		const running = status.state === 'running' || status.state === 'starting';
+		const entry = group('Preview the Site', stateIcon(status, ready), {
 			tooltip: ready
-				? status.reason ?? 'The site repository: run it, build it, and open the folder it lives in'
-				: siteRepo() + ' is not the clone of temcocontrols/temco-learn',
+				? `${stateWord(status, ready)} —${status.reason ?? `${siteRepo()}: clone, build, run and read the log on one page`}`
+				: `Not set up —${siteRepo()} is not the clone of temcocontrols/temco-learn. Open the page to clone it there.`,
 			state: vscode.TreeItemCollapsibleState.Expanded,
-			kids: this.rows()
+			command: { command: 'temcoLearn.site.page', title: 'Open the Site Page' },
+			kids: this.siteRows(ready, running)
 		});
 		entry.id = 'temcoLearn.browse.site';
+		entry.resourceUri = badgeRow(stateWord(status, ready), 'site', stateTone(status, ready));
 		return entry;
 	}
 
-	/** The rows of the Site group: one way of running the site here, one for editing it, then the acts. */
-	private rows(): Row[] {
-		const status = this.site();
-		const running = status.state === 'running' || status.state === 'starting';
-
-		if (!repoReady(siteRepo())) {
-			const choose = row('Choose the Site Folder…', 'folder-library', {
-				tooltip: 'Point Temco Learn at the clone of temcocontrols/temco-learn',
-				command: { command: 'temcoLearn.site.choose', title: 'Choose the Site Folder' }
+	/** What sits under the site's heading: the act that changes it, and the two ways to read it. */
+	private siteRows(ready: boolean, running: boolean): Row[] {
+		// No clone: the two ways to get one, and both of them are on the page as well.
+		if (!ready) {
+			const clone = row('Clone temco-learn…', 'cloud-download', {
+				description: 'into ~/temco/temco-learn',
+				tooltip: 'Clone temcocontrols/temco-learn, then install and build it from the Site page',
+				command: { command: 'temcoLearn.site.clone', title: 'Clone temco-learn' }
 			});
-			choose.id = 'temcoLearn.browse.site.choose';
-			return [choose];
+			clone.id = 'temcoLearn.browse.site.clone';
+			const existing = row('Use an Existing Clone…', 'folder-opened', {
+				tooltip: 'Point Temco Learn at a clone that is already on this machine',
+				command: { command: 'temcoLearn.site.useExisting', title: 'Use an Existing Clone' }
+			});
+			existing.id = 'temcoLearn.browse.site.useExisting';
+			return [clone, existing];
 		}
 
-		const preview = row('Preview', 'globe', {
-			description: 'localhost:1011',
-			tooltip: 'Run the built site and show it here — the site readers get, at the address it is served from',
-			command: { command: 'temcoLearn.site.preview', title: 'Preview the Site' }
-		});
-		preview.id = 'temcoLearn.browse.site.preview';
+		const act = running
+			? row('Stop', 'debug-stop', {
+					tooltip: 'Stop the server: the port is free afterwards',
+					command: { command: 'temcoLearn.site.stop', title: 'Stop the Site' }
+				})
+			: row('Start', 'play', {
+					tooltip: 'Start the site on its one port, the way it was last served',
+					command: { command: 'temcoLearn.site.start', title: 'Start the Site' }
+				});
+		act.id = running ? 'temcoLearn.browse.site.stop' : 'temcoLearn.browse.site.start';
 
-		const development = row('Development', 'code', {
-			description: 'localhost:3003',
-			tooltip: 'Run the development server, for editing the site repository itself',
-			command: { command: 'temcoLearn.site.dev', title: 'Start the Development Server' }
+		// Two places a site can be read, named for the difference a person actually feels: a tab in this window, or the
+		// browser they already have open. The panel says both, so nobody has to guess which one `Open` means.
+		const here = row('Open', 'preview', {
+			tooltip: 'Open the site in a tab in this window, starting the server first if it is not running',
+			command: { command: 'temcoLearn.site.preview', title: 'Open the Site Here' }
 		});
-		development.id = 'temcoLearn.browse.site.dev';
+		here.id = 'temcoLearn.browse.site.preview';
 
 		const browser = row('Open in Browser', 'link-external', {
-			description: 'localhost:1011',
-			tooltip: 'Open the running site in the browser rather than in the editor',
+			tooltip: `Open the site in your browser at ${siteUrl()}, starting the server first if it is not running`,
 			command: { command: 'temcoLearn.site.open', title: 'Open the Site in the Browser' }
 		});
 		browser.id = 'temcoLearn.browse.site.open';
+		browser.resourceUri = badgeRow(':' + String(sitePort()), 'port');
 
-		const build = row('Build', 'tools', {
-			tooltip: 'Build the site: the catalog, the search index, then the bundle Vite writes to dist/',
-			command: { command: 'temcoLearn.site.build', title: 'Build the Site' }
-		});
-		build.id = 'temcoLearn.browse.site.build';
-
-		const install = row('Install Dependencies', 'package', {
-			tooltip: 'Run npm install in the site repository, when a clone is new',
-			command: { command: 'temcoLearn.site.install', title: 'Install the Site Dependencies' }
-		});
-		install.id = 'temcoLearn.browse.site.install';
-
-		const stop = row('Stop', 'debug-stop', {
-			description: running ? 'running' : 'not running',
-			tooltip: 'Stop the server, whichever of the two is running',
-			command: { command: 'temcoLearn.site.stop', title: 'Stop the Site' }
-		});
-		stop.id = 'temcoLearn.browse.site.stop';
-
-		const folder = row('Source Folder', 'folder-opened', {
-			description: path.basename(siteRepo()),
-			tooltip: siteRepo(),
-			command: { command: 'temcoLearn.site.folder', title: 'Open the Site Folder' }
-		});
-		folder.id = 'temcoLearn.browse.site.folder';
-
-		return [preview, development, browser, build, install, stop, folder];
+		return [act, here, browser];
 	}
 
-	/** The projects on the site, with every version each one keeps. */
-	private projects(data: Snapshot): Row {
+	/**
+	 * The projects the site serves, at their newest version, one level and one row each: `T3000 · 13.0`.
+	 *
+	 * Projects used to be a group to expand before the thing you wanted, and every version was a row —a product with twenty
+	 * versions turned this into a scroll bar. The newest version is the one a person wants nine times in ten, and the site's
+	 * own list holds the rest, so the panel says what the site serves and stops there.
+	 */	/** The projects the site serves, at their newest version, one level and one row each: `T3000 · 13.0`. */
+	private library(data: Snapshot): Row {
+		const rows = this.libraryRows(data);
 		const kids =
-			data.site.projects.length === 0
-				? [row('Nothing on the site yet', 'info', { tooltip: 'Add a build, or write a page under content/ in the site repository.' })]
-				: data.site.projects.map((project, index) => this.project(project, index === 0));
-		const entry = group('Projects', 'file-directory', {
-			description: plural(data.site.projects.length, 'project'),
-			tooltip: 'The projects the site serves, with every version each one keeps',
+			rows.length === 0
+				? [
+						row('Add a Build to the Site…', 'add', {
+							description: 'nothing on the site yet',
+							tooltip: 'Pick a build and copy it onto the website, or write a page under content/ in the site repository',
+							command: { command: 'temcoLearn.addBuilds', title: 'Add a Build to the Site' }
+						})
+					]
+				: rows;
+		const entry = group('Library', 'library', {
+			tooltip: 'Every project the site serves, at its newest version —the site lists the older ones',
 			kids,
 			state: vscode.TreeItemCollapsibleState.Expanded
 		});
-		entry.id = 'temcoLearn.browse.projects';
+		entry.id = 'temcoLearn.browse.library';
+		entry.resourceUri = badgeRow(plural(rows.length, 'project'), 'library');
 		return entry;
 	}
 
-	/** One project: its versions. The first project opens, so the view never reads as shut doors. */
-	private project(project: SiteProject, open: boolean): Row {
-		const kids = project.versions.map((version) => {
-			const entry = row(version.version, 'tag', {
-				description: plural(version.pages.length, 'page'),
-				tooltip: 'Written ' + (version.builtAt === undefined ? 'at an unknown time' : ago(version.builtAt)),
+	/** One project, at its newest version, opening that page on the site. The catalog writes the versions newest first. */
+	private libraryRows(data: Snapshot): Row[] {
+		return data.site.projects.map((project) => {
+			const newest = project.versions[0];
+			const name = shortName(project.title);
+			const entry = row(newest === undefined ? name : `${name} · ${newest.version}`, 'library', {
+				tooltip: `Read ${name}${newest === undefined ? '' : ` ${newest.version}`} on the site —every earlier version is in the site's own list`,
 				command: {
 					command: 'temcoLearn.site.preview',
-					title: project.title + ' ' + version.version,
-					arguments: [{ project: project.id, version: version.version }]
+					title: name,
+					arguments: [newest === undefined ? { project: project.id } : { project: project.id, version: newest.version }]
 				}
 			});
-			entry.id = 'temcoLearn.browse.version.' + project.id + '.' + version.version;
-			entry.contextValue = 'temcoLearn.version';
+			entry.id = 'temcoLearn.browse.project.' + project.id;
+			entry.contextValue = 'temcoLearn.project';
 			return entry;
 		});
-		const entry = group(shortName(project.title), 'book', {
-			description: plural(kids.length, 'version'),
-			tooltip: 'Read ' + shortName(project.title) + ' on the site',
-			kids,
-			state: open ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
-			command: {
-				command: 'temcoLearn.site.preview',
-				title: project.title,
-				arguments: [{ project: project.id }]
-			}
-		});
-		entry.id = 'temcoLearn.browse.project.' + project.id;
-		entry.contextValue = 'temcoLearn.project';
-		return entry;
 	}
 }
 
@@ -341,8 +428,8 @@ export class DownloadTree implements vscode.TreeDataProvider<Row> {
 		return rows.length === 0
 			? [
 					row('No file to take', 'info', {
-						tooltip: 'Open the Downloads page: what a build writes, and where it lands',
-						command: { command: 'temcoLearn.downloads', title: 'Downloads' }
+						tooltip: 'Open the Build Output page: what a build writes, and where it lands',
+						command: { command: 'temcoLearn.downloads', title: 'Build Output' }
 					})
 				]
 			: rows;
@@ -385,10 +472,12 @@ export class TodoTree implements vscode.TreeDataProvider<Row> {
 		const builds = waiting(data);
 		const rows: Row[] = [];
 		if (builds.length > 0) {
-			const add = group('Waiting to be added', 'add', {
+			// The label is the act, not the state: a row that says what you would do needs no explaining.
+			const add = group('Add to the site', 'add', {
 				description: plural(builds.length, 'build'),
-				tooltip: 'Builds on disk that the website does not have yet',
-				kids: builds.map((build) => this.build(build))
+				tooltip:
+					'Builds on disk the website does not serve yet. Click one to add it — you choose its version, and nothing is published until you publish.',
+				kids: builds.map((build) => this.build(build, data))
 			});
 			add.id = 'temcoLearn.todo.builds';
 			add.contextValue = 'temcoLearn.todo.builds';
@@ -418,17 +507,28 @@ export class TodoTree implements vscode.TreeDataProvider<Row> {
 
 	/** The builds to add, under the finding that names them. */
 	private under(item: Row, data: Snapshot): Row[] {
-		return item.id === 'temcoLearn.todo.builds' ? waiting(data).map((build) => this.build(build)) : [];
+		return item.id === 'temcoLearn.todo.builds' ? waiting(data).map((build) => this.build(build, data)) : [];
 	}
 
-	/** One build waiting to be added: its name, and the act that adds it. */
-	private build(build: Build): Row {
+	/** One build the site does not serve: its name, why it is waiting, and the act that adds it. */
+	private build(build: Build, data: Snapshot): Row {
 		const entry: Row = new vscode.TreeItem(build.title, vscode.TreeItemCollapsibleState.None);
 		entry.id = `temcoLearn.todo.build.${build.folder}`;
 		entry.iconPath = new vscode.ThemeIcon('package');
+		entry.description = whyWaiting(build, data);
 		entry.contextValue = 'temcoLearn.build';
-		entry.tooltip = path.join(build.folder, 'index.html');
+		entry.tooltip = `${whyWaiting(build, data)} — ${build.folder}: clicking this copies it onto the site and asks for its version`;
 		entry.command = { command: 'temcoLearn.addBuild', title: 'Add to the Website', arguments: [build.folder] };
 		return entry;
 	}
+}
+
+/** Why a build is in the queue: the project is not on the site, or this build is newer than the version it serves. */
+function whyWaiting(build: Build, data: Snapshot): string {
+	const project = data.site.projects.find((entry) => entry.id === build.id);
+	if (project === undefined) {
+		return 'not on the site';
+	}
+	const newest = project.versions[0]?.version;
+	return newest === undefined ? 'no version on the site' : `newer than ${newest}`;
 }

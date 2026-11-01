@@ -125,7 +125,7 @@ function state(overrides: { projects?: unknown[]; builds?: unknown[]; artifacts?
 /** Nothing at all: no project, no build, no file, no repository. */
 const empty = { projects: [], builds: [], artifacts: [], pending: 0, published: { where: undefined, base: undefined, commit: undefined, at: undefined, pending: 0 } };
 
-/** The rows of one part of the page, as `title — meta — command`. */
+/** The rows the page draws, if it draws any: `title — meta — command`. */
 const rowsOf = (html: string): { title: string; meta: string; command: string }[] => {
 	const starts = [...html.matchAll(/<div class="az-entry(?: az-entry--action)?"/gu)].map((match) => match.index ?? 0);
 	return starts.map((start, index) => {
@@ -137,9 +137,6 @@ const rowsOf = (html: string): { title: string; meta: string; command: string }[
 		return { command, title, meta };
 	});
 };
-
-/** The acts of one part, which live along its bottom edge. */
-const feet = (html: string): string[] => [...html.matchAll(/<div class="az-block__foot">([\s\S]*?)<\/div>/gu)].map((match) => match[1]);
 
 test('the page opens by saying what this module is, counting from the data and naming no project in its prose', () => {
 	const html = overview.html(state());
@@ -165,97 +162,47 @@ test('the workflow is four steps, in order, each ending in a link with a glyph',
 	}
 });
 
-test('the parts come in order, and no part puts its acts at the right of its heading', () => {
+test('the page is the callout, the workflow, and where each kind of work lands', () => {
 	const html = overview.html(state());
 	const titles = [...html.matchAll(/az-section__title">([^<]*)</gu)].map((match) => match[1]);
-	assert.deepEqual(titles, ['Publishing workflow', 'Published projects', 'Build outputs', 'Publication']);
+	assert.deepEqual(titles, ['Publishing workflow', 'Where it stands'], 'the page still restates a part another page owns');
 	assert.equal(html.includes('az-section__actions'), false, 'a heading still carries acts on its right');
-	assert.equal(feet(html).length, 3, 'each part ends in its own foot');
-	for (const foot of feet(html)) {
-		assert.match(foot, /data-command="/u, 'a foot carries no act');
-	}
-	assert.ok(html.indexOf('Open the website') > html.indexOf('az-entry__title">BACnet'), 'the act is not after the rows it belongs to');
-});
-
-test('Published projects lists every project, and a row opens that project on the website', () => {
-	const html = overview.html(state());
-	assert.match(html, /2 projects are published in Documentation, 3 versions and 4 pages between them\./u);
-	const rows = rowsOf(html);
+	// Three rows, one per page that owns the fact — a count here, the detail there, never a copy of its list.
 	assert.deepEqual(
-		rows.filter((row) => row.command === 'temcoLearn.site.preview').map((row) => [row.title, row.meta]),
+		rowsOf(html).map((row) => [row.title, row.meta, row.command]),
 		[
-			['T3000', '2 versions · 3 pages · newest 13.0'],
-			['BACnet', '1 version · 1 page · newest 4.2']
+			['Documentation Site', '2 projects · 3 versions · 4 pages', 'temcoLearn.site.page'],
+			['Build Output', '3 files · 5.3 MB', 'temcoLearn.downloads'],
+			['Publishing', 'https://temcocontrols.github.io/docs/ · 3 changes waiting', 'temcoLearn.publishing']
 		]
 	);
-	assert.match(html, /data-args="\{&quot;project&quot;:&quot;t3000&quot;\}"/u);
-	assert.match(html, /A row opens that project on the website\./u);
+	assert.doesNotMatch(html, /az-facts|az-fact__|az-block__foot/u, 'the page still draws a band of another page’s facts');
 });
 
-test('Build outputs lists the projects, and a row opens that project’s build folder', () => {
-	const html = overview.html(state());
-	assert.match(html, /3 files across 1 project, each in that project's own dist folder\./u);
-	const rows = rowsOf(html).filter((row) => row.command === 'temcoLearn.revealArtifact');
-	assert.deepEqual(
-		rows.map((row) => [row.title, row.meta]),
-		[['T3000', '3 files · 5.3 MB · C:/Temco/t3000/dist']]
-	);
-	// No file is named: the folder is the unit, and the panel lists the files.
-	assert.doesNotMatch(html, /T3000\.chm|T3000-site\.zip|T3000-guide\.pdf/u);
-	assert.match(html, /data-args="&quot;C:\/Temco\/t3000\/dist&quot;"/u);
-	assert.match(html, /A row opens that project's build folder\./u);
-});
-
-test('Publication puts the address, the branch and the last publish on one line, and keeps the rest', () => {
-	const html = overview.html(state());
-	assert.match(html, /Publishing commits the clone and pushes it at main to temcocontrols\/docs/u);
-	assert.match(html, /GitHub Actions then builds the site from that commit/u);
-	assert.match(html, /Nothing is forced: every publish is one commit on top of the last/u);
-	const cells = [...html.matchAll(/<span class="az-fact__title">(?:\[[a-z-]+\])?([^<]*)<\/span><span class="az-fact__value[^"]*">([^<]*)</gu)].map((match) => [
-		match[1],
-		match[2]
-	]);
-	assert.deepEqual(cells, [
-		['Address', 'https://temcocontrols.github.io/docs/'],
-		['Branch', 'main · built and served by GitHub Actions'],
-		['Last publish', '6f2c1ab, 12 min ago']
-	]);
-	assert.equal(feet(html).at(-1)?.includes('Open in browser'), true);
-	assert.match(html, /Waiting.*3 changes waiting to be published/su);
-	assert.match(html, /The site is the clone at .* The preview runs that same clone/u);
-});
 test('the callout says what needs doing, or that nothing does, or that nothing exists yet', () => {
 	assert.match(overview.html(state()), /What needs doing/u);
 	assert.match(overview.html(state()), /1 build on disk is not on the website · 3 changes are not published\./u);
 	assert.match(overview.html(state({ builds: [], pending: 0 })), /Nothing needs doing/u);
 });
 
-test('with nothing built and nothing published, every part says so and still offers the next act', () => {
+test('with nothing built and nothing published, the callout says so, and the three lines say so too', () => {
 	const html = overview.html(state(empty));
 	assert.match(html, /Nothing has been built yet/u);
-	assert.match(html, /Nothing is published yet\. A project appears here/u);
-	assert.match(html, /No build output was found\./u);
-	assert.match(html, /there is nothing to publish at yet/u);
-	assert.match(html, /Address.*none yet/su);
-	assert.deepEqual(rowsOf(html).map((row) => row.title), [], 'an empty part still drew a row');
-	const cells = [...html.matchAll(/<span class="az-fact__title">(?:\[[a-z-]+\])?([^<]*)<\/span><span class="az-fact__value[^"]*">([^<]*)</gu)].map((match) => [
-		match[1],
-		match[2]
-	]);
-	assert.deepEqual(cells, [
-		['Address', 'none yet'],
-		['Branch', 'main'],
-		['Last publish', 'never']
-	]);
-	const last = feet(html).at(-1) ?? '';
-	assert.match(last, /Publish/u);
+	assert.match(html, /data-command="temcoDocs\.builds"/u);
+	assert.deepEqual(
+		rowsOf(html).map((row) => [row.title, row.meta]),
+		[
+			['Documentation Site', '0 projects · 0 versions · 0 pages'],
+			['Build Output', 'nothing built yet'],
+			['Publishing', 'no address yet · nothing waiting']
+		]
+	);
 });
 
 test('the brand bar is a short rule beside the title, and the cards sit four in a row', () => {
 	assert.match(overview.PAGE_STYLE, /\.az-section__title::before \{[^}]*height: 12px/u);
 	assert.match(overview.PAGE_STYLE, /\.az-section__title::before \{[^}]*width: 2px[^}]*background: var\(--az-blue/u);
 	assert.match(overview.PAGE_STYLE, /\.az-options \{ grid-template-columns: repeat\(auto-fit, minmax\(215px, 1fr\)\)/u);
-	assert.match(overview.PAGE_STYLE, /\.az-block__foot \{[^}]*border-top: 1px solid var\(--border\)/u);
 });
 
 test('the page is the application’s, not the website’s', () => {

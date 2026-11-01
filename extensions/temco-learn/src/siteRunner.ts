@@ -1,8 +1,11 @@
-// The site's own processes.
+// The site's own process.
 //
-// Two ways of running the site, and both of them belong to the repository's own scripts: `serve` shows the built site at
-// 1011, `client-dev` runs Vite at 3003. This module starts them, says what they are doing, and stops them — it never
-// builds a second way of serving anything, because a preview that is not the real site is the thing this replaces.
+// One way of running the site, and it belongs to the repository's own script: `serve` shows the built pages on one port.
+// This module starts it, says what it is doing, and stops it — it never builds a second way of serving anything, because a
+// preview that is not the real site is the thing this replaces.
+//
+// (`client-dev` — Vite with hot reload — stays the repository's for editing its own source, and a terminal still runs it.
+// It is not a choice this page offers: a page that serves what was built has one way to serve it.)
 //
 // A server that is starting is not a server that is up, so `start` waits for the address to answer before it says
 // running: a frame pointed at a port with nothing behind it is the grey page this avoids.
@@ -12,17 +15,13 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { DEV_URL, PREVIEW_URL, repoReady, siteRepo } from './siteRepo';
-
-/** The two ways of running the site. */
-export type SiteMode = 'preview' | 'development';
+import { repoReady, sitePort, siteRepo, siteUrl } from './siteRepo';
 
 /** What the server is doing. */
 export type SiteState = 'stopped' | 'starting' | 'running' | 'failed';
 
 export interface SiteStatus {
 	state: SiteState;
-	mode?: SiteMode;
 	/** The address the site answers at while it is running. */
 	url?: string;
 	/** Why it is not running, when it is not. */
@@ -32,15 +31,13 @@ export interface SiteStatus {
 /** Where a line of the server's own output goes. */
 export type Log = (line: string) => void;
 
-const SCRIPT: Record<SiteMode, string> = { preview: 'serve', development: 'client-dev' };
+/** The repository's own script, and the words a person reads for each state. */
+const SCRIPT = 'serve';
 
-const ADDRESS: Record<SiteMode, string> = { preview: PREVIEW_URL, development: DEV_URL };
-
-/** The words a person reads for each state, in the panel and in the preview's own bar. */
-export function describe(status: SiteStatus): string {
+export function describe(status: SiteStatus, port = sitePort()): string {
 	switch (status.state) {
 		case 'running':
-			return `${status.mode === 'development' ? 'developing' : 'running'} · ${String(new URL(status.url ?? PREVIEW_URL).port)}`;
+			return `running · localhost:${String(port)}`;
 		case 'starting':
 			return 'starting…';
 		case 'failed':
@@ -87,10 +84,10 @@ function end(pid: number): Promise<void> {
 }
 
 /**
- * One site server at a time.
+ * The site's server: one server, started the one way the module serves the site.
  *
- * Two servers on two ports of the same checkout is not a thing a person means to do, so starting the other way of
- * running the site ends the first.
+ * `serve` runs the repository's own script against `dist/`, on the one port. Starting it twice is not a thing a person means
+ * to do, so a start while one is running first ends it.
  */
 export class SiteRunner implements vscode.Disposable {
 	private child: ChildProcess | undefined;
@@ -100,7 +97,7 @@ export class SiteRunner implements vscode.Disposable {
 
 	readonly onDidChange = this.changed.event;
 
-	constructor(private readonly read: () => string = siteRepo) { }
+	constructor(private readonly read: () => string = siteRepo, private readonly port: () => number = sitePort) { }
 
 	get status(): SiteStatus {
 		return this.current;
@@ -110,25 +107,28 @@ export class SiteRunner implements vscode.Disposable {
 		return this.current.state === 'running' || this.current.state === 'starting';
 	}
 
+	/** The address the site answers at, whether or not it is up. */
+	url(): string {
+		return siteUrl(this.port());
+	}
+
 	/**
-	 * Start one way of running the site, and wait until it answers.
+	 * Serve the built pages, and wait until they answer.
 	 *
-	 * A preview needs something to preview, so a `dist` that was never built is built first rather than served as an
-	 * empty folder.
+	 * They need something to serve, so a `dist` that was never built is built first rather than served as an empty folder.
 	 */
-	async start(mode: SiteMode, log: Log): Promise<SiteStatus> {
-		if (this.running && this.current.mode === mode) {
-			return this.current;
-		}
+	async start(log: Log): Promise<SiteStatus> {
 		if (this.running) {
-			await this.stop();
+			return this.current;
 		}
 		const repo = this.read();
 		if (!repoReady(repo)) {
-			return this.fail(`The site repository is not at ${repo}. Choose the folder in the Overview page.`);
+			return this.fail(`The site repository is not at ${repo}. Choose the folder in the Documentation Site page.`);
 		}
-		this.set({ state: 'starting', mode });
-		if (mode === 'preview' && !fs.existsSync(path.join(repo, 'dist', 'index.html'))) {
+		const port = this.port();
+		const url = siteUrl(port);
+		this.set({ state: 'starting' });
+		if (!fs.existsSync(path.join(repo, 'dist', 'index.html'))) {
 			log('[site] dist/ was not there — building the site first.');
 			const built = await this.run('build', log);
 			if (built !== 0) {
@@ -136,7 +136,7 @@ export class SiteRunner implements vscode.Disposable {
 			}
 		}
 
-		const child = spawn('npm run ' + SCRIPT[mode], {
+		const child = spawn(`npm run ${SCRIPT} -- --port ${String(port)}`, {
 			cwd: repo,
 			shell: true,
 			windowsHide: true,
@@ -162,14 +162,13 @@ export class SiteRunner implements vscode.Disposable {
 			}
 		});
 
-		const url = ADDRESS[mode];
-		log(`[site] ${SCRIPT[mode]} is starting at ${url}`);
-		const ready = await this.wait(url, mode === 'preview' ? 90000 : 180000, () => this.child === child);
+		log(`[site] ${SCRIPT} is starting at ${url}`);
+		const ready = await this.wait(url, 90000, () => this.child === child);
 		if (!ready) {
 			await this.stop();
 			return this.fail(`The site did not answer at ${url}. The log says what the server said.`);
 		}
-		this.set({ state: 'running', mode, url });
+		this.set({ state: 'running', url });
 		return this.current;
 	}
 
@@ -177,7 +176,7 @@ export class SiteRunner implements vscode.Disposable {
 	async stop(): Promise<void> {
 		const child = this.child;
 		const pid = child?.pid;
-		const url = this.current.url ?? (this.current.mode === 'development' ? DEV_URL : PREVIEW_URL);
+		const url = this.url();
 		this.child = undefined;
 		this.leaving = true;
 		this.set({ state: 'stopped' });
@@ -190,6 +189,33 @@ export class SiteRunner implements vscode.Disposable {
 			}
 		}
 		this.leaving = false;
+	}
+
+	/** Run one git command in the clone (or beside it), streaming what it says. The exit code is the answer. */
+	async git(args: readonly string[], log: Log, cwd = this.read()): Promise<number> {
+		return new Promise((resolve) => {
+			log('[git] git ' + args.join(' '));
+			const child = spawn('git', [...args], { cwd, windowsHide: true, env: process.env });
+			child.stdout?.on('data', (chunk: Buffer) => log(String(chunk).trimEnd()));
+			child.stderr?.on('data', (chunk: Buffer) => log(String(chunk).trimEnd()));
+			child.on('error', (error: Error) => {
+				log('[git] ' + error.message);
+				resolve(-1);
+			});
+			child.on('exit', (code) => resolve(code ?? -1));
+		});
+	}
+
+	/** Fetch and fast-forward the clone. Never a merge and never a force: a clone that has diverged is a person's problem. */
+	async pull(log: Log): Promise<number> {
+		return this.git(['pull', '--ff-only'], log);
+	}
+
+	/** Clone the site beside nothing else, into the folder the module is pointed at. */
+	async clone(url: string, folder: string, log: Log): Promise<number> {
+		const parent = path.dirname(folder);
+		log('[git] git clone ' + url + ' ' + folder);
+		return this.git(['clone', url, folder], log, parent);
 	}
 
 	/** Run one of the repository's scripts to completion: `build`, `catalog`, or `install`. The exit code is the answer. */
@@ -228,7 +254,7 @@ export class SiteRunner implements vscode.Disposable {
 	}
 
 	private fail(reason: string): SiteStatus {
-		this.set({ state: 'failed', mode: this.current.mode, reason });
+		this.set({ state: 'failed', reason });
 		return this.current;
 	}
 
