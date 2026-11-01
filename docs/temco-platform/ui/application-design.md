@@ -289,11 +289,22 @@ terminal still runs it (`npm run client-dev -- --port 1025`). A page that serves
 switch that changes nothing for the reader is a question nobody asked. A change to the port takes effect the next time the
 server starts, and the log says so.
 
-**Publishing is one page and one press** (`src/publishPage.ts`, `temcoLearn.publishing`). `Publish` opens the page rather than
-acting on the click, and the page shows the clone itself — remote, branch, `HEAD`, commits unpushed, and the paths a commit
-would carry — beside the steps of a publish with the act that performs each, how much is waiting, and the lines the last
-attempt printed. The button that does it (`temcoLearn.publishNow`) writes its result where the decision was made, so there is
-no preview strip to read it in and no second page to be redirected to.
+**Publishing is one page and one press** (`src/publishPage.ts`, `temcoLearn.publishing`). The row reads `Publish the Site` —
+the count is already at its right-hand end as a badge, so the label says what is published and the number stays a number. The
+row opens the page rather than acting on the click, and the page has four sections, each with the 2 px brand bar:
+
+- **The repository** — one card, not a band of four cells. A head line of **links** (the remote opens the repo on GitHub, the
+  commit opens that commit, the branch sits plain between them), then `12 paths in this commit` and the first **five** of them,
+  each a link to the file on GitHub. The rest fold into a native `<details>` — `Show 7 more paths` — so a publish that touches
+  forty files reads as six lines and expands in place, with no script and no round-trip. The foot says whether anything is
+  unpushed and offers `Open the clone` · `Terminal`.
+- **What publishing does** — the four step cards, each ending in the act that performs it.
+- **Where it goes** — one card for the one subject: `ADDRESS` as the page's biggest **link** (it opens the live site), then
+  `Served from` (main, built by GitHub Actions, handed to Pages), `Last publish` and `Waiting` as label/value pairs.
+- **The last attempt** — the lines git printed, unchanged.
+
+The button that does it (`temcoLearn.publishNow`) writes its result where the decision was made, so there is no preview strip
+to read it in and no second page to be redirected to.
 
 **Artifacts has a page** (`src/downloadPage.ts`, `temcoLearn.downloads`), opened by the Artifacts view's empty row and by its
 title bar. Three sections, each with the 2 px brand bar the other pages carry: **What a build writes** (five cards — the
@@ -310,8 +321,8 @@ The page lists only what a build produces **as a whole**. A loose `.html` in `di
 output: listing it beside `T3000.pdf` made the page read like a folder dump, so it is filtered out — and a project whose only
 result is such a fragment is not a project here at all, which is why the count in the title block counts the cards rather than
 the files on disk. The panel's Artifacts view draws the same line: it lists what can be taken away, never a fragment.
-**Publish** closes that view — the words beside it are how many changes are waiting (`up to date` when none are), and its
-tooltip carries the last publish. Publishing is about every build at once, which is why it is the one act that sits with them.
+**Publish** closes that view as `Publish the Site` — the count sits at the row's right-hand end as a badge, and the tooltip
+carries the last publish. Publishing is about every build at once, which is why it is the one act that sits with them.
 
 Nothing is invented: a project with no `.chm` has no `.chm` row, and the panel says `Nothing built on this machine yet` only
 when nothing exists at all. Publishing state is read from git
@@ -430,7 +441,6 @@ and the files that are both), which is the divide the panel draws.
 The panel (`src/tree.ts`) is three views in the order the questions are asked — **Overview** (one row: the page above),
 **Site** (`Preview the Site` with a state dot and the port, and **Library** with one row per project at its newest version),
 and **Artifacts** (a project, and the files its build wrote — names only, with the size and the path on hover; a row saves a copy and offers *Show in
-the Folder* inline; `Publish` closes the view with the changes waiting). What a row holds is its `description`: the grey words
-beside a name, as the Explorer writes them. A row has no sentence under it: what a view is *for* is its tooltip and, written
-out, the Overview page.
+the Folder* inline; `Publish the Site` closes the view, its count at the row's right end). What a row holds is its `description`:
+the grey words beside a name, as the Explorer writes them — and where a row deliberately says nothing, the hover carries it.
 

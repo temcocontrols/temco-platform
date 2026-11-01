@@ -317,7 +317,8 @@
     "check-panel": "node --experimental-strip-types scripts/check-panel.mts",
     "check-preview": "node --experimental-strip-types scripts/check-preview.mts",
     "check-downloads": "node --experimental-strip-types scripts/check-downloads.mts",
-    "check-site": "node --experimental-strip-types scripts/check-site.mts"
+    "check-site": "node --experimental-strip-types scripts/check-site.mts",
+    "check-publish-page": "node --experimental-strip-types scripts/check-publish-page.mts"
   },
   "extensionDependencies": [
     "temcocontrols.temco-ui"

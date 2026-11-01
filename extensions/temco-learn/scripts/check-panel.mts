@@ -266,7 +266,7 @@ test('Files is the files each build wrote, with Publish closing the view', async
 	// A row is a name; what it does not say, a hover does. The count on Publish sits at the row's right-hand end.
 	assert.deepEqual(rows.map((row) => [row.label, count(row), row.command?.command ?? '']), [
 		['T3000', '', ''],
-		['Publish', '', 'temcoLearn.publishing']
+		['Publish the Site', '', 'temcoLearn.publishing']
 	]);
 	assert.match(String(rows[0].tooltip), /2 files this build wrote — C:\/Temco\/t3000/u);
 	assert.match(String(rows[1].tooltip), /3 changes waiting to be published/u);
@@ -285,7 +285,7 @@ test('Files is the files each build wrote, with Publish closing the view', async
 test('Publish carries no count when there is nothing waiting', async () => {
 	const rows = await new views.DownloadTree(newReads(cleanState)).getChildren();
 	const publish = rows.at(-1);
-	assert.deepEqual([publish?.label, count(publish ?? {}), textOfEnd(publish ?? {})], ['Publish', '', '']);
+	assert.deepEqual([publish?.label, count(publish ?? {}), textOfEnd(publish ?? {})], ['Publish the Site', '', '']);
 	assert.match(String(publish?.tooltip), /up to date/u);
 });
 
@@ -294,7 +294,7 @@ test('with nothing built, the view names where a build starts and still offers P
 	assert.deepEqual(rows.map((row) => [row.label, row.command?.command ?? '']), [
 		['Nothing built on this machine yet', 'temcoLearn.downloads'],
 		['Build a Project…', 'temcoDocs.builds'],
-		['Publish', 'temcoLearn.publishing']
+		['Publish the Site', 'temcoLearn.publishing']
 	]);
 });
 
@@ -347,7 +347,7 @@ test('a project is written by its name, without the "docs" its page title ends w
 	const [, byProject] = await browse.getChildren();
 	assert.deepEqual((await browse.getChildren(byProject)).map((row) => row.label), ['Test1 · 1.0']);
 	const download = new views.DownloadTree(newReads(named));
-	assert.deepEqual((await download.getChildren()).map((row) => row.label), ['Test1', 'Publish']);
+	assert.deepEqual((await download.getChildren()).map((row) => row.label), ['Test1', 'Publish the Site']);
 });
 
 test('the right-hand end of a row is a badge, and the words travel in the URI', () => {

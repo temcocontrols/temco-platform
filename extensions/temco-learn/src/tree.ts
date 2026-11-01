@@ -435,7 +435,7 @@ export class DownloadTree implements vscode.TreeDataProvider<Row> {
 	private publish(data: Snapshot): Row {
 		const published = data.published;
 		const last = published.commit === undefined ? 'never published' : `last publish ${published.commit}, ${ago(published.at)}`;
-		const entry = row('Publish', 'cloud-upload', {
+		const entry = row('Publish the Site', 'cloud-upload', {
 			tooltip: `${
 				published.pending === 0 ? 'up to date' : `${plural(published.pending, 'change')} waiting to be published`
 			} · ${published.base ?? 'no address yet'} · ${last}`,

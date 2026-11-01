@@ -8,9 +8,32 @@ import * as vscode from 'vscode';
 import { PublishLog } from './publishLog';
 import { siteRepo } from './siteRepo';
 import { ago } from './state';
-import { callout, cards, code, commandScript, escapeHtml, hero, icon, page, pageColumn, runCommand, section } from './ui';
+import { callout, cards, code, commandScript, escapeHtml, hero, page, pageColumn, runCommand, section } from './ui';
 
 export const PUBLISH_VIEW_TYPE = 'temcoLearn.publishing';
+
+/** The page's own rules: the brand bar a section title carries on every page of ours, one card per subject, and the fold. */
+export const PAGE_STYLE = `
+.az-section__title { position: relative; padding-left: 10px; }
+.az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
+.pub-card { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); }
+.pub-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--sp-3); }
+.pub-head__where { font-family: var(--font-mono); font-size: 12.5px; }
+.pub-head__meta { color: var(--ink-3); font-size: 11.5px; line-height: 18px; }
+.pub-rule { height: 1px; background: var(--hairline); }
+.pub-list { display: grid; }
+.pub-path { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: baseline; gap: var(--sp-2); }
+.pub-path__code { color: var(--ink-3); font-family: var(--font-mono); font-size: 11px; }
+.pub-path__file { justify-self: start; min-width: 0; font-family: var(--font-mono); font-size: 11.5px; overflow-wrap: anywhere; text-align: left; }
+.pub-more > summary { padding: 2px 0; color: var(--az-blue, #0078d4); font-size: 11.5px; cursor: pointer; }
+.pub-more > summary:hover { text-decoration: underline; }
+.pub-more > summary:focus-visible { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
+.pub-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3); color: var(--ink-3); font-size: 11.5px; }
+.pub-fact { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: baseline; gap: var(--sp-2); color: var(--ink-2); font-size: 12px; line-height: 18px; }
+.pub-fact__label { color: var(--ink-3); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; }
+.pub-address { justify-self: start; font-family: var(--font-mono); font-size: 13px; }
+.pub-address--none { color: var(--ink-3); }
+`;
 
 /** Everything the page says, gathered once so the page itself decides nothing about where it lives. */
 export interface PublishFacts {
@@ -75,11 +98,24 @@ export class PublishPage implements vscode.Disposable {
 		if (opened === undefined) {
 			return;
 		}
-		opened.webview.html = page(html(await this.read()), { title: 'Publishing', script: commandScript });
+		opened.webview.html = page(html(await this.read()), { title: 'Publishing', script: commandScript, extraCss: PAGE_STYLE });
 	}
 }
 
 const plural = (count: number, one: string): string => `${count} ${count === 1 ? one : `${one}s`}`;
+
+/** A word that runs one of this module's commands, drawn as a link. */
+function link(label: string, command: string): string {
+	return `<button type="button" class="az-btn az-btn--link" data-command="${escapeHtml(command)}"><span>${escapeHtml(label)}</span></button>`;
+}
+
+/** A word that opens GitHub — the remote, a commit, or one file in it: one command knows the repository, so all three use it. */
+function github(path: string, label: string, cls = ''): string {
+	const args = path === '' ? '' : ` data-args="${escapeHtml(JSON.stringify({ path }))}"`;
+	return `<button type="button" class="az-btn az-btn--link${cls === '' ? '' : ' ' + cls}" data-command="temcoLearn.site.remote"${args}>${escapeHtml(
+		label
+	)}</button>`;
+}
 
 /** The steps of a publish, in the order they happen. */
 function steps(pending: number): string {
@@ -118,50 +154,78 @@ function steps(pending: number): string {
 
 /** The clone's own facts, and the paths a commit would take: the answer to "what am I about to push?". */
 function repository(state: PublishFacts): string {
-	const cell = (title: string, value: string, mark: string, mono = false): string =>
-		`<div class="az-fact"><span class="az-fact__title">${icon(mark, 'icon--sm')}${escapeHtml(title)}</span><span class="az-fact__value${
-			mono ? ' az-fact__value--mono' : ''
-		}">${escapeHtml(value)}</span></div>`;
+	const where = state.where ?? 'temcocontrols/temco-learn';
+	const committed = state.commit === undefined ? undefined : github('commit/' + state.commit, state.commit);
 	const distance = state.ahead === 0 ? 'nothing unpushed' : `${plural(state.ahead, 'commit')} unpushed`;
-	const band = `<div class="az-facts">${cell('Remote', state.where ?? 'no GitHub origin', 'repo', true)}${cell(
-		'Branch',
-		state.branch ?? 'main',
-		'branch'
-	)}${cell('HEAD', state.commit ?? 'nothing committed', 'clock', true)}${cell('Unpushed', distance, 'upload')}</div>`;
+	const head = `<div class="pub-head">${github('', where, 'pub-head__where')}<span class="pub-head__meta">${escapeHtml(
+		state.branch ?? 'main'
+	)}</span>${committed === undefined ? '' : committed}<span class="pub-head__meta">${
+		state.at === undefined ? '' : '· ' + escapeHtml(ago(state.at))
+	}</span></div>`;
+
 	if (state.changes.length === 0) {
-		return `${band}<p class="az-block__note">The clone matches the last publish, so a publish commits nothing and pushes the same commit.</p>`;
+		return `<div class="pub-card">${head}<div class="pub-rule"></div><p class="az-block__note">The clone matches the last publish, so a publish commits nothing and pushes the same commit.</p><div class="pub-foot"><span>${escapeHtml(
+			distance
+		)}</span>${link('Open the clone', 'temcoLearn.site.folder')}</div></div>`;
 	}
-	const shown = state.changes.slice(0, 8);
-	const more = state.changes.length - shown.length;
-	const rows = shown
-		.map(
-			(change) =>
-				`<div class="az-entry"><span class="az-entry__icon">${icon('document')}</span><div class="az-entry__main"><span class="az-entry__title">${escapeHtml(
-					change.path
-				)}</span><span class="az-entry__meta">${escapeHtml(change.code)}</span></div></div>`
-		)
-		.join('');
+
+	// Five paths in the open, the rest one click away: a publish that touches forty files must not fill the page, and the
+	// fold is a native `<details>`, so it opens in place without a script or a round-trip.
+	const shown = state.changes.slice(0, 5);
+	const rest = state.changes.slice(5);
+	const row = (change: { code: string; path: string }): string =>
+		`<div class="pub-path"><span class="pub-path__code">${escapeHtml(change.code)}</span>${github(
+			'blob/' + (state.branch ?? 'main') + '/' + change.path,
+			change.path,
+			'pub-path__file'
+		)}</div>`;
 	return [
-		band,
-		`<div class="az-entries">${rows}</div>`,
-		more > 0 ? `<p class="az-block__note">${plural(more, 'more path')} in this publish.</p>` : ''
+		`<div class="pub-card">`,
+		head,
+		`<div class="pub-rule"></div>`,
+		`<span class="pub-head__meta">${escapeHtml(plural(state.changes.length, 'path'))} in this commit</span>`,
+		`<div class="pub-list">${shown.map(row).join('')}</div>`,
+		rest.length === 0
+			? ''
+			: `<details class="pub-more"><summary>Show ${escapeHtml(plural(rest.length, 'more path'))}</summary><div class="pub-list">${rest
+					.map(row)
+					.join('')}</div></details>`,
+		`<div class="pub-rule"></div>`,
+		`<div class="pub-foot"><span>${escapeHtml(distance)}</span>${link('Open the clone', 'temcoLearn.site.folder')}${link(
+			'Terminal',
+			'temcoLearn.site.terminal'
+		)}</div>`,
+		`</div>`
 	]
 		.filter((part) => part !== '')
 		.join('\n');
 }
 
-/** The address, the branch and the last publish, on one line: the three facts a person checks before publishing. */
-function facts(state: PublishFacts): string {
-	const cell = (title: string, value: string, mark: string, mono = false): string =>
-		`<div class="az-fact"><span class="az-fact__title">${icon(mark, 'icon--sm')}${escapeHtml(title)}</span><span class="az-fact__value${
-			mono ? ' az-fact__value--mono' : ''
-		}">${escapeHtml(value)}</span></div>`;
+/**
+ * Where the site is published: the address is the fact, so it is the link.
+ *
+ * A card rather than a band of four cells: the address needs the room, and the three facts under it are read in one pass —
+ * served from where, published when, and how much is waiting.
+ */
+function whereItGoes(state: PublishFacts): string {
 	const at = state.commit === undefined ? 'never' : `${state.commit}, ${ago(state.at)}`;
-	return `<div class="az-facts">${cell('Address', state.base ?? 'none yet', 'globe', true)}${cell(
-		'Branch',
-		'main · served from / by GitHub Pages',
-		'repo'
-	)}${cell('Last publish', at, 'clock')}${cell('Waiting', state.pending === 0 ? 'nothing' : plural(state.pending, 'change'), 'sync')}</div>`;
+	const address =
+		state.base === undefined
+			? '<span class="pub-address pub-address--none">none yet</span>'
+			: `<button type="button" class="az-btn az-btn--link pub-address" data-command="temcoLearn.openPublished">${escapeHtml(
+					state.base
+				)}</button>`;
+	const cell = (label: string, value: string): string =>
+		`<div class="pub-fact"><span class="pub-fact__label">${escapeHtml(label)}</span><span>${value}</span></div>`;
+	return [
+		`<div class="pub-card">`,
+		`<span class="pub-fact__label">Address</span>`,
+		address,
+		cell('Served from', 'main · built by GitHub Actions, handed to Pages'),
+		cell('Last publish', at),
+		cell('Waiting', state.pending === 0 ? 'nothing — the clone matches the last publish' : plural(state.pending, 'change')),
+		`</div>`
+	].join('\n');
 }
 
 /** The last publish's own words: the lines git printed, numbered rather than summarised. */
@@ -223,8 +287,8 @@ export function html(state: PublishFacts): string {
 		repository(state),
 		section({ title: 'What publishing does', desc: 'The steps, in order. The first two happen in Temco Docs and in the panel.' }),
 		steps(state.pending),
-		section({ title: 'Where it goes' }),
-		facts(state),
+		section({ title: 'Where it goes', desc: 'GitHub Pages serves the main branch at the same address every time; GitHub Actions builds it.' }),
+		whereItGoes(state),
 		section({ title: 'The last attempt' }),
 		log(state),
 		`<p class="az-block__note">The site is the clone at ${escapeHtml(siteRepo())}. The preview runs that same clone, so what reads there is what gets published.</p>`
