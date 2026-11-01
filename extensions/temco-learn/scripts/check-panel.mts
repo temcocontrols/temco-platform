@@ -31,7 +31,6 @@ interface Views {
 	OverviewTree: new () => { getChildren(item?: Row): Promise<Row[]> };
 	BrowseTree: new (reads: unknown, site: () => { state: string; mode?: string; url?: string; reason?: string }) => { getChildren(item?: Row): Promise<Row[]> };
 	DownloadTree: new (reads: unknown) => { getChildren(item?: Row): Promise<Row[]> };
-	TodoTree: new (reads: unknown) => { getChildren(item?: Row): Promise<Row[]> };
 	badgeRow(text: string, key: string, tone?: 'ok' | 'warn' | 'err' | 'info'): Row['resourceUri'];
 	badgeDecoration(uri: { scheme: string; path: string; query?: string }): { badge?: string; color?: unknown } | undefined;
 	VIEWS: Record<string, string>;
@@ -261,69 +260,52 @@ test('a site with nothing on it offers to add a build instead of only saying so'
 	assert.equal(textOfEnd(emptyLibrary), '0 projects', 'an empty site does not say it is empty at the row end');
 });
 
-test('Download is the project name as the category, and its rows carry the size', async () => {
+test('Files is the files each build wrote, with Publish closing the view', async () => {
 	const provider = new views.DownloadTree(newReads(snapshot));
-	const [project] = await provider.getChildren();
-	assert.deepEqual([project.label, count(project)], ['T3000', '2 files']);
-	const artifacts = await provider.getChildren(project);
-	assert.deepEqual(artifacts.map((row) => [row.label, count(row)]), [['T3000.chm', '1.1 MB'], ['T3000-site.zip', '4.2 MB']]);
+	const rows = await provider.getChildren();
+	// A row is a name; what it does not say, a hover does. The count on Publish sits at the row's right-hand end.
+	assert.deepEqual(rows.map((row) => [row.label, count(row), row.command?.command ?? '']), [
+		['T3000', '', ''],
+		['Publish', '', 'temcoLearn.publishing']
+	]);
+	assert.match(String(rows[0].tooltip), /2 files this build wrote — C:\/Temco\/t3000/u);
+	assert.match(String(rows[1].tooltip), /3 changes waiting to be published/u);
+	assert.equal(
+		textOfEnd(rows[1]),
+		'3',
+		'the count is not at the row\u2019s right-hand end'
+	);
+	const artifacts = await provider.getChildren(rows[0]);
+	assert.deepEqual(artifacts.map((row) => [row.label, count(row)]), [['T3000.chm', ''], ['T3000-site.zip', '']]);
+	assert.match(String(artifacts[0].tooltip), /^1\.1 MB · C:\/Temco\/HelpDocs\/T3000\.chm$/u, 'the size is not on hover');
 	assert.ok(artifacts.every((row) => row.command?.command === 'temcoLearn.downloadArtifact'));
 	assert.deepEqual(artifacts.map((row) => row.contextValue), ['temcoLearn.artifact.look', 'temcoLearn.artifact']);
-	const none = await new views.DownloadTree(newReads({ ...snapshot, artifacts: [] })).getChildren();
-	assert.deepEqual(none.map((row) => [row.label, row.command?.command]), [['No file to take', 'temcoLearn.downloads']], 'the empty Download row does not open its page');
 });
 
-test('Next steps holds the acts, and Publish opens the page that explains it', async () => {
-	const provider = new views.TodoTree(newReads(snapshot));
-	const rows = await provider.getChildren();
-	assert.deepEqual(rows.map((row) => [row.label, count(row), row.command?.command ?? '']), [
-		['Add to the site', '1 build', ''],
-		['Publish', '3 changes', 'temcoLearn.publishing'],
-		['Build a project', '', 'temcoDocs.builds']
-	]);
-	const builds = await provider.getChildren(rows[0]);
-	assert.deepEqual(
-		builds.map((row) => [row.label, count(row), row.command?.command]),
-		[['NetTools', 'not on the site', 'temcoLearn.addBuild']],
-		'a build in the queue does not say why it is there'
-	);
-	assert.match(String(rows[1].tooltip), /last publish 6f2c1ab/u);
+test('Publish carries no count when there is nothing waiting', async () => {
+	const rows = await new views.DownloadTree(newReads(cleanState)).getChildren();
+	const publish = rows.at(-1);
+	assert.deepEqual([publish?.label, count(publish ?? {}), textOfEnd(publish ?? {})], ['Publish', '', '']);
+	assert.match(String(publish?.tooltip), /up to date/u);
 });
 
-test('a build newer than the version the site serves says so, instead of "not on the site"', async () => {
-	const newer = {
-		...snapshot,
-		builds: [{ ...snapshot.builds[0], id: 't3000', title: 'T3000', at: Date.now() }]
-	};
-	const rows = await new views.TodoTree(newReads(newer)).getChildren();
-	assert.deepEqual(
-		(await new views.TodoTree(newReads(newer)).getChildren(rows[0])).map((row) => [row.label, count(row)]),
-		[['T3000', 'newer than 13.0']]
-	);
-});
-
-test('Next steps says when there is nothing to do, and still offers to publish', async () => {
-	const rows = await new views.TodoTree(newReads(cleanState)).getChildren();
-	assert.deepEqual(rows.map((row) => [row.label, count(row)]), [
-		['Nothing to do', ''],
-		['Publish', 'up to date'],
-		['Build a project', '']
+test('with nothing built, the view names where a build starts and still offers Publish', async () => {
+	const rows = await new views.DownloadTree(newReads({ ...snapshot, artifacts: [] })).getChildren();
+	assert.deepEqual(rows.map((row) => [row.label, row.command?.command ?? '']), [
+		['Nothing built on this machine yet', 'temcoLearn.downloads'],
+		['Build a Project…', 'temcoDocs.builds'],
+		['Publish', 'temcoLearn.publishing']
 	]);
 });
 
-test('the four views are declared, and Projects and Preview do not survive as views', () => {
-	assert.deepEqual(Object.values(views.VIEWS), [
-		'temcoLearn.overviewView',
-		'temcoLearn.browse',
-		'temcoLearn.download',
-		'temcoLearn.todo'
-	]);
+test('three views are declared, each one subject, and none of them is a to-do list', () => {
+	assert.deepEqual(Object.values(views.VIEWS), ['temcoLearn.overviewView', 'temcoLearn.browse', 'temcoLearn.download']);
 	const manifest = createRequire(import.meta.url)('../package.json') as {
 		contributes: { views: Record<string, { id: string }[]> };
 	};
 	assert.deepEqual(
 		(manifest.contributes.views.temcoLearn ?? []).map((entry) => entry.id),
-		['temcoLearn.overviewView', 'temcoLearn.browse', 'temcoLearn.download', 'temcoLearn.todo'],
+		['temcoLearn.overviewView', 'temcoLearn.browse', 'temcoLearn.download'],
 		'the manifest declares a view the code does not, or the other way round'
 	);
 });
@@ -365,7 +347,7 @@ test('a project is written by its name, without the "docs" its page title ends w
 	const [, byProject] = await browse.getChildren();
 	assert.deepEqual((await browse.getChildren(byProject)).map((row) => row.label), ['Test1 · 1.0']);
 	const download = new views.DownloadTree(newReads(named));
-	assert.deepEqual((await download.getChildren()).map((row) => row.label), ['Test1']);
+	assert.deepEqual((await download.getChildren()).map((row) => row.label), ['Test1', 'Publish']);
 });
 
 test('the right-hand end of a row is a badge, and the words travel in the URI', () => {

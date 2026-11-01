@@ -49,13 +49,8 @@
         },
         {
           "id": "temcoLearn.download",
-          "name": "Build Output",
-          "initialSize": 2
-        },
-        {
-          "id": "temcoLearn.todo",
-          "name": "To do",
-          "initialSize": 3
+          "name": "Artifacts",
+          "initialSize": 4
         }
       ]
     },
@@ -233,7 +228,7 @@
       },
       {
         "command": "temcoLearn.downloads",
-        "title": "Build Output",
+        "title": "Artifacts",
         "icon": "$(cloud-download)",
         "category": "Temco Learn"
       }
@@ -258,11 +253,6 @@
         {
           "command": "temcoLearn.refresh",
           "when": "view == temcoLearn.download",
-          "group": "navigation@9"
-        },
-        {
-          "command": "temcoLearn.refresh",
-          "when": "view == temcoLearn.todo",
           "group": "navigation@9"
         },
         {
@@ -326,7 +316,8 @@
     "check-artifacts": "node --experimental-strip-types scripts/check-artifacts.mts",
     "check-panel": "node --experimental-strip-types scripts/check-panel.mts",
     "check-preview": "node --experimental-strip-types scripts/check-preview.mts",
-    "check-downloads": "node --experimental-strip-types scripts/check-downloads.mts"
+    "check-downloads": "node --experimental-strip-types scripts/check-downloads.mts",
+    "check-site": "node --experimental-strip-types scripts/check-site.mts"
   },
   "extensionDependencies": [
     "temcocontrols.temco-ui"

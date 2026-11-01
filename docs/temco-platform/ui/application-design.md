@@ -162,7 +162,7 @@ way closing a browser tab does not stop a website; `Stop` does. `Add This Build 
 version box, never in a notification. `Publish` commits the clone and pushes it at `main`; it refuses a folder that is not a
 clone instead of initialising one, because an empty history pushed at a real site is worse than a refusal.
 
-The panel is **four views in the container**, the way Home is three — VS Code draws the header, the separator and the
+The panel is **three views in the container**, the way Home is three — VS Code draws the header, the separator and the
 collapse state, so the grouping is the one a person already knows from the Explorer, and each section carries its own
 title-bar actions. A row is a name and a glyph, and what it holds is `TreeItem.description` — the grey words the Explorer
 writes beside a folder (`3 versions`), never a badge of our own. Sentences live on the Overview page and in tooltips, never in
@@ -172,19 +172,27 @@ a row.
 |---|---|---|
 | **Overview** | one row, `Temco Learn`, which opens the page | — |
 | **Site** | **Preview the Site** (a state dot and one word; its heading opens the Site page; `Stop`/`Start`, `Open` and `Open in Browser :1025` under it), then **Library** (one row per project, at its newest version) | the state: `Running`, `Starting…`, `Stopped`, `Failed`, `Not set up`; projects served |
-| **Build Output** | a project, then the files its build wrote (this view starts small: `initialSize: 2`) | files per project, then their size |
-| **To do** | **Add to the site** (each build under it, with why it waits), `Publish`, Build a project | builds waiting, changes waiting |
+| **Artifacts** | one row per project built on this machine, opening onto the files its build wrote; `Publish` closes the view (`initialSize: 4`) | **nothing** — the name only, and a hover carries the count and the paths; `Publish` puts its count at the row’s right end |
 
-**The two views are one subject each, and their names say which.** *Build Output* is **content**: the files the builds on this
-machine wrote — nothing else, which is why it holds no state and no act. *To do* is **work**: the first row is the act
-`Add to the site` (a group, whose children are the builds the website does not serve yet), then `Publish`, then the one row
-that points at where building happens. Neither view repeats the other: a build appears in *To do* as a task and its files
-appear in *Build Output* as content, and those are two different facts about it.
+**Three views, one subject each.** *Artifacts* is **content**: the files the builds on this machine wrote, plus the single
+act that is about all of them at once (`Publish`). Nothing here is a task list and nothing here is a state — a view holds
+things, and the things are files.
 
-`Add to the site` is named for the **act** rather than the state, which is the fix for the name that never worked: `Waiting to
-be added` and `Not on the site yet` described a condition and left the reader to work out what to do about it. A row in a
-to-do view answers *what will happen if I click*, and its children say *why this one is here* (`not on the site`,
-`newer than 13.0`).
+**Adding a build is not in the panel at all**, because it is a *site* operation: it copies a build into the site repository
+and asks for its version, exactly like cloning, building and publishing write into that repository. So it lives on the **Site
+page**, as a section of its own — `Builds not on the site`, one row per build with the reason it waits (`not on the site`,
+`newer than 13.0`) and one `Add…` button — and every command that means "add a build" (`temcoLearn.addBuilds`, from the
+Overview callout, its workflow card, the Publishing page's step, the `+` on the Site view) opens that page **with the section
+first and marked**. That is the whole answer to "what is that row for": it is the step that turns a folder on disk into a
+version on the website, it needs the version typed, and it belongs beside the other steps on the site.
+
+`Build a project` is not a row either: building happens in Temco Docs, so it appears **only when nothing has been built at
+all** — `Nothing built on this machine yet` / `Build a Project…` — where it is the honest next step. The ellipsis is VS Code's
+signal that a click leaves this window, and the tooltip says where it goes.
+
+A label is **navigation** or an **instruction**, and the two are not the same sentence: a button on a page that goes to the
+other module reads `Open Temco Docs` (the way VS Code says `Open Settings`), while the last row of an empty view reads
+`Build a Project…`, because a view with one line in it has to answer *what do I do*, not *what opens*.
 
 **Site** answers two questions, in that order. **Preview the Site** is a group whose *heading* is the page and whose
 *children* are the only acts a panel is good for: `Stop` while it is running and `Start` while it is not (one row, the
@@ -219,7 +227,7 @@ and a *category* is the catalog's `section` field, a different axis. The row wri
 version is already in the label, and a grey `2 pages` beside four rows was the noisiest thing in the view. A site with
 nothing on it does not report emptiness: its one row is `Add a Build to the Site…`, which runs the same picker the view's
 title bar does. There is deliberately no group of `dist` builds: the build as written is a file on disk, which is the
-Build output page's business, not something to read here.
+Artifacts page's business, not something to read here.
 
 **The Site page is where the clone is managed** (`src/sitePage.ts`, `temcoLearn.site.page`), and it is what `Preview the website`
 opens when there is no clone — a folder dialog was never an explanation. It reads the folder every time it is drawn
@@ -287,7 +295,7 @@ would carry — beside the steps of a publish with the act that performs each, h
 attempt printed. The button that does it (`temcoLearn.publishNow`) writes its result where the decision was made, so there is
 no preview strip to read it in and no second page to be redirected to.
 
-**Build output has a page** (`src/downloadPage.ts`, `temcoLearn.downloads`), opened by the Build output view's empty row and by its
+**Artifacts has a page** (`src/downloadPage.ts`, `temcoLearn.downloads`), opened by the Artifacts view's empty row and by its
 title bar. Three sections, each with the 2 px brand bar the other pages carry: **What a build writes** (five cards — the
 website, the help file, the pdf, the archive, the Word document), **Where it lands** (one card, because there is one working
 area: the folder written out as the card's own **link**, and two lines spelling out `<project>/dist` and the `HelpDocs`
@@ -301,13 +309,12 @@ instead and gets out of the way.
 The page lists only what a build produces **as a whole**. A loose `.html` in `dist` is a page someone was iterating on, not an
 output: listing it beside `T3000.pdf` made the page read like a folder dump, so it is filtered out — and a project whose only
 result is such a fragment is not a project here at all, which is why the count in the title block counts the cards rather than
-the files on disk. The panel's Build output view draws the same line: it lists what can be taken away, never a fragment.
-**To do** is where the acts live; `Publish` sits there first and again after every change, and the words beside it are how
-many changes are waiting (`up to date` when none are). It is an act, so it belongs with the other acts, not with the site it
-publishes.
+the files on disk. The panel's Artifacts view draws the same line: it lists what can be taken away, never a fragment.
+**Publish** closes that view — the words beside it are how many changes are waiting (`up to date` when none are), and its
+tooltip carries the last publish. Publishing is about every build at once, which is why it is the one act that sits with them.
 
-Nothing is invented: a project with no `.chm` has no `.chm` row, an empty view says so in one row, and "Nothing to do"
-appears only when every build is on the site and everything is published. Publishing state is read from git
+Nothing is invented: a project with no `.chm` has no `.chm` row, and the panel says `Nothing built on this machine yet` only
+when nothing exists at all. Publishing state is read from git
 (`src/state.ts`) in the clone, so two machines never disagree about what is out.
 
 Answers appear in the **preview's own strip**, under its bar, and never in a notification: adding a build, building,
@@ -389,27 +396,27 @@ name. The section headings carry the 2 px brand bar the other pages use.
 
 **And it stops there — with one line back.** The page used to go on with three parts — *Published projects*, *Build outputs* and
 *Publication* — that restated what the pages which act on those facts already say: the Site page holds the clone, the versions it
-serves and where it is published; the Build output page holds what a build wrote; the Publishing page holds the address, the branch and
+serves and where it is published; the Artifacts page holds what a build wrote; the Publishing page holds the address, the branch and
 what a push would carry. A summary page that copies the page it summarises drifts from it, so the **lists** went. What came back is
 **Where it stands**, and it is deliberately one line per page rather than a section per subject:
 
 | line | the fact on it | it opens |
 |---|---|---|
 | `Documentation Site` | `2 projects · 3 versions · 4 pages` | the Site page |
-| `Build output` | `3 files · 5.3 MB` | the Build output page |
+| `Artifacts` | `3 files · 5.3 MB` | the Artifacts page |
 | `Publishing` | `https://temcocontrols.github.io/docs/ · 3 changes waiting` | the Publishing page |
 
 A **count** is the one thing worth repeating: it is computed from the same snapshot on every draw, so it cannot drift, and it
 answers "is there anything in there?" without a list that has to be kept in step. Each line ends in the standard `Open ›`, so the
 detail is one click away and lives where it is edited.
 
-**Add a build** never opens a picker: it brings the *To do* view forward with the **Add to the site** group open,
-because the builds to choose are already rows there. That group is the queue of what the website does not serve: a build on
-disk whose project is absent from the catalog, or whose `dist/site` is newer than the version the catalog lists. Each row
-says which of the two it is (`not on the site`, `newer than 13.0`), so the list answers *why* it is there and not only how
-many — and clicking one adds it (version box, copy into `public/imported/`, `npm run catalog`), after which it drops out.
-Nothing about it is automatic: a test build stays out of the public site until somebody adds it. A link on this page is text
-with a glyph (`temcoLearn.*` command), never an `href` into
+**Add a build** is a section of the **Site page**, not a panel view: it belongs to the page that clones, builds, runs and
+publishes the site, because it writes into the same repository those do. `Builds not on the site` lists every build on disk
+whose project is absent from the catalog or whose `dist/site` is newer than the version the catalog lists, each with the
+reason (`not on the site`, `newer than 13.0`) and one `Add…` button. Adding asks for the version, copies into
+`public/imported/`, runs `npm run catalog`, and publishes nothing. Every command that means "add a build" opens that page with
+the section first and marked. Nothing about it is automatic: a test build stays out of the public site until somebody adds it.
+A link on this page is text with a glyph (`temcoLearn.*` command), never an `href` into
 the website — that boundary was crossed once already. The module therefore depends on `temcocontrols.temco-ui`, exactly as
 `temco-docs` does.
 
@@ -420,11 +427,10 @@ a project with no `.chm` simply has no `.chm` row, and a file in a shared `HelpD
 after. Each artifact is either something to look at (`site`, `chm`, `pdf`, a single page) or something to take away (`zip`, `docx`,
 and the files that are both), which is the divide the panel draws.
 
-The panel (`src/tree.ts`) is four views in the order the questions are asked — **Overview** (one row: the page above),
+The panel (`src/tree.ts`) is three views in the order the questions are asked — **Overview** (one row: the page above),
 **Site** (`Preview the Site` with a state dot and the port, and **Library** with one row per project at its newest version),
-**Build output** (`2 files` — a project, the files its build wrote, with their sizes; a row saves a copy and offers *Show in the
-Folder* inline), and **To do** (`1 build` — the builds newer than what the website holds, opening onto the build to add,
-`Publish` with the changes waiting, and where building happens: in Temco Docs). What a row holds is its `description`: the
-grey words beside a name, as the Explorer writes them. A row has no sentence under it: what a view is *for* is its tooltip
-and, written out, the Overview page.
+and **Artifacts** (a project, and the files its build wrote — names only, with the size and the path on hover; a row saves a copy and offers *Show in
+the Folder* inline; `Publish` closes the view with the changes waiting). What a row holds is its `description`: the grey words
+beside a name, as the Explorer writes them. A row has no sentence under it: what a view is *for* is its tooltip and, written
+out, the Overview page.
 

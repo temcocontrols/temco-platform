@@ -3,7 +3,7 @@
 // The website is what a reader opens; it carries nothing about running it. This page is ours, drawn with the application's
 // page vocabulary (`temco-ui`: the Fluent kit seeded from Azure blue). It opens by saying what the module is, says what needs
 // doing, and draws the four steps that get a page to a reader — and stops there: what is on the website, what a build wrote
-// and where it is published each belong to the page that acts on them (Documentation Site, Build output, Publishing).
+// and where it is published each belong to the page that acts on them (Documentation Site, Artifacts, Publishing).
 
 import * as vscode from 'vscode';
 import { formatSize } from './artifacts';
@@ -210,7 +210,7 @@ function workflow(state: Snapshot): string {
 			'Download',
 			'Take the build away: the offline help, the pdf, the zip.',
 			files
-				? link('Build a project', 'temcoDocs.builds', { mark: 'play' })
+				? link('Open Temco Docs', 'temcoDocs.builds', { mark: 'play' })
 				: link('Show in the folder', 'temcoLearn.revealArtifact', { args: workRoot(), mark: 'folder' })
 		)
 	];
@@ -241,7 +241,7 @@ function whereItStands(state: Snapshot): string {
 			command: 'temcoLearn.site.page'
 		}),
 		entryRow({
-			title: 'Build Output',
+			title: 'Artifacts',
 			meta: files === 0 ? 'nothing built yet' : [plural(files, 'file'), bytes === 0 ? '' : formatSize(bytes)].filter((part) => part !== '').join(' · '),
 			mark: 'download',
 			command: 'temcoLearn.downloads'

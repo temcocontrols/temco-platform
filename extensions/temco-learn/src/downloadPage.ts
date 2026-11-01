@@ -1,4 +1,4 @@
-// Build output — the page behind "No file to take", and behind the Build output view's title bar.
+// Artifacts — the page behind "Nothing built on this machine yet", and behind the Artifacts view's title bar.
 //
 // A build writes five things, and a folder with none of them is not a fault: it is a project nobody has built yet. This
 // page says what a build writes, where each kind lands, and — when the workspace has files — which ones.
@@ -48,7 +48,7 @@ export class DownloadPage implements vscode.Disposable {
 			void this.render();
 			return;
 		}
-		this.opened = vscode.window.createWebviewPanel(DOWNLOAD_VIEW_TYPE, 'Build Output', pageColumn(), {
+		this.opened = vscode.window.createWebviewPanel(DOWNLOAD_VIEW_TYPE, 'Artifacts', pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
@@ -73,7 +73,7 @@ export class DownloadPage implements vscode.Disposable {
 		if (opened === undefined) {
 			return;
 		}
-		opened.webview.html = page(html(await this.read()), { title: 'Build Output', script: commandScript, extraCss: PAGE_STYLE });
+		opened.webview.html = page(html(await this.read()), { title: 'Artifacts', script: commandScript, extraCss: PAGE_STYLE });
 	}
 }
 
@@ -191,7 +191,7 @@ export function html(state: DownloadFacts): string {
 		hero({
 			eyebrow: 'Temco Learn',
 			mark: 'download',
-			title: 'Build Output',
+			title: 'Artifacts',
 			desc: `A build writes more than a website: ${plural(files, 'file')} across ${plural(shown.length, 'project')} are on this machine now. This page says what a build writes, where it lands, and which files are there — and the three steps a build takes to reach a reader: Temco Docs writes it, the panel adds it to the site, and the Publishing page publishes it.`,
 			descWide: true
 		}),

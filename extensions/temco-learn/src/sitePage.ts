@@ -65,12 +65,25 @@ export const PAGE_STYLE = `
 #site-tab-output:checked ~ .site-tab-pane--output { display: block; }
 #site-tab-publish:checked ~ .site-tab-pane--publish { display: block; }
 .site-console { margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); background: color-mix(in srgb, var(--az-blue, #0078d4) 3%, var(--surface-card)); color: var(--ink-2); font-family: var(--font-mono); font-size: 11.5px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.site-add { display: grid; gap: 2px; padding: var(--sp-2) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); background: color-mix(in srgb, var(--az-blue, #0078d4) 4%, var(--surface-card)); }
+.site-add--focus { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
+.site-add__row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--sp-3); padding: var(--sp-1) 0; }
+.site-add__name { min-width: 0; color: var(--ink-1); font-size: 12.5px; line-height: 18px; overflow-wrap: anywhere; }
+.site-add__why { color: var(--ink-3); font-size: 11.5px; line-height: 18px; }
 `;
 
 /** The links in the meta line are buttons in the page's own dress: a command, never an `href` into the website. */
 function metaLink(label: string, command: string, args?: unknown, mono = false): string {
 	const data = args === undefined ? '' : ` data-args="${escapeHtml(JSON.stringify(args))}"`;
 	return `<button type="button" class="site-meta__link${mono ? ' site-meta__repo' : ''}" data-command="${escapeHtml(command)}"${data}>${escapeHtml(label)}</button>`;
+}
+
+/** One build on this machine the website does not serve yet: what to add, and why it is waiting. */
+export interface PendingBuild {
+	title: string;
+	folder: string;
+	/** `not on the site`, or `newer than 13.0` — the reason to add it, in the row. */
+	why: string;
 }
 
 /** Everything the page says: the folder and what is in it, what is running, and the last lines a command printed. */
@@ -84,14 +97,21 @@ export interface SitePageFacts {
 	configured: boolean;
 	/** The one port the site is served on. */
 	port: number;
+	/** The builds on this machine that are not versions on the site yet — the one act this page owns that no other page does. */
+	pending: readonly PendingBuild[];
+	/** Set when the page was opened *for* the add section: it comes first, and says so. */
+	focus?: 'add';
 }
 
 export class SitePage implements vscode.Disposable {
 	private opened: vscode.WebviewPanel | undefined;
+	private focus: 'add' | undefined;
 
 	constructor(private readonly read: () => Promise<SitePageFacts>) { }
 
-	open(): void {
+	/** Opens the page, or brings it forward. `focus` puts the add section at the top, for the acts that mean "add one". */
+	open(focus?: 'add'): void {
+		this.focus = focus;
 		if (this.opened !== undefined) {
 			this.opened.reveal(pageColumn());
 			void this.render();
@@ -126,7 +146,14 @@ export class SitePage implements vscode.Disposable {
 		if (opened === undefined) {
 			return;
 		}
-		opened.webview.html = page(html(await this.read()), { title: SITE_PAGE_TITLE, script: commandScript, extraCss: PAGE_STYLE });
+		const facts = await this.read();
+		const focus = this.focus;
+		this.focus = undefined;
+		opened.webview.html = page(html(focus === undefined ? facts : { ...facts, focus }), {
+			title: SITE_PAGE_TITLE,
+			script: commandScript,
+			extraCss: PAGE_STYLE
+		});
 	}
 }
 
@@ -200,6 +227,34 @@ export function cleanLine(text: string): string {
 		.replace(DECORATION, '')
 		.replace(/[ \t]+$/gu, '')
 		.trim();
+}
+
+/**
+ * The builds on this machine the site does not serve: the one act this page owns that nothing else does.
+ *
+ * A build is a folder inside a project; the site is a repository that gets published, so a build is invisible to the
+ * website until it is copied in — and the copy needs the version, which only a person knows. That is what `Add…` is, and
+ * it is why the act lives here rather than in the panel: it writes into the site, like clone, build and publish do.
+ */
+function adds(state: SitePageFacts): string {
+	const rows = state.pending.map(
+		(build) =>
+			`<div class="site-add__row"><span class="site-add__name">${escapeHtml(build.title)}</span><span class="site-add__why">${escapeHtml(
+				build.why
+			)}</span>${button('Add…', 'temcoLearn.addBuild', { kind: 'link', args: build.folder })}</div>`
+	);
+	const body =
+		rows.length === 0
+			? '<p class="az-block__note">Every build on this machine is on the site already. A build you make in Temco Docs appears here.</p>'
+			: rows.join('');
+	return [
+		section({
+			title: 'Builds not on the site',
+			desc: 'Adding copies a build into the site repository as a new version. It does not publish it — that is a separate act, and yours.',
+			actions: button('Open Temco Docs', 'temcoDocs.builds', { kind: 'link', mark: 'external' })
+		}),
+		`<div class="site-add${state.focus === 'add' ? ' site-add--focus' : ''}">${body}</div>`
+	].join('\n');
 }
 
 export function html(state: SitePageFacts): string {
@@ -300,6 +355,10 @@ export function html(state: SitePageFacts): string {
 		? button('Stop', 'temcoLearn.site.stop') + openHere + openInBrowser
 		: `${button(starting ? 'Starting…' : 'Start', 'temcoLearn.site.start', { kind: repo.built ? 'primary' : undefined })}${openHere}${openInBrowser}`;
 
+	// The add section comes first when the page was opened for it — that is what the four buttons that mean "add a build"
+	// promise — and sits after the machine otherwise, where it reads as the next step of the same lifecycle.
+	const addsSection = adds(state);
+
 	return [
 		head,
 		meta(repo),
@@ -312,6 +371,7 @@ export function html(state: SitePageFacts): string {
 					actions: button('Try again', 'temcoLearn.site.start') + button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link' })
 				})
 			: '',
+		state.focus === 'add' ? addsSection : '',
 		section({
 			title: 'This machine',
 			desc: 'The clone on disk, and the one server that shows it — read from the folder every time this page is drawn.'
@@ -338,6 +398,7 @@ export function html(state: SitePageFacts): string {
 			button(repo.built ? 'Rebuild' : 'Build', 'temcoLearn.site.build', { kind: 'link' }),
 			{ tone: repo.built ? 'ok' : 'warn' }
 		)}</div>`,
+		state.focus === 'add' ? '' : addsSection,
 		section({
 			title: 'Activity',
 			desc: 'What a clone, a pull, a build or a server printed in this window, and what the last publish attempt said.',

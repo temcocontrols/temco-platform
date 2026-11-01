@@ -172,7 +172,7 @@ test('the page is the callout, the workflow, and where each kind of work lands',
 		rowsOf(html).map((row) => [row.title, row.meta, row.command]),
 		[
 			['Documentation Site', '2 projects · 3 versions · 4 pages', 'temcoLearn.site.page'],
-			['Build Output', '3 files · 5.3 MB', 'temcoLearn.downloads'],
+			['Artifacts', '3 files · 5.3 MB', 'temcoLearn.downloads'],
 			['Publishing', 'https://temcocontrols.github.io/docs/ · 3 changes waiting', 'temcoLearn.publishing']
 		]
 	);
@@ -193,7 +193,7 @@ test('with nothing built and nothing published, the callout says so, and the thr
 		rowsOf(html).map((row) => [row.title, row.meta]),
 		[
 			['Documentation Site', '0 projects · 0 versions · 0 pages'],
-			['Build Output', 'nothing built yet'],
+			['Artifacts', 'nothing built yet'],
 			['Publishing', 'no address yet · nothing waiting']
 		]
 	);

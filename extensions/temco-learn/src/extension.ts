@@ -22,7 +22,7 @@ import { PublishLog } from './publishLog';
 import { PublishFacts, PublishPage } from './publishPage';
 import { ensureRepo, publishSite, PublishSink } from './publish';
 import { Server } from './server';
-import { importBuild, readSite, workRoot } from './site';
+import { importBuild, readSite, Site, workRoot } from './site';
 import { pageUrl, repoReady, sitePort, siteRepo } from './siteRepo';
 import { readRepoFacts } from './siteFacts';
 import { SiteLog } from './siteLog';
@@ -30,12 +30,22 @@ import { SitePage, SitePageFacts } from './sitePage';
 import { describe, SiteRunner, SiteStatus } from './siteRunner';
 import { Snapshot } from './snapshot';
 import { readPublishedState } from './state';
-import { BrowseTree, DownloadTree, OverviewTree, Reads, registerBadges, TodoTree, VIEWS } from './tree';
+import { BrowseTree, DownloadTree, OverviewTree, Reads, registerBadges, VIEWS } from './tree';
 
 const plural = (count: number, one: string, many?: string): string =>
 	String(count) + ' ' + (count === 1 ? one : many === undefined ? one + 's' : many);
 
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** Why a build is on the add list: the project is not on the site at all, or this build is newer than the version it serves. */
+function whyWaiting(id: string, site: Site): string {
+	const project = site.projects.find((entry) => entry.id === id);
+	if (project === undefined) {
+		return 'not on the site';
+	}
+	const newest = project.versions[0]?.version;
+	return newest === undefined ? 'no version on the site' : `newer than ${newest}`;
+}
 
 export function activate(context: vscode.ExtensionContext): void {
 	const output = vscode.window.createOutputChannel('Temco Learn');
@@ -86,14 +96,29 @@ export function activate(context: vscode.ExtensionContext): void {
 		};
 	};
 	/** What the Site page says: the folder and what is in it, what is running, and the last lines anything printed. */
-	const readSiteFacts = async (): Promise<SitePageFacts> => ({
-		repo: await readRepoFacts(repo()),
-		status: runner.status,
-		log: siteLog.read(),
-		publish: publishLog.read().lines,
-		configured: repoReady(repo()),
-		port: sitePort()
-	});
+	const readSiteFacts = async (): Promise<SitePageFacts> => {
+		const site = await readSite(repo());
+		const builds = await findBuilds();
+		return {
+			repo: await readRepoFacts(repo()),
+			status: runner.status,
+			log: siteLog.read(),
+			publish: publishLog.read().lines,
+			configured: repoReady(repo()),
+			port: sitePort(),
+			// The one thing this page owns that no other page does: which builds on disk are not versions on the site.
+			pending: builds
+				.filter((build) => {
+					const project = site.projects.find((entry) => entry.id === build.id);
+					if (project === undefined) {
+						return true;
+					}
+					const newest = project.versions[0]?.builtAt;
+					return newest === undefined || build.at > Date.parse(newest);
+				})
+				.map((build) => ({ title: build.title, folder: build.folder, why: whyWaiting(build.id, site) }))
+		};
+	};
 	const reads = new Reads(readSnapshot);
 	const overview = new OverviewPage(readSnapshot);
 	const publishing = new PublishPage(readPublishFacts, publishLog);
@@ -104,15 +129,12 @@ export function activate(context: vscode.ExtensionContext): void {
 	// The panel's rows say their facts at the row's right-hand edge, where a tree can only put a badge.
 	registerBadges(context);
 	const downloadTree = new DownloadTree(reads);
-	const todoTree = new TodoTree(reads);
 	// One view per group: VS Code draws the header, the separator and the collapse state, which is the grouping a
 	// person already knows from the Explorer.
-	const todoView = vscode.window.createTreeView(VIEWS.todo, { treeDataProvider: todoTree });
 	const views = [
 		vscode.window.createTreeView(VIEWS.overview, { treeDataProvider: overviewTree }),
 		vscode.window.createTreeView(VIEWS.browse, { treeDataProvider: browseTree }),
-		vscode.window.createTreeView(VIEWS.download, { treeDataProvider: downloadTree }),
-		todoView
+		vscode.window.createTreeView(VIEWS.download, { treeDataProvider: downloadTree })
 	];
 
 	/** Both surfaces read the same facts, so both are re-read together: a panel and a page that disagree is a bug. */
@@ -121,7 +143,6 @@ export function activate(context: vscode.ExtensionContext): void {
 		overviewTree.refresh();
 		browseTree.refresh();
 		downloadTree.refresh();
-		todoTree.refresh();
 		overview.refresh();
 		publishing.refresh();
 		sitePage.refresh();
@@ -579,14 +600,10 @@ export function activate(context: vscode.ExtensionContext): void {
 			await add(typeof folder === 'string' ? folder : undefined);
 		}),
 
-		// Adding a build never asks which one in a picker: the panel lists them, and a row there adds it. The view is
-		// brought forward with the waiting group open, so the act the page promised is one click away.
-		vscode.commands.registerCommand('temcoLearn.addBuilds', async () => {
-			await vscode.commands.executeCommand(VIEWS.todo + '.focus');
-			const waiting = (await todoTree.getChildren()).find((entry) => entry.id === 'temcoLearn.todo.builds');
-			if (waiting !== undefined) {
-				await todoView.reveal(waiting, { expand: true, select: false, focus: false });
-			}
+		// Adding a build is a site operation: the page that clones, builds, runs and publishes the site owns it, and the
+		// section comes first there so the act the caller promised is on screen.
+		vscode.commands.registerCommand('temcoLearn.addBuilds', () => {
+			sitePage.open('add');
 		}),
 
 		// Publishing is an act that changes what the world sees, so the row opens the page that says what it would push.

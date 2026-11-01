@@ -4,24 +4,23 @@
 // row pretending to be a heading. A row is a name and a glyph, and what it holds is `description`: the grey words the
 // Explorer writes beside a folder, never a badge of our own. Sentences belong on the Overview page, never in a row.
 //
-// Four views: the module's page as one row, **Site** (the site, and the library it serves), **Download** (the files a
-// build wrote) and **Next steps** (the acts, publishing among them).
+// Three views, each one subject: the module's page as one row, **Site** (the site, and the library it serves) and
+// **Artifacts** (the files the builds wrote, and the one act that publishes them). Adding a build to the site is a
+// site operation, so it lives on the Site page with the other site operations — not in the panel.
 
 import * as vscode from 'vscode';
 import { Artifact, ArtifactKind, formatSize, isDownloadable, isPreviewable, nameOf } from './artifacts';
-import { Build } from './builds';
 import { shortName } from './site';
 import { repoReady, sitePort, siteRepo, siteUrl } from './siteRepo';
 import { SiteStatus } from './siteRunner';
 import { Snapshot } from './snapshot';
 import { ago } from './state';
 
-/** The four views this module contributes, by the ids its manifest declares. */
+/** The three views this module contributes, by the ids its manifest declares. */
 export const VIEWS = {
 	overview: 'temcoLearn.overviewView',
 	browse: 'temcoLearn.browse',
-	download: 'temcoLearn.download',
-	todo: 'temcoLearn.todo'
+	download: 'temcoLearn.download'
 } as const;
 
 /** A row that knows what hangs under it. */
@@ -111,19 +110,6 @@ export class Reads {
 	forget(): void {
 		this.reading = undefined;
 	}
-}
-
-
-/** The builds newer than what the website holds: those are the ones worth adding. */
-function waiting(data: Snapshot): Snapshot['builds'] {
-	return data.builds.filter((build) => {
-		const project = data.site.projects.find((entry) => entry.id === build.id);
-		if (project === undefined) {
-			return true;
-		}
-		const newest = project.versions[0]?.builtAt;
-		return newest === undefined || build.at > Date.parse(newest);
-	});
 }
 
 /* ---- Overview: the module's page, as one row ------------------------------------------------------------------ */
@@ -417,29 +403,58 @@ export class DownloadTree implements vscode.TreeDataProvider<Row> {
 			if (shown.length === 0) {
 				continue;
 			}
+			// The name, and nothing beside it: a row that lists files should read like a list of files. How many there
+			// are, and where they live, is one hover away.
 			const entry = group(shortName(project.title), 'book', {
-				description: plural(shown.length, 'file'),
+				tooltip: `${plural(shown.length, 'file')} this build wrote — ${project.folder}`,
 				kids: shown.map((artifact) => this.artifact(artifact))
 			});
 			entry.id = `temcoLearn.download.${project.id}`;
 			entry.contextValue = 'temcoLearn.download.project';
 			rows.push(entry);
 		}
-		return rows.length === 0
-			? [
-					row('No file to take', 'info', {
-						tooltip: 'Open the Build Output page: what a build writes, and where it lands',
-						command: { command: 'temcoLearn.downloads', title: 'Build Output' }
-					})
-				]
-			: rows;
+		// Nothing built anywhere: the one useful row is where builds come from. No verdict row otherwise — a view of what
+		// exists does not need to say "nothing to do".
+		if (rows.length === 0) {
+			rows.push(
+				row('Nothing built on this machine yet', 'info', {
+					tooltip: 'Open the Artifacts page: what a build writes, and where it lands',
+					command: { command: 'temcoLearn.downloads', title: 'Artifacts' }
+				}),
+				row('Build a Project…', 'tools', {
+					tooltip: 'Opens Temco Docs, where a build is made — this module takes the folder it writes',
+					command: { command: 'temcoDocs.builds', title: 'Build a Project in Temco Docs' }
+				})
+			);
+		}
+		rows.push(this.publish(data));
+		return rows;
 	}
 
-	/** One file the build wrote: its name, and how big it is. */
+	/** Publishing is an act, so it sits with the builds it publishes: the first time, and again after every change. */
+	private publish(data: Snapshot): Row {
+		const published = data.published;
+		const last = published.commit === undefined ? 'never published' : `last publish ${published.commit}, ${ago(published.at)}`;
+		const entry = row('Publish', 'cloud-upload', {
+			tooltip: `${
+				published.pending === 0 ? 'up to date' : `${plural(published.pending, 'change')} waiting to be published`
+			} · ${published.base ?? 'no address yet'} · ${last}`,
+			command: { command: 'temcoLearn.publishing', title: 'Publishing' }
+		});
+		entry.id = 'temcoLearn.download.publish';
+		entry.contextValue = 'temcoLearn.publish';
+		// The count sits at the row's right-hand end, in the badge slot the Site view already uses for its own numbers.
+		if (published.pending > 0) {
+			entry.resourceUri = badgeRow(String(published.pending), 'publish');
+		}
+		return entry;
+	}
+
+	/** One file the build wrote: its name, and how big it is on hover. */
 	private artifact(artifact: Artifact): Row {
+		const size = formatSize(artifact.size);
 		const entry = row(nameOf(artifact), ICON[artifact.kind], {
-			description: artifact.size === undefined ? undefined : formatSize(artifact.size),
-			tooltip: artifact.file,
+			tooltip: [size, artifact.file].filter((part) => part !== '').join(' · '),
 			command: { command: 'temcoLearn.downloadArtifact', title: 'Save a Copy', arguments: [artifact.file] }
 		});
 		entry.id = `temcoLearn.download.artifact.${artifact.file}`;
@@ -447,88 +462,4 @@ export class DownloadTree implements vscode.TreeDataProvider<Row> {
 		entry.file = artifact.file;
 		return entry;
 	}
-}
-/* ---- Next steps: the acts, with how many things each one clears ------------------------------------------------ */
-
-export class TodoTree implements vscode.TreeDataProvider<Row> {
-	private readonly changed = new vscode.EventEmitter<void>();
-	readonly onDidChangeTreeData = this.changed.event;
-
-	constructor(private readonly reads: Reads) { }
-
-	refresh(): void {
-		this.changed.fire();
-	}
-
-	getTreeItem(item: Row): vscode.TreeItem {
-		return item;
-	}
-
-	async getChildren(item?: Row): Promise<Row[]> {
-		const data = await this.reads.data();
-		if (item !== undefined) {
-			return this.under(item, data);
-		}
-		const builds = waiting(data);
-		const rows: Row[] = [];
-		if (builds.length > 0) {
-			// The label is the act, not the state: a row that says what you would do needs no explaining.
-			const add = group('Add to the site', 'add', {
-				description: plural(builds.length, 'build'),
-				tooltip:
-					'Builds on disk the website does not serve yet. Click one to add it — you choose its version, and nothing is published until you publish.',
-				kids: builds.map((build) => this.build(build, data))
-			});
-			add.id = 'temcoLearn.todo.builds';
-			add.contextValue = 'temcoLearn.todo.builds';
-			rows.push(add);
-		}
-		rows.push(this.publish(data));
-		rows.push(row('Build a project', 'tools', { command: { command: 'temcoDocs.builds', title: 'Build a Project in Temco Docs' }, tooltip: 'Building belongs to Temco Docs' }));
-		if (builds.length === 0 && data.published.pending === 0) {
-			return [row('Nothing to do', 'check', { tooltip: 'Everything built is on the website, and it is published' }), ...rows];
-		}
-		return rows;
-	}
-
-	/** Publishing is an act, so it lives with the acts: the first time, and again after a change. */
-	private publish(data: Snapshot): Row {
-		const published = data.published;
-		const last = published.commit === undefined ? 'never published' : `last publish ${published.commit}, ${ago(published.at)}`;
-		const entry = row('Publish', 'cloud-upload', {
-			description: published.pending === 0 ? 'up to date' : plural(published.pending, 'change'),
-			tooltip: `${published.base ?? 'no address yet'} · ${last} · publishes the site, or publishes it again after a change`,
-			command: { command: 'temcoLearn.publishing', title: 'Publishing' }
-		});
-		entry.id = 'temcoLearn.todo.publish';
-		entry.contextValue = 'temcoLearn.publish';
-		return entry;
-	}
-
-	/** The builds to add, under the finding that names them. */
-	private under(item: Row, data: Snapshot): Row[] {
-		return item.id === 'temcoLearn.todo.builds' ? waiting(data).map((build) => this.build(build, data)) : [];
-	}
-
-	/** One build the site does not serve: its name, why it is waiting, and the act that adds it. */
-	private build(build: Build, data: Snapshot): Row {
-		const entry: Row = new vscode.TreeItem(build.title, vscode.TreeItemCollapsibleState.None);
-		entry.id = `temcoLearn.todo.build.${build.folder}`;
-		entry.iconPath = new vscode.ThemeIcon('package');
-		entry.description = whyWaiting(build, data);
-		entry.contextValue = 'temcoLearn.build';
-		entry.tooltip = `${whyWaiting(build, data)} — ${build.folder}: clicking this copies it onto the site and asks for its version`;
-		entry.command = { command: 'temcoLearn.addBuild', title: 'Add to the Website', arguments: [build.folder] };
-		return entry;
-	}
-}
-
-/** Why a build is in the queue: the project is not on the site, or this build is newer than the version it serves. */
-function whyWaiting(build: Build, data: Snapshot): string {
-	const project = data.site.projects.find((entry) => entry.id === build.id);
-	if (project === undefined) {
-		return 'not on the site';
-	}
-	const newest = project.versions[0]?.version;
-	return newest === undefined ? 'no version on the site' : `newer than ${newest}`;
 }
