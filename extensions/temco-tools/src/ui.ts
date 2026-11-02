@@ -27,6 +27,21 @@ interface UiApi {
 	escapeHtml(text: string): string;
 	icon(name: string, cls?: string): string;
 	toneMark(name: string, tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent'): string;
+	hero(options: {
+		crumbs?: string;
+		eyebrow?: string;
+		title: string;
+		mark?: string;
+		desc?: string;
+		descWide?: boolean;
+		actions?: readonly { label: string; command: string; args?: unknown; mark?: string; kind?: 'primary' | 'link' }[];
+		stats?: readonly { value: string; label: string }[];
+		note?: { text: string; mark?: string; mono?: boolean; link?: { command: string; args?: unknown } };
+	}): string;
+	section(options: { title: string; desc?: string; actions?: string }): string;
+	numbers(items: readonly { value: string; label: string }[]): string;
+	entryRow(options: { title: string; meta?: string; mark?: string; command?: string; args?: unknown; go?: string }): string;
+	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
 	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
 	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
 	/** One serializer per page, so the window can bring a page's tab back after a restart. */
@@ -74,6 +89,21 @@ export const icon = ui.icon;
 
 /** One glyph in a tinted circle: a state you can see before you read it. */
 export const toneMark = ui.toneMark;
+
+/** The title block at the top of a page: the wash, the page's only h1, one line of why, and the ways in. */
+export const hero = ui.hero;
+
+/** A section heading: the page's parts, told apart by the brand rule before the title. */
+export const section = ui.section;
+
+/** The row of figures: what a page is about, in numbers, in one box. */
+export const numbers = ui.numbers;
+
+/** One entry lying on its side: the mark, the thing itself, and the way back into it at the right-hand end. */
+export const entryRow = ui.entryRow;
+
+/** The one tinted callout a page is allowed: an icon, a sentence, and the thing to do about it. */
+export const callout = ui.callout;
 
 /** The script a page runs so its `data-command` buttons reach this module. */
 export const commandScript = ui.commandScript;

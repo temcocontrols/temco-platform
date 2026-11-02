@@ -19,7 +19,8 @@
 
 import * as vscode from 'vscode';
 import { Catalog, SqlResult, TableFact } from './store';
-import { PageMessage, commandScript, esc, icon, page, pageColumn, toneMark } from './ui';
+import * as kit from './pageKit';
+import { PageMessage, commandScript, esc, icon, page, pageColumn } from './ui';
 
 /** One surface of the SQL container: the row, the command, and the page it draws. */
 export interface SqlPage {
@@ -128,32 +129,76 @@ interface StudioState {
 
 /* ------------------------------------------------------------------ page vocabulary */
 
+// The vocabulary is the application's (`pageKit.ts`, on `temco-ui`'s kit), plus the four primitives a query surface
+// needs and a page of prose does not: a grid of rows, a toolbar over a statement, the editor itself, and the one line
+// that says what the last run did. Those live in the kit's stylesheet as `az-grid`, `az-toolbar`, `az-editor` and
+// `az-message` — the Data page and the Query Editor draw the same table, so they use the same rules.
+const { button: kitButton, entries, entry: row, figures, head, n, notice, part } = kit;
+
+/** A button; `danger` is the one colour a page uses for an act that forgets something. */
 const button = (
 	label: string,
 	command: string,
 	options: { kind?: 'primary' | 'ghost' | 'danger'; mark?: string; args?: unknown; small?: boolean; title?: string } = {}
-): string =>
-	`<button type="button" class="btn${options.small ? ' btn--sm' : ''}${options.kind ? ` btn--${options.kind}` : ''}" data-command="${command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}${options.title ? ` title="${esc(options.title)}"` : ''}>${options.mark ? icon(options.mark) : ''}<span>${esc(label)}</span></button>`;
+): string => {
+	const markup = kitButton(label, command, {
+		kind: options.kind === 'primary' ? 'primary' : options.kind === 'ghost' ? 'ghost' : undefined,
+		mark: options.mark,
+		args: options.args,
+		small: options.small
+	});
+	const danger = options.kind === 'danger' ? markup.replace('class="az-btn', 'class="az-btn az-btn--danger') : markup;
+	return options.title === undefined ? danger : danger.replace('<button type="button"', `<button type="button" title="${esc(options.title)}"`);
+};
 
-const badge = (text: string, tone?: string): string =>
-	`<span class="badge${tone && tone !== 'neutral' ? ` badge--${tone}` : ''}">${esc(text)}</span>`;
-
+/** The page's title block, with the studio named above it. */
 const pageHead = (options: { title: string; mark: string; desc: string; actions: string }): string =>
-	`<div class="page-head"><div class="page-head__main"><h1 class="page-head__title">${icon(options.mark)}${esc(options.title)}</h1><p class="page-head__desc">${esc(options.desc)}</p></div><div class="page-head__actions">${options.actions}</div></div>`;
+	head({
+		studio: 'SQL',
+		title: options.title,
+		mark: options.mark,
+		desc: options.desc,
+		actions: actionsOf(options.actions)
+	});
 
+/**
+ * The buttons a header carries, read back out of the markup `button()` builds.
+ *
+ * `hero` wants its actions as data and a studio page builds them as markup; the two fields it reads are the command
+ * and the words on the button, and both are in the string.
+ */
+function actionsOf(markup: string): { label: string; command: string; kind?: 'primary' }[] {
+	return [...markup.matchAll(/data-command="([^"]*)"[^>]*>(?:<[^>]+>)*<span>([^<]*)<\/span>/g)].map((match) => ({
+		command: decode(match[1]),
+		label: decode(match[2]),
+		kind: /az-btn--primary/.test(match[0]) ? ('primary' as const) : undefined
+	}));
+}
+
+const decode = (text: string): string =>
+	text.replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
+
+/** One part of a page: its heading, the count and sentence under it, and what can be done from here. */
 const rule = (options: { label: string; count?: string; note?: string; actions?: string; plain?: boolean }): string =>
-	`<div class="group-head"><span class="group-head__label${options.plain ? ' group-head__label--plain' : ''}">${esc(options.label)}</span><span class="group-head__rule"></span>${options.count ? `<span class="group-head__count">${esc(options.count)}</span>` : ''}${options.actions ? `<span class="group-head__actions">${options.actions}</span>` : ''}</div>${options.note ? `<p class="group-note">${esc(options.note)}</p>` : ''}`;
+	part({ title: options.label, count: options.count, note: options.note, actions: options.actions });
 
+/** A part and the list of rows under it. */
 const group = (options: { label: string; count?: string; note?: string; actions?: string; body: string }): string =>
-	`${rule(options)}<div class="record-list">${options.body}</div>`;
+	`${part({ title: options.label, count: options.count, note: options.note, actions: options.actions })}${entries(options.body)}`;
 
-const tiles = (items: { value: string; label: string }[]): string =>
-	`<div class="tiles">${items.map((item) => `<div class="tile"><span class="tile__value">${esc(item.value)}</span><span class="tile__label">${esc(item.label)}</span></div>`).join('')}</div>`;
+/** The figures a page opens on. */
+const tiles = (items: { value: string; label: string }[]): string => figures(items);
 
-const callout = (html: string, kind: 'warn' | 'ok' | 'info' = 'info'): string =>
-	`<div class="callout${kind === 'info' ? '' : ` callout--${kind}`}">${icon(kind === 'warn' ? 'alert' : kind === 'ok' ? 'check' : 'info')}<div>${html}</div></div>`;
-
-const n = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
+/** The one tinted paragraph a page is allowed. */
+const callout = (html: string, kind: 'warn' | 'ok' | 'info' = 'info'): string => {
+	const title = /<b>([^<]*)<\/b>/.exec(html);
+	const plain = html.replace(/<[^>]+>/g, '').trim();
+	return notice({
+		mark: kind === 'warn' ? 'alert' : kind === 'ok' ? 'check' : 'info',
+		title: title === null ? (kind === 'ok' ? 'Done' : kind === 'warn' ? 'Check this' : 'Worth knowing') : title[1],
+		desc: title === null ? plain : plain.replace(title[1], '').replace(/^[\s.]+/, '').replace(/\s+/g, ' ').trim()
+	});
+};
 
 /** One value in a result cell: nothing is invented, and a blob is not printed as bytes. */
 function cell(value: unknown): string {
@@ -184,11 +229,11 @@ function resultTable(result: SqlResult): string {
 	if (result.columns.length === 0) {
 		return callout('The statement returned no columns. A statement that answers nothing is a statement that reads nothing.', 'warn');
 	}
-	const head = `<th class="sql-grid__row">#</th>${result.columns.map((column) => `<th>${esc(column)}</th>`).join('')}`;
+	const head = `<th class="az-grid__row">#</th>${result.columns.map((column) => `<th>${esc(column)}</th>`).join('')}`;
 	const rows = result.rows
-		.map((row, index) => `<tr><td class="sql-grid__row">${index + 1}</td>${row.map((value) => `<td${typeof value === 'number' ? ' class="sql-grid__num"' : ''}>${cell(value)}</td>`).join('')}</tr>`)
+		.map((row, index) => `<tr><td class="az-grid__row">${index + 1}</td>${row.map((value) => `<td${typeof value === 'number' ? ' class="az-grid__num"' : ''}>${cell(value)}</td>`).join('')}</tr>`)
 		.join('');
-	return `<div class="sql-grid"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${result.truncated ? `<p class="group-note">Showing the first ${result.rows.length} rows — add a LIMIT, or narrow the WHERE.</p>` : ''}`;
+	return `<div class="az-grid"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>${result.truncated ? `<p class="group-note">Showing the first ${result.rows.length} rows — add a LIMIT, or narrow the WHERE.</p>` : ''}`;
 }
 
 /**
@@ -240,30 +285,14 @@ const EDITOR_SCRIPT = `
  * page by the kit.
  */
 const QUERY_CSS = `
-.sql-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 8px; }
-.sql-bar__facts { margin-left: auto; color: var(--fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
-.sql-editor { width: 100%; min-height: 220px; box-sizing: border-box; padding: 12px 14px; tab-size: 2;
-	font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: 13px; line-height: 1.6;
-	color: var(--fg); background: var(--vscode-editor-background, #fff);
-	border: 1px solid var(--border); border-radius: 8px; resize: vertical; }
-.sql-editor:focus { outline: none; border-color: var(--vscode-focusBorder); }
-.sql-message { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; margin-top: 12px;
-	padding: 7px 11px; border-radius: 6px; background: rgba(127, 127, 127, 0.09); color: var(--fg); }
-.sql-message--err { background: rgba(220, 60, 60, 0.12); }
+/* The grid, the editor, the toolbar and the message line are the kit's own (az-grid, az-editor, az-toolbar,
+   az-message). Only what is this page's remains here: the result bar above the grid, and the height the grid is
+   allowed before it scrolls inside the page. */
 .sql-result-head { display: flex; align-items: center; gap: 10px; margin: 20px 0 8px; }
 .sql-result-head__title { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); }
 .sql-result-head__facts { color: var(--fg-subtle); font-size: 12px; }
 .sql-result-head__actions { margin-left: auto; display: flex; gap: 6px; }
-.sql-grid { border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 420px; }
-.sql-grid table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
-.sql-grid th, .sql-grid td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
-.sql-grid th { position: sticky; top: 0; z-index: 1; font-weight: 600; color: var(--fg-muted);
-	background: var(--vscode-editorWidget-background, rgba(127, 127, 127, 0.10)); }
-.sql-grid tbody tr:last-child td { border-bottom: 0; }
-.sql-grid tbody tr:hover td { background: rgba(127, 127, 127, 0.06); }
-.sql-grid__row { text-align: right; width: 1%; color: var(--fg-subtle);
-	font-family: var(--vscode-editor-font-family, Consolas, monospace); }
-.sql-grid__num { text-align: right; font-family: var(--vscode-editor-font-family, Consolas, monospace); }
+.az-grid { max-height: 420px; }
 `;
 
 /* ------------------------------------------------------------------ the six pages */
@@ -275,10 +304,10 @@ function queryBody(state: StudioState, schemaVersion: number, file: string): str
 	const name = file.split(/[\\/]/).pop() ?? file;
 
 	const message = error !== undefined
-		? `<div class="sql-message sql-message--err">${icon('error')}<span><b>Msg:</b> ${esc(error.message)}</span></div>`
+		? `<div class="az-message az-message--err"><span><b>Msg:</b> ${esc(error.message)}</span></div>`
 		: last === undefined
 			? ''
-			: `<div class="sql-message">${icon('check')}<span>Query executed successfully — ${
+			: `<div class="az-message"><span>Query executed successfully — ${
 				last.result.readOnly
 					? n(last.result.rows.length, 'row', 'rows')
 					: n(last.result.changes ?? 0, 'row affected', 'rows affected')
@@ -299,12 +328,12 @@ ${resultTable(last.result)}`;
 		desc: 'One statement against the platform database. Ctrl+Enter runs it; reading is unrestricted and writing needs the checkbox.',
 		actions: button('Presets', 'temcoTools.sql.reports', { mark: 'graph' }) + button('History', 'temcoTools.sql.history', { mark: 'clock' })
 	})}
-<div class="sql-bar">
-	<button type="button" class="btn btn--primary" id="sql-run">${icon('play')}<span>Run</span></button>
-	<label class="row" style="gap:6px;align-items:center;font-size:12px"><input type="checkbox" id="sql-writes"${state.write ? ' checked' : ''} /><span>Allow writes</span></label>
-	<span class="sql-bar__facts">SQLite · ${esc(name)} · schema ${schemaVersion} · ${n(state.history.length, 'statement', 'statements')} run this session</span>
+<div class="az-toolbar">
+	<button type="button" class="az-btn az-btn--primary" id="sql-run">${icon('play')}<span>Run</span></button>
+	<label class="az-check" style="font-size:12px"><input type="checkbox" id="sql-writes"${state.write ? ' checked' : ''} /><span>Allow writes</span></label>
+	<span class="az-toolbar__facts">SQLite · ${esc(name)} · schema ${schemaVersion} · ${n(state.history.length, 'statement', 'statements')} run this session</span>
 </div>
-<textarea id="sql-editor" class="sql-editor" spellcheck="false">${esc(state.editor)}</textarea>
+<textarea id="sql-editor" class="az-editor" spellcheck="false">${esc(state.editor)}</textarea>
 ${message}
 ${results}`;
 }
@@ -323,14 +352,8 @@ body { min-height: 100vh; display: flex; flex-direction: column; }
 /* One head height for both columns, so the table list and the rows begin on the same line. */
 .data-split .group-head,
 .data-split .group-head:first-of-type { min-height: 26px; margin: 0 0 8px; }
-.data-grid { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.data-grid table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
-.data-grid th, .data-grid td { padding: 6px 10px; border-bottom: 1px solid var(--border);
 	text-align: left; white-space: nowrap; }
-.data-grid th { position: sticky; top: 0; z-index: 1; font-weight: 600; color: var(--fg-muted);
 	background: var(--vscode-editorWidget-background, rgba(127, 127, 127, 0.10)); }
-.data-grid tbody tr:last-child td { border-bottom: 0; }
-.data-grid tbody tr:hover td { background: rgba(127, 127, 127, 0.06); }
 @media (max-width: 900px) {
 	.data-split { grid-template-columns: minmax(0, 1fr); grid-template-rows: 240px minmax(0, 1fr); }
 }
@@ -344,9 +367,14 @@ function dataBody(
 	offset: number
 ): string {
 	const picker = tables
-		.flatMap((entry) => entry.name === table
-			? [`<div class="record-row record-row--current" data-command="temcoTools.sql.browse" data-args="${esc(JSON.stringify([entry.name]))}">${toneMark('list', 'accent')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(entry.name)}</span></div></div><div class="record-row__state cell-mono">${entry.rows.toLocaleString('en-US')}</div><div style="display:flex;gap:6px;align-items:center">${button('Query', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', args: [entry.name] })}<span class="record-row__go">${icon('chevron-right', 'icon--sm')}</span></div></div>`]
-			: [`<div class="record-row" data-command="temcoTools.sql.browse" data-args="${esc(JSON.stringify([entry.name]))}">${toneMark('list')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(entry.name)}</span></div></div><div class="record-row__state cell-mono">${entry.rows.toLocaleString('en-US')}</div><div style="display:flex;gap:6px;align-items:center">${button('Query', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', args: [entry.name] })}<span class="record-row__go">${icon('chevron-right', 'icon--sm')}</span></div></div>`])
+		.map((item) => row({
+			mark: 'list',
+			tone: row.name === table ? 'accent' : undefined,
+			title: item.name,
+			meta: [`${item.rows.toLocaleString('en-US')} rows`],
+			actions: button('Query', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', args: [item.name] }),
+			state: item.name === table ? 'showing' : 'open'
+		}))
 		.join('');
 
 	const head = page === undefined ? '' : page.columns.map((column) => `<th>${esc(column)}</th>`).join('');
@@ -379,7 +407,7 @@ ${tables.length === 0
 				})}
 ${page.total === 0
 					? callout('This table is empty. A row appears here when something writes one — a read, a draft, a build or a release.')
-					: `<div class="data-grid"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`}`}</div>
+					: `<div class="az-grid"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`}`}</div>
 </div>`}`;
 }
 
@@ -393,7 +421,7 @@ function databaseBody(facts: DatabaseFacts): string {
 	const drift = facts.schemaVersion !== facts.expected;
 
 	const act = (mark: string, name: string, note: string, action: string, options: { tone?: 'warn' | 'err'; label?: string } = {}): string =>
-		`<div class="record-row record-row--static">${toneMark(mark, options.tone)}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name">${esc(name)}</span></div><div class="record-row__meta"><span>${note}</span></div></div><div class="record-row__state">${options.tone === undefined ? '' : badge('destructive', options.tone)}</div>${button(options.label ?? name, action, { small: true, kind: 'ghost' })}</div>`;
+		`${row({ mark, tone: options.tone, title: name, meta: [note], state: options.tone === undefined ? undefined : 'destructive', actions: button(options.label ?? name, action, { small: true, kind: 'ghost' }) })}`;
 
 	return `${pageHead({
 		title: 'Database',
@@ -436,8 +464,8 @@ ${drift
 
 /** *History* — what this window ran, newest first. */
 function historyBody(state: StudioState): string {
-	const row = (entry: RunEntry): string =>
-		`<div class="record-row" data-command="temcoTools.sql.recall" data-args="${esc(JSON.stringify([entry.sql]))}">${toneMark(entry.ok ? 'check' : 'error', entry.ok ? 'ok' : 'err')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(entry.sql)}</span></div><div class="record-row__meta"><span>${esc(entry.at)}</span><span>${esc(entry.detail)}</span></div></div><div class="record-row__state">${badge(entry.ok ? 'Ran' : 'Failed', entry.ok ? 'ok' : 'err')}</div><span class="record-row__go">${icon('chevron-right', 'icon--sm')}</span></div>`;
+	const line = (run: RunEntry): string =>
+		`${row({ mark: run.ok ? 'check' : 'error', tone: run.ok ? 'ok' : 'err', title: run.sql, meta: [run.at, run.detail], state: run.ok ? 'Ran' : 'Failed', actions: button('Recall', 'temcoTools.sql.recall', { small: true, kind: 'ghost', args: [run.sql] }) })}`;
 
 	return `${pageHead({
 		title: 'History',
@@ -447,7 +475,7 @@ function historyBody(state: StudioState): string {
 	})}
 ${state.history.length === 0
 			? `<div class="mt-16">${callout('Nothing has been run in this window yet. The history is per window and is not written anywhere — a statement is a thing that happened, not state.')}</div>`
-			: group({ label: 'Statements', count: n(state.history.length, 'statement', 'statements'), body: state.history.map(row).join('') })}`;
+			: group({ label: 'Statements', count: n(state.history.length, 'statement', 'statements'), body: state.history.map(line).join('') })}`;
 }
 
 /**
@@ -462,11 +490,11 @@ function schemaBody(tables: TableFact[], stored: number, expected: number, selec
 	const table = tables.find((entry) => entry.name === selected) ?? tables[0];
 
 	const picker = tables
-		.map((entry) => `<div class="record-row${entry.name === table?.name ? ' record-row--current' : ''}" data-command="temcoTools.sql.selectTable" data-args="${esc(JSON.stringify([entry.name]))}">${toneMark('list', entry.name === table?.name ? 'accent' : undefined)}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(entry.name)}</span></div><div class="record-row__meta"><span>${n(entry.columns.length, 'column', 'columns')}${entry.indexes.length > 0 ? ` · ${n(entry.indexes.length, 'index', 'indexes')}` : ''}</span></div></div><div class="record-row__state cell-mono">${entry.rows.toLocaleString('en-US')}</div><span class="record-row__go">${icon('chevron-right', 'icon--sm')}</span></div>`)
+		.map((entry) => `${row({ mark: 'list', tone: entry.name === table?.name ? 'accent' : undefined, title: entry.name, meta: [n(entry.columns.length, 'column', 'columns'), entry.indexes.length > 0 ? n(entry.indexes.length, 'index', 'indexes') : undefined, `${entry.rows.toLocaleString('en-US')} rows`], state: entry.name === table?.name ? 'showing' : 'open', actions: button('Open', 'temcoTools.sql.selectTable', { small: true, kind: 'ghost', args: [entry.name] }) })}`)
 		.join('');
 
 	const columnRow = (column: TableFact['columns'][number]): string =>
-		`<div class="record-row record-row--static">${toneMark('code', column.primaryKey ? 'accent' : undefined)}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(column.name)}</span><span class="tag">${esc(column.type || 'no type')}</span>${column.primaryKey ? badge('primary key', 'accent') : ''}${column.notNull ? badge('not null', 'neutral') : ''}${column.defaultValue === undefined ? '' : badge(`default ${column.defaultValue}`, 'neutral')}</div></div><div class="record-row__state"></div><div class="record-row__state"></div></div>`;
+		`${row({ mark: 'code', tone: column.primaryKey ? 'accent' : undefined, title: column.name, meta: [column.type || 'no type', column.primaryKey ? 'primary key' : undefined, column.notNull ? 'not null' : undefined, column.defaultValue === undefined ? undefined : `default ${column.defaultValue}`] })}`;
 
 	const detail = table === undefined
 		? callout('The database has no tables. Reset it from the <b>Database</b> page to write this build’s schema.', 'warn')
@@ -507,8 +535,8 @@ ${tables.length === 0
 
 /** *Saved Queries* — kept in this profile, and nothing pretends they are more than that. */
 function savedBody(saved: { name: string; sql: string }[]): string {
-	const row = (entry: { name: string; sql: string }): string =>
-		`<div class="record-row">${toneMark('book', 'accent')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name">${esc(entry.name)}</span></div><div class="record-row__meta"><span class="cell-mono">${esc(entry.sql.replace(/\s+/g, ' ').slice(0, 110))}</span></div></div><div class="record-row__state"></div><div style="display:flex;gap:6px;align-items:center">${button('Load', 'temcoTools.sql.loadSaved', { small: true, kind: 'ghost', args: [entry.name] })}${button('Delete', 'temcoTools.sql.deleteSaved', { small: true, kind: 'ghost', args: [entry.name] })}</div></div>`;
+	const line = (savedQuery: { name: string; sql: string }): string =>
+		`${row({ mark: 'book', tone: 'accent', title: savedQuery.name, meta: [savedQuery.sql.replace(/\s+/g, ' ').slice(0, 110)], actions: button('Load', 'temcoTools.sql.loadSaved', { small: true, kind: 'ghost', args: [savedQuery.name] }) + button('Delete', 'temcoTools.sql.deleteSaved', { small: true, kind: 'danger', args: [savedQuery.name] }) })}`;
 
 	return `${pageHead({
 		title: 'Saved Queries',
@@ -518,13 +546,13 @@ function savedBody(saved: { name: string; sql: string }[]): string {
 	})}
 ${saved.length === 0
 			? `<div class="mt-16">${callout('Nothing is saved yet. Write a statement in the <b>Query Editor</b> and press <b>Save This</b>, or start from a <b>Preset</b>.')}</div>`
-			: group({ label: 'Statements', count: n(saved.length, 'query', 'queries'), body: saved.map(row).join('') })}`;
+			: group({ label: 'Statements', count: n(saved.length, 'query', 'queries'), body: saved.map(line).join('') })}`;
 }
 
 /** *Presets* — statements written against this schema, ready to load. */
 function presetsBody(): string {
-	const row = (preset: Preset): string =>
-		`<div class="record-row" data-command="temcoTools.sql.loadPreset" data-args="${esc(JSON.stringify([preset.name]))}">${toneMark('graph')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name">${esc(preset.name)}</span></div><div class="record-row__meta"><span>${esc(preset.note)}</span></div></div><div class="record-row__state"></div>${button('Load', 'temcoTools.sql.loadPreset', { small: true, kind: 'ghost', args: [preset.name] })}</div>`;
+	const line = (preset: Preset): string =>
+		`${row({ mark: 'graph', title: preset.name, meta: [preset.note], actions: button('Load', 'temcoTools.sql.loadPreset', { small: true, kind: 'ghost', args: [preset.name] }) })}`;
 
 	return `${pageHead({
 		title: 'Presets',
@@ -532,7 +560,7 @@ function presetsBody(): string {
 		desc: 'Statements written against the schema this build has. Loading one puts it in the editor; a preset that returns nothing is telling you the schema moved.',
 		actions: button('Query Editor', 'temcoTools.sql.query', { kind: 'primary', mark: 'code' })
 	})}
-${group({ label: 'Statements', count: n(PRESETS.length, 'preset', 'presets'), body: PRESETS.map(row).join('') })}
+${group({ label: 'Statements', count: n(PRESETS.length, 'preset', 'presets'), body: PRESETS.map(line).join('') })}
 <div class="mt-16">${callout('A preset is written by this module, not by the database: a table it does not know about is a table it cannot ask about.')}</div>`;
 }
 

@@ -3513,7 +3513,7 @@ body {
 }
 
 .az-stat__label {
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
 }
@@ -3584,7 +3584,7 @@ body {
 
 .az-crumbs {
 	margin: 0 0 var(--sp-2);
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
 }
@@ -3634,7 +3634,7 @@ body {
 .az-intro {
 	margin: var(--sp-2) 0 0;
 	max-width: 78ch;
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 13px;
 	line-height: 20px;
 }
@@ -3656,7 +3656,7 @@ body {
 	padding: var(--sp-2) var(--sp-3);
 	border-radius: var(--r-2);
 	background: var(--bg-inset);
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: var(--fs-sm);
 	line-height: 20px;
 }
@@ -3731,14 +3731,14 @@ body {
 	border: 1px solid var(--hairline-strong);
 	border-radius: var(--r-2);
 	background: var(--surface-card);
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	cursor: pointer;
 	text-align: left;
 }
 
 .az-field:hover {
 	border-color: var(--az-blue);
-	color: var(--ink-2);
+	color: var(--fg-muted);
 }
 
 .az-field:focus-visible {
@@ -3767,7 +3767,7 @@ body {
 	padding: 0 4px;
 	border: 1px solid var(--hairline-strong);
 	border-radius: var(--r-2);
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-family: var(--font-mono);
 	font-size: 11px;
 	line-height: 16px;
@@ -3945,7 +3945,7 @@ body {
 
 .az-option__desc {
 	margin: 0;
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 13px;
 	line-height: 18px;
 }
@@ -3964,7 +3964,7 @@ body {
 	grid-template-columns: 14px 1fr;
 	gap: var(--sp-2);
 	align-items: start;
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 13px;
 	line-height: 18px;
 }
@@ -4018,7 +4018,7 @@ body {
 
 .az-number__label {
 	margin: 2px 0 0;
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
 }
@@ -4068,7 +4068,7 @@ body {
 
 .az-callout__desc {
 	margin: 2px 0 0;
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 13px;
 	line-height: 18px;
 }
@@ -4102,7 +4102,7 @@ body {
 
 .az-section__desc {
 	margin: 2px 0 0;
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 12px;
 	line-height: 16px;
 }
@@ -4115,7 +4115,7 @@ body {
  */
 .az-note {
 	margin: var(--sp-2) 0 0;
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 11.5px;
 	line-height: 16px;
 }
@@ -4197,7 +4197,7 @@ body {
 
 .az-card__desc {
 	margin: 2px 0 0;
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 12px;
 	line-height: 16px;
 }
@@ -4205,7 +4205,7 @@ body {
 /* A counted fact under the description: "2 of 5 steps". */
 .az-card__note {
 	margin: var(--sp-2) 0 0;
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
 }
@@ -4301,7 +4301,7 @@ body {
 .az-entry__meta {
 	display: block;
 	margin-top: 1px;
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
 	font-family: var(--font-mono);
@@ -4411,7 +4411,7 @@ body {
 }
 
 .az-choice__desc {
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 12px;
 	line-height: 16px;
 }
@@ -4455,13 +4455,13 @@ body {
 }
 
 .az-form__label {
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 12px;
 	line-height: 16px;
 }
 
 .az-form__hint {
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
 }
@@ -4557,7 +4557,7 @@ body {
 }
 
 .az-check__note {
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
 	overflow: hidden;
@@ -4598,7 +4598,7 @@ body {
 
 .az-actions__summary {
 	min-width: 0;
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
 	overflow: hidden;
@@ -4644,7 +4644,7 @@ body {
 .az-q__ask .icon {
 	width: 12px;
 	height: 12px;
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	transition: transform 120ms ease;
 }
 
@@ -4655,7 +4655,7 @@ body {
 .az-q__answer {
 	margin: 0 0 var(--sp-3);
 	padding: 0 var(--sp-1) 0 calc(var(--sp-1) + 12px + var(--sp-2));
-	color: var(--ink-2);
+	color: var(--fg-muted);
 	font-size: 12px;
 	line-height: 18px;
 }
@@ -4702,7 +4702,7 @@ body {
 	gap: var(--sp-2);
 	padding: var(--sp-1) var(--sp-3);
 	border-bottom: 1px solid var(--hairline);
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	font-size: 11px;
 	line-height: 16px;
 }
@@ -4734,7 +4734,7 @@ body {
 }
 
 .az-code__n {
-	color: var(--ink-3);
+	color: var(--fg-subtle);
 	text-align: right;
 	user-select: none;
 	font-variant-numeric: tabular-nums;
@@ -4743,7 +4743,7 @@ body {
 .az-code .tok-keyword { color: #a4262c; }
 .az-code .tok-string { color: #00766c; }
 .az-code .tok-name { color: #5c2d91; }
-.az-code .tok-comment { color: var(--ink-3); font-style: italic; }
+.az-code .tok-comment { color: var(--fg-subtle); font-style: italic; }
 
 body.vscode-dark .az-code .tok-keyword { color: #ff9aa8; }
 body.vscode-dark .az-code .tok-string { color: #7fd8cb; }
@@ -4777,4 +4777,140 @@ body.vscode-dark .az-code .tok-name { color: #c6b3ff; }
 	.az-q__ask .icon {
 		transition: none;
 	}
+}
+
+/* ---- a table: rows a tool reads back ---- */
+/* One grid for every surface that shows rows a statement returned: the query editor's result and the Data page are
+   the same table with a different source, and two copies of these rules had already drifted apart. The header is
+   sticky because a result is scrolled, and the numbers are tabular because a column of them is read down. */
+.az-grid {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	overflow: auto;
+	background: var(--bg-card);
+}
+
+.az-grid table {
+	border-collapse: separate;
+	border-spacing: 0;
+	width: 100%;
+	font-size: 12px;
+}
+
+.az-grid th,
+.az-grid td {
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--hairline);
+	text-align: left;
+	white-space: nowrap;
+	color: var(--fg);
+}
+
+.az-grid th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	font-weight: 600;
+	color: var(--fg-muted);
+	background: var(--bg-inset);
+}
+
+.az-grid tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.az-grid tbody tr:hover td {
+	background: var(--bg-hover);
+}
+
+.az-grid__row {
+	width: 1%;
+	text-align: right;
+	color: var(--fg-subtle);
+	font-family: var(--vscode-editor-font-family, Consolas, monospace);
+}
+
+.az-grid__num {
+	text-align: right;
+	font-family: var(--vscode-editor-font-family, Consolas, monospace);
+}
+
+/* ---- a toolbar: the controls that belong to the statement under them ---- */
+.az-toolbar {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	flex-wrap: wrap;
+	margin: var(--sp-4) 0 var(--sp-2);
+}
+
+.az-toolbar__facts {
+	margin-left: auto;
+	color: var(--fg-subtle);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---- an editor: the one place a page holds text a person writes ---- */
+.az-editor {
+	width: 100%;
+	box-sizing: border-box;
+	min-height: 220px;
+	padding: 12px 14px;
+	tab-size: 2;
+	font-family: var(--vscode-editor-font-family, Consolas, monospace);
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--fg);
+	background: var(--editor-bg);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	resize: vertical;
+}
+
+.az-editor:focus {
+	outline: none;
+	border-color: var(--az-blue);
+}
+
+/* ---- a message line: what the last act said ---- */
+.az-message {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--sp-2);
+	margin-top: var(--sp-3);
+	padding: 7px 11px;
+	border-radius: 6px;
+	font-size: 12px;
+	color: var(--fg);
+	background: var(--bg-inset);
+}
+
+.az-message--err {
+	background: var(--err-pale, rgba(220, 60, 60, 0.12));
+}
+
+/* ---- two panes: an index on the left, the thing picked on the right ---- */
+.az-split {
+	display: grid;
+	grid-template-columns: 300px minmax(0, 1fr);
+	gap: var(--sp-6);
+	align-items: start;
+	margin-top: var(--sp-4);
+}
+
+@media (max-width: 900px) {
+	.az-split {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* A destructive button is the same button, in the one colour a page uses for "this forgets something". */
+.az-btn--danger {
+	color: var(--vscode-errorForeground, #d13438);
+	border-color: currentColor;
+}
+
+.az-btn--danger:hover {
+	background: rgba(209, 52, 56, 0.10);
 }
