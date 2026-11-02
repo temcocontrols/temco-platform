@@ -31,7 +31,7 @@ import { describe, SiteRunner, SiteStatus } from './siteRunner';
 import { Snapshot } from './snapshot';
 import { readPublishedState } from './state';
 import { BrowseTree, DownloadTree, OverviewTree, Reads, registerBadges, VIEWS } from './tree';
-import { restoreByReopen, remember } from './ui';
+import { restore, remember } from './ui';
 
 const plural = (count: number, one: string, many?: string): string =>
 	String(count) + ' ' + (count === 1 ? one : many === undefined ? one + 's' : many);
@@ -465,12 +465,13 @@ export function activate(context: vscode.ExtensionContext): void {
 		downloads,
 		...views,
 		output,
-		// A page of this module that was open when the window closed comes back with its tab.
-		...restoreByReopen(context, [
-			{ viewType: OVERVIEW_VIEW_TYPE, open: () => overview.open() },
-			{ viewType: SITE_VIEW_TYPE, open: () => sitePage.open() },
-			{ viewType: DOWNLOAD_VIEW_TYPE, open: () => downloads.open() },
-			{ viewType: PUBLISH_VIEW_TYPE, open: () => publishing.open() }
+		// A page of this module that was open when the window closed comes back with its tab: the panel the window
+		// restored is drawn into, so the tab keeps its place and there is never a second copy of it.
+		...restore(context, [
+			{ viewType: OVERVIEW_VIEW_TYPE, open: (panel) => overview.open(panel) },
+			{ viewType: SITE_VIEW_TYPE, open: (panel) => sitePage.open(undefined, panel) },
+			{ viewType: DOWNLOAD_VIEW_TYPE, open: (panel) => downloads.open(panel) },
+			{ viewType: PUBLISH_VIEW_TYPE, open: (panel) => publishing.open(panel) }
 		]),
 
 		// The folder and the port are settings, so a hand-edited setting reaches the panel and the page as well.

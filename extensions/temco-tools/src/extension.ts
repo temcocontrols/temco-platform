@@ -26,7 +26,7 @@ import { DEVICE_PAGES, registerDevices } from './devices';
 import { IO_PAGES, registerIo } from './io';
 import { NETWORK_PAGES, registerNetwork } from './network';
 import { SQL_PAGES, registerSql } from './sqlStudio';
-import { restoreByReopen } from './ui';
+import { restore } from './ui';
 
 /** One row of a studio's side bar: the label, the sentence behind it, and the glyph. */
 interface StudyRow {
@@ -135,13 +135,14 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.window.createTreeView('temcoTools.sqlWorkbench', { treeDataProvider: new PagesTree(SQL_PAGES.filter((entry) => entry.group === 'rows')) }),
 		vscode.window.createTreeView('temcoTools.sqlDocs', { treeDataProvider: new PagesTree(SQL_PAGES.filter((entry) => entry.group === 'file')) }),
 		// A page of a studio that was open when the window closed comes back with its tab. Each studio's table already
-		// carries both halves — the view type it opens under and the id its opener takes — so nothing is remembered here.
-		...restoreByReopen(context, [
-			...DEVICE_PAGES.map((page) => ({ viewType: page.viewType, open: () => devices.pages.open(page.id) })),
-			...IO_PAGES.map((page) => ({ viewType: page.viewType, open: () => io.pages.open(page.id) })),
-			...BACNET_PAGES.map((page) => ({ viewType: page.viewType, open: () => bacnet.pages.open(page.id) })),
-			...NETWORK_PAGES.map((page) => ({ viewType: page.viewType, open: () => network.pages.open(page.id) })),
-			...SQL_PAGES.map((page) => ({ viewType: page.viewType, open: () => void sql.pages.open(page.id) }))
+		// carries both halves — the view type it opens under and the id its opener takes — so nothing is remembered
+		// here. The panel the window restored is drawn into, so the tab keeps its place.
+		...restore(context, [
+			...DEVICE_PAGES.map((page) => ({ viewType: page.viewType, open: (panel: vscode.WebviewPanel) => devices.pages.open(page.id, panel) })),
+			...IO_PAGES.map((page) => ({ viewType: page.viewType, open: (panel: vscode.WebviewPanel) => io.pages.open(page.id, panel) })),
+			...BACNET_PAGES.map((page) => ({ viewType: page.viewType, open: (panel: vscode.WebviewPanel) => bacnet.pages.open(page.id, panel) })),
+			...NETWORK_PAGES.map((page) => ({ viewType: page.viewType, open: (panel: vscode.WebviewPanel) => network.pages.open(page.id, panel) })),
+			...SQL_PAGES.map((page) => ({ viewType: page.viewType, open: (panel: vscode.WebviewPanel) => void sql.pages.open(page.id, panel) }))
 		])
 	);
 }

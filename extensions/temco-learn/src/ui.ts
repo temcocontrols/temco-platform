@@ -34,8 +34,6 @@ interface UiApi {
 	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
 	/** One serializer per page, so the window can bring a page's tab back after a restart. */
 	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
-	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
 	commandScript: string;
 	runCommand(message: PageMessage): void;
 }
@@ -173,5 +171,3 @@ export const remember = ui.remember;
 /** One serializer per page, so the window can bring a page's tab back after a restart. */
 export const restore = ui.restore;
 
-/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-export const restoreByReopen = ui.restoreByReopen;

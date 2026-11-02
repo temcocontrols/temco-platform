@@ -21,8 +21,6 @@ interface UiApi {
 	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
 	/** One serializer per page, so the window can bring a page's tab back after a restart. */
 	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
-	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
 	commandScript: string;
 	/** Runs one of those messages: `{ command, args }`. */
 	runCommand(message: { command?: unknown; args?: unknown }): void;
@@ -150,5 +148,3 @@ export async function focusLibrary(): Promise<void> {
 	);
 }
 
-/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-export const restoreByReopen = ui.restoreByReopen;

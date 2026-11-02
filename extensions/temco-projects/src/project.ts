@@ -15,7 +15,7 @@ import { ProjectsPage } from './projectsPage';
 import { discardWorkFolder, folderConsequence, workFolderOf } from './removal';
 import { AddSourcePage, ADD_SOURCE_VIEW_TYPE } from './sourceFlow';
 import { Catalog, CatalogUnavailable, Selection, slugOf } from './store';
-import { focusLibrary, restoreByReopen, rowSlug } from './ui';
+import { focusLibrary, restore, rowSlug } from './ui';
 import { PROJECTS_PAGE_VIEW_TYPE, PROJECT_VIEW_TYPE } from './surface';
 
 /** A slug, or the sidebar row that stands for a project — the two things a command argument can be. */
@@ -68,12 +68,13 @@ export function registerProjectCommands(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('temcoProjects.newProject', () => void flow.open()),
-    // A page of this module that was open when the window closed comes back with its tab, on the same project.
-    ...restoreByReopen(context, [
-      { viewType: PROJECT_VIEW_TYPE, open: (arg) => page.openEdit(arg ?? '') },
-      { viewType: PROJECTS_PAGE_VIEW_TYPE, open: () => void projects.open() },
-      { viewType: NEW_PROJECT_VIEW_TYPE, open: () => void flow.open() },
-      { viewType: ADD_SOURCE_VIEW_TYPE, open: () => source.open() }
+    // A page of this module that was open when the window closed comes back with its tab, on the same project: the
+    // panel the window restored is drawn into, so the tab keeps its place and there is never a second copy of it.
+    ...restore(context, [
+      { viewType: PROJECT_VIEW_TYPE, open: (panel, arg) => page.openEdit(arg ?? '', panel) },
+      { viewType: PROJECTS_PAGE_VIEW_TYPE, open: (panel) => void projects.open(panel) },
+      { viewType: NEW_PROJECT_VIEW_TYPE, open: (panel) => void flow.open(undefined, panel) },
+      { viewType: ADD_SOURCE_VIEW_TYPE, open: (panel) => source.open(panel) }
     ]),
     // The projects page: one list of everything the catalog holds.
     vscode.commands.registerCommand('temcoProjects.projectsPage', () => void projects.open()),

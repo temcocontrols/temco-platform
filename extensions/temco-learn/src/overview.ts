@@ -26,17 +26,20 @@ export class OverviewPage implements vscode.Disposable {
 
 	constructor(private readonly read: () => Promise<Snapshot>) { }
 
-	/** Opens the page, or brings it forward if it is already open. */
-	open(): void {
+	/** Opens the page, or brings it forward if it is already open. `restored` is the tab the window gave back. */
+	open(restored?: vscode.WebviewPanel): void {
 		if (this.opened !== undefined) {
 			this.opened.reveal(pageColumn());
 			void this.render();
 			return;
 		}
-		this.opened = vscode.window.createWebviewPanel(OVERVIEW_VIEW_TYPE, 'Temco Learn', pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip, and closing it as well
+		// as working on it would leave an empty tab of the same name behind.
+		this.opened = restored ?? vscode.window.createWebviewPanel(OVERVIEW_VIEW_TYPE, 'Temco Learn', pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		this.opened.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.opened.iconPath = new vscode.ThemeIcon('cloud-upload');
 		this.opened.onDidDispose(() => {
 			this.opened = undefined;

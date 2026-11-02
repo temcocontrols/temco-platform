@@ -42,16 +42,19 @@ export class DownloadPage implements vscode.Disposable {
 
 	constructor(private readonly read: () => Promise<DownloadFacts>) { }
 
-	open(): void {
+	/** Opens the page, or brings it forward. `restored` is the tab the window gave back. */
+	open(restored?: vscode.WebviewPanel): void {
 		if (this.opened !== undefined) {
 			this.opened.reveal(pageColumn());
 			void this.render();
 			return;
 		}
-		this.opened = vscode.window.createWebviewPanel(DOWNLOAD_VIEW_TYPE, 'Artifacts', pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		this.opened = restored ?? vscode.window.createWebviewPanel(DOWNLOAD_VIEW_TYPE, 'Artifacts', pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		this.opened.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.opened.iconPath = new vscode.ThemeIcon('cloud-download');
 		this.opened.onDidDispose(() => {
 			this.opened = undefined;

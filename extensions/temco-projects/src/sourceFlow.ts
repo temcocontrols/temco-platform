@@ -313,7 +313,7 @@ export class AddSourcePage {
 
 	constructor(private readonly context: vscode.ExtensionContext) { }
 
-	open(): void {
+	open(restored?: vscode.WebviewPanel): void {
 		remember(this.context, ADD_SOURCE_VIEW_TYPE);
 		const body = html();
 		if (this.panel) {
@@ -321,10 +321,12 @@ export class AddSourcePage {
 			this.panel.webview.html = page(body, { title: 'Add Source', script: SCRIPT, extraCss: LOCAL_CSS });
 			return;
 		}
-		const panel = vscode.window.createWebviewPanel(ADD_SOURCE_VIEW_TYPE, 'Add Source', pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		const panel = restored ?? vscode.window.createWebviewPanel(ADD_SOURCE_VIEW_TYPE, 'Add Source', pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.panel = panel;
 		panel.webview.onDidReceiveMessage((message: { type?: string; values?: Values }) => void this.receive(message));
 		panel.webview.html = page(body, { title: 'Add Source', script: SCRIPT, extraCss: LOCAL_CSS });

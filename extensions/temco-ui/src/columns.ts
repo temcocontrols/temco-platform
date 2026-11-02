@@ -22,15 +22,29 @@ import * as vscode from 'vscode';
 const OUR_PREFIX = 'temco';
 
 /**
+ * The prefix a tab reports before the view type it was opened with.
+ *
+ * `TabInputWebview.viewType` is the *internal* id: a panel created as `temcoLearn.overview` is reported as
+ * `mainThreadWebview-temcoLearn.overview`. Matching on the view type without stripping this is why "is that tab one
+ * of ours?" kept answering no for tabs that plainly were.
+ */
+const INTERNAL_PREFIX = 'mainThreadWebview-';
+
+/** True when a view type — as a tab reports it, or as it was created — is a page of ours. */
+export function isOurViewType(viewType: string): boolean {
+	const bare = viewType.startsWith(INTERNAL_PREFIX) ? viewType.slice(INTERNAL_PREFIX.length) : viewType;
+	return bare.startsWith(OUR_PREFIX);
+}
+
+/**
  * True when a tab is one of our webview pages.
  *
- * Matched on the prefix rather than on an exact view type on purpose: the exact string a tab reports is not
- * something to depend on (that assumption is what made the split), and no other extension's webview can carry
- * this prefix — `temcoDocs`, `temcoAi`, `temcoRepositories` and the rest are all ours.
+ * Matched on the prefix rather than on an exact view type on purpose: `temcoDocs`, `temcoAi`, `temcoRepositories`
+ * and the rest are all ours, and no other extension's webview can carry this prefix.
  */
 function isOurTab(tab: vscode.Tab): boolean {
 	const input = tab.input;
-	return input instanceof vscode.TabInputWebview && input.viewType.startsWith(OUR_PREFIX);
+	return input instanceof vscode.TabInputWebview && isOurViewType(input.viewType);
 }
 
 /** The tab group that already holds a page of ours — the one group our pages live in, if any is open. */

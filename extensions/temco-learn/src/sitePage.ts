@@ -110,17 +110,19 @@ export class SitePage implements vscode.Disposable {
 	constructor(private readonly read: () => Promise<SitePageFacts>) { }
 
 	/** Opens the page, or brings it forward. `focus` puts the add section at the top, for the acts that mean "add one". */
-	open(focus?: 'add'): void {
+	open(focus?: 'add', restored?: vscode.WebviewPanel): void {
 		this.focus = focus;
 		if (this.opened !== undefined) {
 			this.opened.reveal(pageColumn());
 			void this.render();
 			return;
 		}
-		this.opened = vscode.window.createWebviewPanel(SITE_VIEW_TYPE, SITE_PAGE_TITLE, pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		this.opened = restored ?? vscode.window.createWebviewPanel(SITE_VIEW_TYPE, SITE_PAGE_TITLE, pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		this.opened.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.opened.onDidDispose(() => {
 			this.opened = undefined;
 		});

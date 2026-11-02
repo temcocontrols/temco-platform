@@ -12,10 +12,16 @@
 //     default.
 //   * `restore` — one serializer per view type, which hands the panel the window restored to the module's own `open`.
 //     **Adoption is the point**: the module draws into the panel it is given instead of creating a second one, so the
-//     tab keeps its place in the group and the reader gets their layout back rather than a copy of it.
+//     tab keeps its place in the group and the reader gets their layout back rather than a copy of it. A module that
+//     opens a start page asks {@link restoredAny} first: a window that is bringing pages back is not an empty one.
 //
 // A module that wants its pages back calls `remember` where it opens a page, and `restore` once in `activate`. The
 // manifest needs `onWebviewPanel:<viewType>` for each of them, or the module is not running yet when the window asks.
+//
+// Adoption is the *only* way here, and that is worth knowing before "simplifying" it: closing the panel the window
+// hands back and opening the page again looks equivalent and is not. The closed one is a tab the window is still
+// restoring, so it stays in the strip as an empty tab of the same name — a page of ours came back as a blank tab
+// beside a second copy of itself, one more every restart.
 
 import * as vscode from 'vscode';
 
@@ -33,6 +39,22 @@ export interface RestorablePage {
 
 const KEY = 'temcoUi.restore.';
 
+/** Whether this window has brought back at least one page of ours: a restored window, not an empty one. */
+let restoredAPage = false;
+
+const restoredListeners = new Set<() => void>();
+
+/** Whether a page of ours has been restored into this window. */
+export function restoredAny(): boolean {
+	return restoredAPage;
+}
+
+/** Calls `listener` when the first page of ours is restored — a window that is coming back, not a fresh one. */
+export function onDidRestorePage(listener: () => void): vscode.Disposable {
+	restoredListeners.add(listener);
+	return new vscode.Disposable(() => restoredListeners.delete(listener));
+}
+
 /** The subject this view type was last opened on, or `undefined`. */
 export function remembered(context: vscode.ExtensionContext, viewType: string): string | undefined {
 	const value = context.workspaceState.get<string>(KEY + viewType);
@@ -44,7 +66,11 @@ export function remember(context: vscode.ExtensionContext, viewType: string, arg
 	void context.workspaceState.update(KEY + viewType, arg ?? '');
 }
 
-/** One serializer per page: the window asks for the tab, and the module draws it. */
+/**
+ * One serializer per page: the window asks for the tab, and the module draws it.
+ *
+ * `open` must draw into the panel it is given — the module's own `open` takes it and uses it instead of creating one.
+ */
 export function restore(
 	context: vscode.ExtensionContext,
 	pages: readonly RestorablePage[]
@@ -52,28 +78,11 @@ export function restore(
 	return pages.map((page) =>
 		vscode.window.registerWebviewPanelSerializer(page.viewType, {
 			async deserializeWebviewPanel(panel: vscode.WebviewPanel): Promise<void> {
+				restoredAPage = true;
+				for (const listener of [...restoredListeners]) {
+					listener();
+				}
 				page.open(panel, remembered(context, page.viewType));
-			}
-		})
-	);
-}
-
-/**
- * One serializer per page for a module whose `open` makes its own panel.
- *
- * The restored tab is closed and the page opened again: the reader gets their page back, but the tab lands where the
- * module puts it rather than where it was. `restore` above is the version that keeps the position, and is worth the
- * extra few lines wherever a module's `open` can take a panel.
- */
-export function restoreByReopen(
-	context: vscode.ExtensionContext,
-	pages: readonly { viewType: string; open(arg?: string): void }[]
-): vscode.Disposable[] {
-	return pages.map((page) =>
-		vscode.window.registerWebviewPanelSerializer(page.viewType, {
-			async deserializeWebviewPanel(panel: vscode.WebviewPanel): Promise<void> {
-				panel.dispose();
-				page.open(remembered(context, page.viewType));
 			}
 		})
 	);

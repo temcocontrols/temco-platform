@@ -48,17 +48,19 @@ export class NeedsPage {
     private readonly roots: () => readonly DocsRoot[]
   ) { }
 
-  open(): void {
+  open(restored?: vscode.WebviewPanel): void {
     if (this.panel) {
       this.panel.reveal(pageColumn());
       this.seed();
       return;
     }
 
-    this.panel = vscode.window.createWebviewPanel(NEEDS_VIEW_TYPE, 'What needs doing', pageColumn(), {
+    // A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+    this.panel = restored ?? vscode.window.createWebviewPanel(NEEDS_VIEW_TYPE, 'What needs doing', pageColumn(), {
       enableScripts: true,
       localResourceRoots: [],
     });
+    this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
     this.panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'docs.svg');
     // A button on the page names a command and, when it needs one, its arguments; the same script every page of ours
     // runs. A script run is remembered here rather than in the page, because a run is a thing that happened.

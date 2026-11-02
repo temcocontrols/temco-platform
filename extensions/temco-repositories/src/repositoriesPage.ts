@@ -91,7 +91,7 @@ export class RepositoriesPage {
   ) { }
 
   /** Opens the page, or brings it forward if it is already open. One instance, always. */
-  open(slug?: string, citeTarget?: string): void {
+  open(slug?: string, citeTarget?: string, restored?: vscode.WebviewPanel): void {
     remember(this.context, REPOSITORIES_VIEW_TYPE, slug ?? citeTarget ?? '');
     // Opened *for* one organisation — the panel asks for its own row, not for whatever was last shown.
     if (slug !== undefined) {
@@ -107,10 +107,12 @@ export class RepositoriesPage {
       void this.send();
       return;
     }
-    this.panel = vscode.window.createWebviewPanel(REPOSITORIES_VIEW_TYPE, 'Repositories', pageColumn(), {
+    // A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+    this.panel = restored ?? vscode.window.createWebviewPanel(REPOSITORIES_VIEW_TYPE, 'Repositories', pageColumn(), {
       enableScripts: true,
       localResourceRoots: [],
     });
+    this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
     this.panel.onDidDispose(() => {
       this.panel = undefined;
     });

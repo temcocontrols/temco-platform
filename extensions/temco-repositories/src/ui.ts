@@ -25,8 +25,16 @@ interface UiApi {
 	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
 	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
 	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
-	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
+	/** One serializer per page: the module draws into the panel the window restored, so the tab keeps its place. */
+	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
+}
+
+/** One page of a module, as the window needs it back. */
+export interface RestorablePage {
+	/** The view type the panel was created with — the id the window restores by. */
+	viewType: string;
+	/** Opens the page, drawing into `panel` when the window handed one back. */
+	open(panel?: vscode.WebviewPanel, arg?: string): void;
 }
 
 const extension = vscode.extensions.getExtension<UiApi>(UI_EXTENSION_ID);
@@ -60,8 +68,9 @@ export const section = ui.section;
 /** The one tinted callout a page is allowed. */
 export const callout = ui.callout;
 
-/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-export const restoreByReopen = ui.restoreByReopen;
+/** One serializer per page: the module draws into the panel the window restored, so the tab keeps its place. */
+export const restore = ui.restore;
+
 
 /** Records the subject a page is being opened on, so a restored tab opens on the same one. */
 export const remember = ui.remember;

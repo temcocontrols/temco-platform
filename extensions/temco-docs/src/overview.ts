@@ -23,17 +23,19 @@ export class OverviewPage {
 		private readonly roots: () => readonly DocsRoot[]
 	) { }
 
-	/** Opens the page, or brings it forward if it is already open. */
-	open(): void {
+	/** Opens the page, or brings it forward if it is already open. `restored` is the tab the window gave back. */
+	open(restored?: vscode.WebviewPanel): void {
 		if (this.panel) {
 			this.panel.reveal(pageColumn());
 			this.render();
 			return;
 		}
-		this.panel = vscode.window.createWebviewPanel(OVERVIEW_VIEW_TYPE, 'Documentation', pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		this.panel = restored ?? vscode.window.createWebviewPanel(OVERVIEW_VIEW_TYPE, 'Documentation', pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'docs.svg');
 		this.panel.onDidDispose(() => {
 			this.panel = undefined;

@@ -57,7 +57,7 @@ export class RepositoryDetailPage {
     private readonly refresh: () => void
   ) { }
 
-  open(name: string, organisation?: string): void {
+  open(name: string, organisation?: string, restored?: vscode.WebviewPanel): void {
     remember(this.context, REPOSITORY_DETAIL_VIEW_TYPE, name);
     this.name = name;
     this.organisation = organisation;
@@ -67,10 +67,12 @@ export class RepositoryDetailPage {
       void this.render();
       return;
     }
-    this.panel = vscode.window.createWebviewPanel(REPOSITORY_DETAIL_VIEW_TYPE, name, pageColumn(), {
+    // A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+    this.panel = restored ?? vscode.window.createWebviewPanel(REPOSITORY_DETAIL_VIEW_TYPE, name, pageColumn(), {
       enableScripts: true,
       localResourceRoots: [],
     });
+    this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
     this.panel.onDidDispose(() => {
       this.panel = undefined;
     });

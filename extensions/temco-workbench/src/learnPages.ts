@@ -116,8 +116,8 @@ export class LearnPages {
 
 	constructor(private readonly context: vscode.ExtensionContext) { }
 
-	async home(): Promise<void> {
-		this.open('home', LEARN_HOME_VIEW_TYPE, 'Temco Learn', homeBody(await readLearnFacts(this.context)));
+	async home(restored?: vscode.WebviewPanel): Promise<void> {
+		this.open('home', LEARN_HOME_VIEW_TYPE, 'Temco Learn', homeBody(await readLearnFacts(this.context)), restored);
 	}
 
 	/**
@@ -126,7 +126,7 @@ export class LearnPages {
 	 * A reader's page is the file a release put on disk, so this opens that rather than drawing a second copy of it:
 	 * a preview that can disagree with the shipped page is worse than no preview.
 	 */
-	async article(): Promise<void> {
+	async article(restored?: vscode.WebviewPanel): Promise<void> {
 		const facts = await readLearnFacts(this.context);
 		const newest = facts.releases[0];
 		if (newest === undefined) {
@@ -135,14 +135,14 @@ export class LearnPages {
 				mark: 'document',
 				desc: 'A reader\u2019s page is a file a release put on disk. Build the site and publish it, and this opens the site itself.',
 				actions: button('Build the Site', 'temcoDocs.buildSite', { kind: 'primary', mark: 'play' }) + button('Publish', 'temcoDocs.publishRelease', { mark: 'upload' })
-			})}${hero({ tone: 'warn', title: 'No published version', desc: 'The build writes the site; publishing copies it to a folder a reader can open. Until both have happened there is no page to read.', actions: button('Open Build Center', 'temcoDocs.builds', { kind: 'primary', mark: 'play' }) })}`);
+			})}${hero({ tone: 'warn', title: 'No published version', desc: 'The build writes the site; publishing copies it to a folder a reader can open. Until both have happened there is no page to read.', actions: button('Open Build Center', 'temcoDocs.builds', { kind: 'primary', mark: 'play' }) })}`, restored);
 			return;
 		}
 		await vscode.commands.executeCommand('temcoDocs.openPublished', newest.destination);
 	}
 
-	async downloads(): Promise<void> {
-		this.open('downloads', LEARN_DOWNLOADS_VIEW_TYPE, 'Downloads', downloadsBody(await readLearnFacts(this.context)));
+	async downloads(restored?: vscode.WebviewPanel): Promise<void> {
+		this.open('downloads', LEARN_DOWNLOADS_VIEW_TYPE, 'Downloads', downloadsBody(await readLearnFacts(this.context)), restored);
 	}
 
 	dispose(): void {
@@ -152,7 +152,7 @@ export class LearnPages {
 		this.panels.clear();
 	}
 
-	private open(key: string, viewType: string, title: string, body: string): void {
+	private open(key: string, viewType: string, title: string, body: string, restored?: vscode.WebviewPanel): void {
 		const html = page(body, { title, script: commandScript });
 		const existing = this.panels.get(key);
 		if (existing) {
@@ -160,10 +160,11 @@ export class LearnPages {
 			existing.webview.html = html;
 			return;
 		}
-		const panel = vscode.window.createWebviewPanel(viewType, title, pageColumn(), {
+		const panel = restored ?? vscode.window.createWebviewPanel(viewType, title, pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = new vscode.ThemeIcon('cloud-upload');
 		panel.webview.onDidReceiveMessage(runCommand);
 		panel.webview.html = html;

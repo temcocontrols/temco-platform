@@ -59,16 +59,19 @@ export class PublishPage implements vscode.Disposable {
 		private readonly log: PublishLog
 	) { }
 
-	open(): void {
+	/** Opens the page, or brings it forward. `restored` is the tab the window gave back. */
+	open(restored?: vscode.WebviewPanel): void {
 		if (this.opened !== undefined) {
 			this.opened.reveal(pageColumn());
 			void this.render();
 			return;
 		}
-		this.opened = vscode.window.createWebviewPanel(PUBLISH_VIEW_TYPE, 'Publishing', pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		this.opened = restored ?? vscode.window.createWebviewPanel(PUBLISH_VIEW_TYPE, 'Publishing', pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		this.opened.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.opened.iconPath = new vscode.ThemeIcon('cloud-upload');
 		this.opened.onDidDispose(() => {
 			this.opened = undefined;

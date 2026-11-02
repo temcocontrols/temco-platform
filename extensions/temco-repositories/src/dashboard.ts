@@ -189,17 +189,19 @@ export class DashboardPage {
 		private readonly onDidChange: (listener: () => void) => vscode.Disposable
 	) { }
 
-	open(): void {
+	open(restored?: vscode.WebviewPanel): void {
 		remember(this.context, DASHBOARD_VIEW_TYPE);
 		if (this.panel !== undefined) {
 			this.panel.reveal(pageColumn());
 			void this.render();
 			return;
 		}
-		this.panel = vscode.window.createWebviewPanel(DASHBOARD_VIEW_TYPE, 'Repositories — dashboard', pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		this.panel = restored ?? vscode.window.createWebviewPanel(DASHBOARD_VIEW_TYPE, 'Repositories — dashboard', pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.panel.iconPath = new vscode.ThemeIcon('history');
 		this.panel.onDidDispose(() => {
 			this.panel = undefined;

@@ -92,16 +92,16 @@ export class HelpPages {
 		private readonly selection: Selection
 	) { }
 
-	welcome(): void {
-		void this.open('welcome', HELP_WELCOME_VIEW_TYPE, 'Welcome', this.welcomeBody());
+	welcome(restored?: vscode.WebviewPanel): void {
+		void this.open('welcome', HELP_WELCOME_VIEW_TYPE, 'Welcome', this.welcomeBody(), restored);
 	}
 
-	home(): void {
-		void this.open('home', HELP_HOME_VIEW_TYPE, 'Help', homeBody());
+	home(restored?: vscode.WebviewPanel): void {
+		void this.open('home', HELP_HOME_VIEW_TYPE, 'Help', homeBody(), restored);
 	}
 
 	/** Reads the command list first: the page's one job is to say which of these keys reaches a command here. */
-	async keys(): Promise<void> {
+	async keys(restored?: vscode.WebviewPanel): Promise<void> {
 		let registered: string[] = [];
 		try {
 			registered = await vscode.commands.getCommands(true);
@@ -109,20 +109,20 @@ export class HelpPages {
 			// A host that will not list its commands leaves every row unknown rather than "missing".
 			registered = [];
 		}
-		await this.open('keys', HELP_KEYS_VIEW_TYPE, 'Keyboard Shortcuts', keysBody(registered));
+		await this.open('keys', HELP_KEYS_VIEW_TYPE, 'Keyboard Shortcuts', keysBody(registered), restored);
 	}
 
 	/** Reads this profile's log folder: the files, their sizes, and the tail of the largest. */
-	async logs(): Promise<void> {
-		await this.open('logs', HELP_LOGS_VIEW_TYPE, 'Logs', await logsBodyFor(this.context));
+	async logs(restored?: vscode.WebviewPanel): Promise<void> {
+		await this.open('logs', HELP_LOGS_VIEW_TYPE, 'Logs', await logsBodyFor(this.context), restored);
 	}
 
-	issue(): void {
-		void this.open('issue', HELP_ISSUE_VIEW_TYPE, 'Report an Issue', issueBody(vscode.version));
+	issue(restored?: vscode.WebviewPanel): void {
+		void this.open('issue', HELP_ISSUE_VIEW_TYPE, 'Report an Issue', issueBody(vscode.version), restored);
 	}
 
-	about(): void {
-		void this.open('about', HELP_ABOUT_VIEW_TYPE, 'About', aboutBody());
+	about(restored?: vscode.WebviewPanel): void {
+		void this.open('about', HELP_ABOUT_VIEW_TYPE, 'About', aboutBody(), restored);
 	}
 
 	/** Re-renders Welcome if it is open — its one checkbox is a setting, and the setting can change elsewhere. */
@@ -181,7 +181,7 @@ export class HelpPages {
 		this.panels.clear();
 	}
 
-	private async open(key: string, viewType: string, title: string, body: string): Promise<void> {
+	private async open(key: string, viewType: string, title: string, body: string, restored?: vscode.WebviewPanel): Promise<void> {
 		const html = page(body, {
 			title,
 			script: key === 'issue' ? commandScript + ISSUE_SCRIPT : commandScript
@@ -199,10 +199,11 @@ export class HelpPages {
 		const before = group?.activeTab;
 		const beforeIndex = before === undefined ? undefined : group?.tabs.indexOf(before);
 
-		const panel = vscode.window.createWebviewPanel(viewType, title, { viewColumn: column, preserveFocus: beforeIndex !== undefined }, {
+		const panel = restored ?? vscode.window.createWebviewPanel(viewType, title, { viewColumn: column, preserveFocus: beforeIndex !== undefined }, {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', key === 'welcome' ? 'dashboard.svg' : 'help.svg');
 		panel.webview.html = html;
 		panel.webview.onDidReceiveMessage((message: HelpMessage) => {

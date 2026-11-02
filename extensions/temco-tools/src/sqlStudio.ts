@@ -568,7 +568,7 @@ export class SqlPages {
 		};
 	}
 
-	async open(id: string): Promise<void> {
+	async open(id: string, restored?: vscode.WebviewPanel): Promise<void> {
 		const definition = SQL_PAGES.find((entry) => entry.id === id);
 		if (definition === undefined) {
 			return;
@@ -581,10 +581,12 @@ export class SqlPages {
 			return;
 		}
 
-		const panel = vscode.window.createWebviewPanel(definition.viewType, definition.label, pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		const panel = restored ?? vscode.window.createWebviewPanel(definition.viewType, definition.label, pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: [],
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'sql.svg');
 		panel.webview.html = html;
 		panel.webview.onDidReceiveMessage((message: PageMessage) => this.receive(message));

@@ -6,14 +6,16 @@
 // like (`media/page.css`), the components a page is built from, and how a page runs a command (a message, never a link).
 
 import * as vscode from 'vscode';
-import { fileColumn, pageColumn } from './columns';
+import { fileColumn, isOurViewType, pageColumn } from './columns';
 import { ActionBarOptions, CalloutOptions, CheckCardsOptions, ChoiceCardsOptions, CodeOptions, EntryRowOptions, FeatureCard, FormField, HeroOptions, NumberItem, OptionCard, Question, SectionOptions, actionBar, callout, cards, checkCards, choiceCards, code, entryRow, floatAction, formFields, hero, icon, numbers, optionCards, questions, section, toneMark } from './components';
 import { COMMAND_SCRIPT, PageMessage, PageOptions, escapeHtml, page, runPageCommand } from './page';
-import { RestorablePage, remember, remembered, restore, restoreByReopen } from './restore';
+import { RestorablePage, onDidRestorePage, remember, remembered, restore, restoredAny } from './restore';
 import { rowSlug } from './rows';
 
 /** What this module offers the rest of the platform. */
 export interface TemcoUiApi {
+	/** True when a view type — as a tab reports it, or as it was created — is a page of ours. */
+	isOurViewType(viewType: string): boolean;
 	/** The editor column every page of ours opens in. */
 	pageColumn(): vscode.ViewColumn;
 	/** The editor column for something that is not a page of ours. */
@@ -66,14 +68,17 @@ export interface TemcoUiApi {
 	remembered(context: vscode.ExtensionContext, viewType: string): string | undefined;
 	/** One serializer per page, so the window can bring a page's tab back after a restart. */
 	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
-	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
+	/** Whether a page of ours has been restored into this window. */
+	restoredAny(): boolean;
+	/** Calls `listener` when the first page of ours is restored. */
+	onDidRestorePage(listener: () => void): vscode.Disposable;
 }
 
 export function activate(context: vscode.ExtensionContext): TemcoUiApi {
 	return {
 		pageColumn,
 		fileColumn,
+		isOurViewType,
 		rowSlug,
 		page: (body, options) => page(context, body, options),
 		escapeHtml,
@@ -98,7 +103,8 @@ export function activate(context: vscode.ExtensionContext): TemcoUiApi {
 		remember,
 		remembered,
 		restore,
-		restoreByReopen
+		restoredAny,
+		onDidRestorePage
 	};
 }
 

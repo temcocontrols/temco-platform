@@ -22,7 +22,7 @@ import { registerSettings } from './settingsPages';
 import { registerSidebarViews } from './sidebar';
 import { OverviewTree } from './overviewTree';
 import { Catalog, selection } from './store';
-import { restoreByReopen } from './ui';
+import { onDidRestorePage, restore, restoredAny } from './ui';
 export function activate(context: vscode.ExtensionContext): void {
 	// How many drafts a person still has to settle. A queue is not in the registry, so it is read from the catalog
 	// once per refresh and kept here — the badge is drawn synchronously, and a number that lags one refresh is
@@ -76,26 +76,27 @@ export function activate(context: vscode.ExtensionContext): void {
 		settings.pages,
 		...settings.disposables,
 		learn,
-		// A page of this module that was open when the window closed comes back with its tab. Each of these pages is
-		// one question with one answer, so there is nothing else to remember about them.
-		...restoreByReopen(context, [
-			{ viewType: 'temcoWorkbench.overview', open: () => void dashboard.open('overview') },
-			{ viewType: 'temcoWorkbench.activity', open: () => void dashboard.open('activity') },
-			{ viewType: 'temcoWorkbench.needs', open: () => needs.open() },
-			{ viewType: 'temcoWorkbench.settings.general', open: () => settings.pages.general() },
-			{ viewType: 'temcoWorkbench.settings.modules', open: () => settings.pages.modules() },
-			{ viewType: 'temcoWorkbench.settings.branding', open: () => settings.pages.branding() },
-			{ viewType: 'temcoWorkbench.settings.ai', open: () => settings.pages.ai() },
-			{ viewType: 'temcoWorkbench.settings.publishing', open: () => settings.pages.publishing() },
-			{ viewType: 'temcoWorkbench.help.welcome', open: () => help.welcome() },
-			{ viewType: 'temcoWorkbench.help.home', open: () => help.home() },
-			{ viewType: 'temcoWorkbench.help.keys', open: () => void help.keys() },
-			{ viewType: 'temcoWorkbench.help.logs', open: () => void help.logs() },
-			{ viewType: 'temcoWorkbench.help.issue', open: () => help.issue() },
-			{ viewType: 'temcoWorkbench.help.about', open: () => help.about() },
-			{ viewType: 'temcoWorkbench.learn.home', open: () => void learn.home() },
-			{ viewType: 'temcoWorkbench.learn.article', open: () => void learn.article() },
-			{ viewType: 'temcoWorkbench.learn.downloads', open: () => void learn.downloads() }
+		// A page of this module that was open when the window closed comes back with its tab: the panel the window
+		// restored is drawn into, so the tab keeps its place and there is never a second copy of it. Each of these
+		// pages is one question with one answer, so there is nothing else to remember about them.
+		...restore(context, [
+			{ viewType: 'temcoWorkbench.overview', open: (panel) => void dashboard.open('overview', panel) },
+			{ viewType: 'temcoWorkbench.activity', open: (panel) => void dashboard.open('activity', panel) },
+			{ viewType: 'temcoWorkbench.needs', open: (panel) => needs.open(panel) },
+			{ viewType: 'temcoWorkbench.settings.general', open: (panel) => settings.pages.general(panel) },
+			{ viewType: 'temcoWorkbench.settings.modules', open: (panel) => settings.pages.modules(panel) },
+			{ viewType: 'temcoWorkbench.settings.branding', open: (panel) => settings.pages.branding(panel) },
+			{ viewType: 'temcoWorkbench.settings.ai', open: (panel) => settings.pages.ai(panel) },
+			{ viewType: 'temcoWorkbench.settings.publishing', open: (panel) => settings.pages.publishing(panel) },
+			{ viewType: 'temcoWorkbench.help.welcome', open: (panel) => help.welcome(panel) },
+			{ viewType: 'temcoWorkbench.help.home', open: (panel) => help.home(panel) },
+			{ viewType: 'temcoWorkbench.help.keys', open: (panel) => void help.keys(panel) },
+			{ viewType: 'temcoWorkbench.help.logs', open: (panel) => void help.logs(panel) },
+			{ viewType: 'temcoWorkbench.help.issue', open: (panel) => help.issue(panel) },
+			{ viewType: 'temcoWorkbench.help.about', open: (panel) => help.about(panel) },
+			{ viewType: 'temcoWorkbench.learn.home', open: (panel) => void learn.home(panel) },
+			{ viewType: 'temcoWorkbench.learn.article', open: (panel) => void learn.article(panel) },
+			{ viewType: 'temcoWorkbench.learn.downloads', open: (panel) => void learn.downloads(panel) }
 		]),
 		vscode.commands.registerCommand('temcoWorkbench.home', () => dashboard.open('overview')),
 		vscode.commands.registerCommand('temcoWorkbench.openNeeds', () => needs.open()),
@@ -191,6 +192,31 @@ export function deactivate(): void {
 }
 
 /**
+ * Whether the window is bringing pages back, waited for rather than asked once.
+ *
+ * A restore is asynchronous: the tab is handed back to its module once that module has activated, which can be
+ * after this activation runs — so the answer is the restore itself, not the tab strip. A window with nothing to
+ * restore answers after the wait, and one that is coming back answers the moment its first page is handed over.
+ */
+const RESTORE_SETTLE_MS = 2500;
+
+/** Resolves true when the window restores a page of ours: now, or as soon as one is handed back. */
+function pagesComeBack(): Promise<boolean> {
+	if (restoredAny()) {
+		return Promise.resolve(true);
+	}
+	return new Promise<boolean>((resolve) => {
+		const finish = (back: boolean): void => {
+			subscription.dispose();
+			clearTimeout(timer);
+			resolve(back);
+		};
+		const subscription = onDidRestorePage(() => finish(true));
+		const timer = setTimeout(() => finish(false), RESTORE_SETTLE_MS);
+	});
+}
+
+/**
  * The tab the platform opens when it starts. `temcoWorkbench.start.open` decides, and nothing else.
  *
  * The default is **the welcome page**, which is the VS Code arrangement: a fresh window opens on the page that says
@@ -201,10 +227,20 @@ export function deactivate(): void {
  * overview. That is the whole point of the checkbox — a person who turns it off is never shown it again by
  * accident, and an empty window gets the overview, which has its own empty state and a *New Project* button.
  * Only `none` opens no tab at all.
+ *
+ * **A window that came back with pages is not an empty window.** Every page of ours answers for its type, so the
+ * tabs that were open when the window closed are restored — each module's serializer draws them again. Opening a
+ * start page on top of them would hide the work somebody came back for, and would add a second copy of it every
+ * restart: the welcome page restored, plus the one this opened. So the start page is only for a window that has
+ * none of ours to show.
  */
 async function openStart(dashboard: DashboardPages, help: HelpPages): Promise<void> {
 	const mode = vscode.workspace.getConfiguration('temcoWorkbench').get<string>('start.open', 'welcome');
 	if (mode === 'none') {
+		return;
+	}
+	const cameBack = await pagesComeBack();
+	if (cameBack) {
 		return;
 	}
 	if (mode === 'welcome') {

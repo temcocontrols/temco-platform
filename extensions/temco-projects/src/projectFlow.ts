@@ -86,7 +86,7 @@ export class ProjectFlowPage {
 		private readonly refresh: () => void
 	) { }
 
-	async open(pinned?: PinnedRepository): Promise<void> {
+	async open(pinned?: PinnedRepository, restored?: vscode.WebviewPanel): Promise<void> {
 		remember(this.context, NEW_PROJECT_VIEW_TYPE);
 		this.pinned = pinned;
 		let unavailable: string | undefined;
@@ -120,10 +120,12 @@ export class ProjectFlowPage {
 			return;
 		}
 
-		this.panel = vscode.window.createWebviewPanel(NEW_PROJECT_VIEW_TYPE, 'New Project', pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		this.panel = restored ?? vscode.window.createWebviewPanel(NEW_PROJECT_VIEW_TYPE, 'New Project', pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.panel.webview.onDidReceiveMessage((message: { type?: string; command?: string; values?: Values; picked?: string[]; files?: string[] }) => void this.receive(message));
 		this.panel.webview.html = page(body, { title: 'New Project', script: WIZARD_SCRIPT, extraCss: FLOW_CSS });
 		this.panel.onDidDispose(() => {

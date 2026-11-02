@@ -146,17 +146,18 @@ export class DocsPages {
 
 	constructor(private readonly context: vscode.ExtensionContext, private readonly roots: () => readonly DocsRoot[]) { }
 
-	open(key: string, viewType: string, title: string, body: string, mark = 'document', extraCss?: string): void {
+	open(key: string, viewType: string, title: string, body: string, mark = 'document', extraCss?: string, restored?: vscode.WebviewPanel): void {
 		const existing = this.panels.get(key);
 		if (existing) {
 			existing.reveal(pageColumn());
 			existing.webview.html = page(body, { title, script: commandScript, extraCss });
 			return;
 		}
-		const panel = vscode.window.createWebviewPanel(viewType, title, pageColumn(), {
+		const panel = restored ?? vscode.window.createWebviewPanel(viewType, title, pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', `${mark}.svg`);
 		panel.webview.onDidReceiveMessage(runCommand);
 		panel.webview.html = page(body, { title, script: commandScript, extraCss });
@@ -164,12 +165,12 @@ export class DocsPages {
 		panel.onDidDispose(() => this.panels.delete(key));
 	}
 
-	projects(): void {
-		void this.openProjects();
+	projects(restored?: vscode.WebviewPanel): void {
+		void this.openProjects(restored);
 	}
 
 	/** The projects the catalog holds, the one the window is on, and the sources attached to it. */
-	private async openProjects(): Promise<void> {
+	private async openProjects(restored?: vscode.WebviewPanel): Promise<void> {
 		let documents: DocumentRow[] = [];
 		let linked: { name: string; kind: string; branch?: string }[] = [];
 		let catalog: Catalog | undefined;
@@ -183,16 +184,16 @@ export class DocsPages {
 		} finally {
 			catalog?.close();
 		}
-		this.open('projects', PROJECTS_VIEW_TYPE, 'Projects', projectsBody(documents, selection.project(), linked));
+		this.open('projects', PROJECTS_VIEW_TYPE, 'Projects', projectsBody(documents, selection.project(), linked), 'document', undefined, restored);
 	}
 
 	/** The project the window is on, as a page: what it is made of, what it produces, and the acts on it. */
-	project(slug?: string): void {
+	project(slug?: string, restored?: vscode.WebviewPanel): void {
 		remember(this.context, 'temcoDocs.projectPage', slug);
-		void this.openProjectPage(slug);
+		void this.openProjectPage(slug, restored);
 	}
 
-	private async openProjectPage(wanted?: string): Promise<void> {
+	private async openProjectPage(wanted?: string, restored?: vscode.WebviewPanel): Promise<void> {
 		let name = wanted ?? '';
 		let projectVersion = '';
 		let sources: { name: string; kind: string; branch?: string }[] = [];
@@ -318,15 +319,15 @@ ${changed.length === 0 ? '' : `${section({ title: `Changed in ${version?.report.
 </div>
 </div>`;
 
-		this.open('project', 'temcoDocs.projectPage', name === '' ? 'Project' : name, body, 'folders', DETAIL_CSS);
+		this.open('project', 'temcoDocs.projectPage', name === '' ? 'Project' : name, body, 'folders', DETAIL_CSS, restored);
 	}
 
 	/** The queue as a page: the three kinds of work, each with the act that settles it. */
-	needsYou(): void {
-		void this.openNeedsPage();
+	needsYou(restored?: vscode.WebviewPanel): void {
+		void this.openNeedsPage(restored);
 	}
 
-	private async openNeedsPage(): Promise<void> {
+	private async openNeedsPage(restored?: vscode.WebviewPanel): Promise<void> {
 		const roots = this.roots();
 		const pages = roots.flatMap((root) => collectPages(root));
 		const captures = await capturesOf(roots);
@@ -380,12 +381,12 @@ ${never.length === 0 ? '' : `<div class="mt-24">${group({
 			}))),
 		})}</div>`}`;
 
-		this.open('needs', 'temcoDocs.needsPage', 'Needs You', body, 'tasklist');
+		this.open('needs', 'temcoDocs.needsPage', 'Needs You', body, 'tasklist', undefined, restored);
 	}
 
-	repository(name?: string): void {
+	repository(name?: string, restored?: vscode.WebviewPanel): void {
 		remember(this.context, REPOSITORY_VIEW_TYPE, name);
-		void this.openRepository(name);
+		void this.openRepository(name, restored);
 	}
 
 	/** Every repository source, with its clone, its reads, its scripts and the pages the last read recorded. */
@@ -423,38 +424,38 @@ ${never.length === 0 ? '' : `<div class="mt-24">${group({
 		return facts;
 	}
 
-	private async openRepository(name: string | undefined): Promise<void> {
+	private async openRepository(name: string | undefined, restored?: vscode.WebviewPanel): Promise<void> {
 		const facts = await this.repositoryFacts();
 		const fact = facts.find((candidate) => candidate.slug === name || candidate.name === name) ?? facts[0];
-		this.open(`repository:${fact?.slug ?? 'none'}`, REPOSITORY_VIEW_TYPE, fact?.name ?? 'Repository', repositoryBody(fact));
+		this.open(`repository:${fact?.slug ?? 'none'}`, REPOSITORY_VIEW_TYPE, fact?.name ?? 'Repository', repositoryBody(fact), 'document', undefined, restored);
 	}
 
-	documents(area?: string): void {
+	documents(area?: string, restored?: vscode.WebviewPanel): void {
 		remember(this.context, DOCUMENTS_VIEW_TYPE, area);
-		this.open('documents', DOCUMENTS_VIEW_TYPE, 'Documents', documentsBody(this.roots(), area));
+		this.open('documents', DOCUMENTS_VIEW_TYPE, 'Documents', documentsBody(this.roots(), area), 'document', undefined, restored);
 	}
 
-	pageOf(title?: string, area?: string): void {
+	pageOf(title?: string, area?: string, restored?: vscode.WebviewPanel): void {
 		remember(this.context, PAGE_VIEW_TYPE, title);
-		void this.openPage(title, area);
+		void this.openPage(title, area, restored);
 	}
 
 	/** One page, read from the registry and the file behind it — never from a sample. */
-	private async openPage(title: string | undefined, area: string | undefined): Promise<void> {
+	private async openPage(title: string | undefined, area: string | undefined, restored?: vscode.WebviewPanel): Promise<void> {
 		const body = await pageBody(this.roots(), title, area);
-		this.open(`page:${body.title}`, PAGE_VIEW_TYPE, body.title, body.html);
+		this.open(`page:${body.title}`, PAGE_VIEW_TYPE, body.title, body.html, 'document', undefined, restored);
 	}
 
-	source(repo?: string): void {
+	source(repo?: string, restored?: vscode.WebviewPanel): void {
 		remember(this.context, SOURCE_VIEW_TYPE, repo);
-		void this.openSource(repo);
+		void this.openSource(repo, restored);
 	}
 
 	/** The files behind the pages of one repository, read from its clone. */
-	private async openSource(repo: string | undefined): Promise<void> {
+	private async openSource(repo: string | undefined, restored?: vscode.WebviewPanel): Promise<void> {
 		const facts = await this.repositoryFacts();
 		const fact = facts.find((candidate) => candidate.slug === repo || candidate.name === repo) ?? facts[0];
-		this.open(`source:${fact?.slug ?? 'none'}`, SOURCE_VIEW_TYPE, 'Source Explorer', sourceBody(fact));
+		this.open(`source:${fact?.slug ?? 'none'}`, SOURCE_VIEW_TYPE, 'Source Explorer', sourceBody(fact), 'document', undefined, restored);
 	}
 
 	/** Whether a page is open, so a caller can decide to redraw it rather than open it. */
@@ -462,16 +463,16 @@ ${never.length === 0 ? '' : `<div class="mt-24">${group({
 		return this.panels.has(key);
 	}
 
-	review(): void {
-		void this.openReview();
+	review(restored?: vscode.WebviewPanel): void {
+		void this.openReview(restored);
 	}
 
-	exports(): void {
-		void this.openExports();
+	exports(restored?: vscode.WebviewPanel): void {
+		void this.openExports(restored);
 	}
 
-	registry(): void {
-		void this.openRegistryPage();
+	registry(restored?: vscode.WebviewPanel): void {
+		void this.openRegistryPage(restored);
 	}
 
 	/**
@@ -488,7 +489,7 @@ ${never.length === 0 ? '' : `<div class="mt-24">${group({
 	 * step of the whole flow that happens *outside* this application — so the page says, per shape, the file it writes, what
 	 * is inside it and who it is for, then lets the reader press the button.
 	 */
-	private async openExports(): Promise<void> {
+	private async openExports(restored?: vscode.WebviewPanel): Promise<void> {
 		const facts = await this.buildFacts();
 		const pages = this.roots().flatMap((root) => collectPages(root)).filter((page) => page.exists);
 		const where = '<code>dist/</code> in the project folder';
@@ -555,7 +556,7 @@ ${tiles([
 		})}</div>
 <div class="mt-24">${callout(`<b>Every export lands in ${where}</b>, and the notification offers <b>Show in Folder</b>. Nothing is uploaded and nothing leaves this machine; publishing to GitHub Pages is the separate step on the Publish & Releases page.`)}</div>`;
 
-		this.open('exports', EXPORTS_VIEW_TYPE, 'Exports', body, 'download');
+		this.open('exports', EXPORTS_VIEW_TYPE, 'Exports', body, 'download', undefined, restored);
 	}
 
 	/**
@@ -566,7 +567,7 @@ ${tiles([
 	 * page lists every registered page with the three reasons a page can be absent, and one action per reason: the file was
 	 * never written (create it), the entry says it does not ship (properties), or the generator recorded a problem (read it).
 	 */
-	private async openRegistryPage(): Promise<void> {
+	private async openRegistryPage(restored?: vscode.WebviewPanel): Promise<void> {
 		const roots = this.roots();
 		const pages = roots.flatMap((root) => collectPages(root));
 		const missing = pages.filter((page) => !page.exists);
@@ -619,10 +620,10 @@ ${roots.length === 0
 				body: list(collectPages(root).map(row))
 			})}</div>`).join('')}`;
 
-		this.open('registry', REGISTRY_VIEW_TYPE, 'The Registry', body, 'list');
+		this.open('registry', REGISTRY_VIEW_TYPE, 'The Registry', body, 'list', undefined, restored);
 	}
 
-	private async openReview(): Promise<void> {
+	private async openReview(restored?: vscode.WebviewPanel): Promise<void> {
 		let project = selection.project();
 		let drafts: DraftRow[] = [];
 		let catalog: Catalog | undefined;
@@ -639,15 +640,15 @@ ${roots.length === 0
 		} finally {
 			catalog?.close();
 		}
-		this.open('review', REVIEW_VIEW_TYPE, 'Review Center', reviewBody(drafts, project), 'check', PIPE_CSS);
+		this.open('review', REVIEW_VIEW_TYPE, 'Review Center', reviewBody(drafts, project), 'check', PIPE_CSS, restored);
 	}
 
-	builds(): void {
-		void this.openBuilds();
+	builds(restored?: vscode.WebviewPanel): void {
+		void this.openBuilds(restored);
 	}
 
-	releases(): void {
-		void this.openReleases();
+	releases(restored?: vscode.WebviewPanel): void {
+		void this.openReleases(restored);
 	}
 
 	/** What the catalog knows about builds: the project on, its builds, the files they left, and its releases. */
@@ -684,12 +685,12 @@ ${roots.length === 0
 		return { project, builds, artifacts, releases, publish };
 	}
 
-	private async openBuilds(): Promise<void> {
-		this.open('builds', BUILDS_VIEW_TYPE, 'Build Center', buildsBody(await this.buildFacts()), 'play', PIPE_CSS);
+	private async openBuilds(restored?: vscode.WebviewPanel): Promise<void> {
+		this.open('builds', BUILDS_VIEW_TYPE, 'Build Center', buildsBody(await this.buildFacts()), 'play', PIPE_CSS, restored);
 	}
 
-	private async openReleases(): Promise<void> {
-		this.open('releases', RELEASES_VIEW_TYPE, 'Publish & Releases', releasesBody(await this.buildFacts()), 'upload', PIPE_CSS);
+	private async openReleases(restored?: vscode.WebviewPanel): Promise<void> {
+		this.open('releases', RELEASES_VIEW_TYPE, 'Publish & Releases', releasesBody(await this.buildFacts()), 'upload', PIPE_CSS, restored);
 	}
 
 	dispose(): void {

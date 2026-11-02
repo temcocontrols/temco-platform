@@ -50,13 +50,13 @@ export class ProjectPage {
   ) { }
 
   /** An existing project, filled in. Creating one is `flow/new-project` (`projectFlow.ts`). */
-  openEdit(slug: string): void {
+  openEdit(slug: string, restored?: vscode.WebviewPanel): void {
     remember(this.context, PROJECT_VIEW_TYPE, slug);
     this.slug = slug;
-    this.show('Project');
+    this.show('Project', restored);
   }
 
-  private show(title: string): void {
+  private show(title: string, restored?: vscode.WebviewPanel): void {
     if (this.panel) {
       this.panel.title = title;
       this.panel.reveal(pageColumn());
@@ -64,12 +64,14 @@ export class ProjectPage {
       return;
     }
 
-    this.panel = vscode.window.createWebviewPanel(
+    // A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+    this.panel = restored ?? vscode.window.createWebviewPanel(
       PROJECT_VIEW_TYPE,
       title,
       pageColumn(),
       { enableScripts: true, localResourceRoots: [] }
     );
+    this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
     this.panel.webview.html = this.html();
     this.panel.webview.onDidReceiveMessage((message: PageMessage) => void this.receive(message));
     // Shown again after the repositories page has had the focus: read the citations again, so a source cited there

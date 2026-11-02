@@ -277,24 +277,24 @@ export class SettingsPages {
 		context.subscriptions.push(this.output);
 	}
 
-	general(): void {
-		void this.open('general');
+	general(restored?: vscode.WebviewPanel): void {
+		void this.open('general', restored);
 	}
 
-	modules(): void {
-		void this.open('modules');
+	modules(restored?: vscode.WebviewPanel): void {
+		void this.open('modules', restored);
 	}
 
-	branding(): void {
-		void this.open('branding');
+	branding(restored?: vscode.WebviewPanel): void {
+		void this.open('branding', restored);
 	}
 
-	ai(): void {
-		void this.open('ai');
+	ai(restored?: vscode.WebviewPanel): void {
+		void this.open('ai', restored);
 	}
 
-	publishing(): void {
-		void this.open('publishing');
+	publishing(restored?: vscode.WebviewPanel): void {
+		void this.open('publishing', restored);
 	}
 
 	/** Re-draws every page that is open: one page's write is another page's fact, and a message is enough to say so. */
@@ -317,7 +317,7 @@ export class SettingsPages {
 		await panel.webview.postMessage({ type: 'state', state: stateFor(page) });
 	}
 
-	private async open(page: SettingsPage): Promise<void> {
+	private async open(page: SettingsPage, restored?: vscode.WebviewPanel): Promise<void> {
 		const definition = PAGES.find((entry) => entry.id === page);
 		if (definition === undefined) {
 			return;
@@ -329,11 +329,13 @@ export class SettingsPages {
 			return;
 		}
 		const folder = await bundleFolder(this.context, this.output);
-		const panel = vscode.window.createWebviewPanel(definition.viewType, definition.title, pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		const panel = restored ?? vscode.window.createWebviewPanel(definition.viewType, definition.title, pageColumn(), {
 			enableScripts: true,
 			retainContextWhenHidden: true,
 			localResourceRoots: [folder]
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [folder] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'settings.svg');
 		panel.webview.html = bundleDocument(panel.webview, folder, definition.title);
 		panel.webview.onDidReceiveMessage((message: SettingsMessage) => void receive(this, page, panel, message));

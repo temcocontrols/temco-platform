@@ -25,7 +25,7 @@ import { RepositoriesPage } from './repositoriesPage';
 import { DashboardPage, DASHBOARD_VIEW_TYPE } from './dashboard';
 import { RepositorySettingsPage, REPOSITORY_SETTINGS_VIEW_TYPE } from './settingsPage';
 import { REPOSITORIES_VIEW_TYPE } from './surface';
-import { restoreByReopen } from './ui';
+import { restore } from './ui';
 import { OFFERED_SCRIPTS, OfferedScript } from './scripts';
 import { registerSourcesView } from './sourcesView';
 import { Catalog, selection, slugOf } from './store';
@@ -73,12 +73,13 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 		{ dispose: () => detail.dispose() },
 		{ dispose: () => settings.dispose() },
 		{ dispose: () => dashboard.dispose() },
-		// A page of this module that was open when the window closed comes back with its tab, on the same subject.
-		...restoreByReopen(context, [
-			{ viewType: REPOSITORIES_VIEW_TYPE, open: (arg) => repositories.open(arg) },
-			{ viewType: REPOSITORY_DETAIL_VIEW_TYPE, open: (arg) => detail.open(arg ?? '') },
-			{ viewType: REPOSITORY_SETTINGS_VIEW_TYPE, open: () => settings.open() },
-			{ viewType: DASHBOARD_VIEW_TYPE, open: () => dashboard.open() }
+		// A page of this module that was open when the window closed comes back with its tab, on the same subject:
+		// the panel the window restored is drawn into, so the tab keeps its place and there is never a second copy.
+		...restore(context, [
+			{ viewType: REPOSITORIES_VIEW_TYPE, open: (panel, arg) => repositories.open(arg, undefined, panel) },
+			{ viewType: REPOSITORY_DETAIL_VIEW_TYPE, open: (panel, arg) => detail.open(arg ?? '', undefined, panel) },
+			{ viewType: REPOSITORY_SETTINGS_VIEW_TYPE, open: (panel) => settings.open(panel) },
+			{ viewType: DASHBOARD_VIEW_TYPE, open: (panel) => dashboard.open(panel) }
 		]),
 		vscode.commands.registerCommand('temcoRepositories.page', (project?: unknown) =>
 			repositories.open(undefined, typeof project === 'string' && project.length > 0 ? project : undefined)

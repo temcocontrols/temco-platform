@@ -37,7 +37,7 @@ export class ProjectsPage {
 		private readonly selection: Selection
 	) { }
 
-	async open(): Promise<void> {
+	async open(restored?: vscode.WebviewPanel): Promise<void> {
     remember(this.context, PROJECTS_PAGE_VIEW_TYPE);
 		const rows = await this.read();
 		if (this.panel !== undefined) {
@@ -45,12 +45,14 @@ export class ProjectsPage {
 			this.panel.webview.html = this.html(rows);
 			return;
 		}
-		this.panel = vscode.window.createWebviewPanel(
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		this.panel = restored ?? vscode.window.createWebviewPanel(
 			PROJECTS_PAGE_VIEW_TYPE,
 			'Projects',
 			pageColumn(),
 			{ enableScripts: true, localResourceRoots: [] }
 		);
+		this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		this.panel.iconPath = new vscode.ThemeIcon('layout');
 		this.panel.webview.html = this.html(rows);
 		this.panel.webview.onDidReceiveMessage(runCommand);

@@ -62,6 +62,8 @@ interface HeroOptions {
 }
 /** The UI module's exports. */
 interface UiApi {
+	/** True when a view type — as a tab reports it, or as it was created — is a page of ours. */
+	isOurViewType(viewType: string): boolean;
 	pageColumn(): vscode.ViewColumn;
 	rowSlug(target: unknown): string | undefined;
 	page(body: string, options?: { title?: string; script?: string; extraCss?: string }): string;
@@ -93,8 +95,10 @@ interface UiApi {
 	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
 	/** One serializer per page, so the window can bring a page's tab back after a restart. */
 	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
-	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
+	/** Whether a page of ours has been restored into this window. */
+	restoredAny(): boolean;
+	/** Calls `listener` when the first page of ours is restored. */
+	onDidRestorePage(listener: () => void): vscode.Disposable;
 }
 
 const extension = vscode.extensions.getExtension<UiApi>(UI_EXTENSION_ID);
@@ -103,6 +107,10 @@ if (extension === undefined || !extension.isActive) {
 }
 
 const ui = extension.exports;
+
+/** The editor column every page of ours opens in. */
+/** True when a view type — as a tab reports it, or as it was created — is a page of ours. */
+export const isOurViewType = ui.isOurViewType;
 
 /** The editor column every page of ours opens in. */
 export const pageColumn = ui.pageColumn;
@@ -172,5 +180,9 @@ export const remember = ui.remember;
 /** One serializer per page, so the window can bring a page's tab back after a restart. */
 export const restore = ui.restore;
 
-/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
-export const restoreByReopen = ui.restoreByReopen;
+/** Whether a page of ours has been restored into this window. */
+export const restoredAny = ui.restoredAny;
+
+/** Calls `listener` when the first page of ours is restored. */
+export const onDidRestorePage = ui.onDidRestorePage;
+

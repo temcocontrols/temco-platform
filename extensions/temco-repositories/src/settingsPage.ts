@@ -28,17 +28,19 @@ export class RepositorySettingsPage {
 
   constructor(private readonly context: vscode.ExtensionContext, private readonly refresh: () => void) { }
 
-  open(): void {
+  open(restored?: vscode.WebviewPanel): void {
     remember(this.context, REPOSITORY_SETTINGS_VIEW_TYPE);
     if (this.panel) {
       this.panel.reveal(pageColumn());
       void this.send();
       return;
     }
-    this.panel = vscode.window.createWebviewPanel(REPOSITORY_SETTINGS_VIEW_TYPE, 'Repository Settings', pageColumn(), {
+    // A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+    this.panel = restored ?? vscode.window.createWebviewPanel(REPOSITORY_SETTINGS_VIEW_TYPE, 'Repository Settings', pageColumn(), {
       enableScripts: true,
       localResourceRoots: [],
     });
+    this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
     this.panel.onDidDispose(() => {
       this.panel = undefined;
     });

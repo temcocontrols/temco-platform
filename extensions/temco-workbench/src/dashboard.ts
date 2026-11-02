@@ -363,7 +363,7 @@ export class DashboardPages {
 
 	constructor(private readonly context: vscode.ExtensionContext) { }
 
-	async open(pageId: 'overview' | 'activity'): Promise<void> {
+	async open(pageId: 'overview' | 'activity', restored?: vscode.WebviewPanel): Promise<void> {
 		const existing = this.panels.get(pageId);
 		const definition = await this.body(pageId);
 		const html = page(definition.body, { title: definition.title, script: commandScript, extraCss: definition.css });
@@ -375,10 +375,12 @@ export class DashboardPages {
 			return;
 		}
 
-		const panel = vscode.window.createWebviewPanel(definition.type, definition.title, pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		const panel = restored ?? vscode.window.createWebviewPanel(definition.type, definition.title, pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'dashboard.svg');
 		panel.onDidDispose(() => this.panels.delete(pageId));
 		panel.webview.onDidReceiveMessage(runCommand);

@@ -388,7 +388,7 @@ export class IoPages {
 
 	constructor(private readonly context: vscode.ExtensionContext) { }
 
-	open(id: string): void {
+	open(id: string, restored?: vscode.WebviewPanel): void {
 		const definition = IO_PAGES.find((entry) => entry.id === id);
 		const pageBody = BODIES[id];
 		if (!definition || !pageBody) {
@@ -400,10 +400,12 @@ export class IoPages {
 			existing.webview.html = this.document(definition, pageBody);
 			return;
 		}
-		const panel = vscode.window.createWebviewPanel(definition.viewType, definition.label, pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		const panel = restored ?? vscode.window.createWebviewPanel(definition.viewType, definition.label, pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'io.svg');
 		panel.webview.html = this.document(definition, pageBody);
 		panel.webview.onDidReceiveMessage((message: PageMessage) => {

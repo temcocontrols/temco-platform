@@ -225,7 +225,7 @@ export class NetworkPages {
 
 	constructor(private readonly context: vscode.ExtensionContext) { }
 
-	open(id: string): void {
+	open(id: string, restored?: vscode.WebviewPanel): void {
 		const definition = NETWORK_PAGES.find((entry) => entry.id === id);
 		const body = BODIES[id];
 		if (!definition || !body) {
@@ -237,10 +237,12 @@ export class NetworkPages {
 			existing.webview.html = this.document(definition, body);
 			return;
 		}
-		const panel = vscode.window.createWebviewPanel(definition.viewType, definition.label, pageColumn(), {
+		// A restored tab is drawn into rather than replaced: it keeps its place in the strip.
+		const panel = restored ?? vscode.window.createWebviewPanel(definition.viewType, definition.label, pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'network.svg');
 		panel.webview.html = this.document(definition, body);
 		panel.webview.onDidReceiveMessage((message: PageMessage) => {
