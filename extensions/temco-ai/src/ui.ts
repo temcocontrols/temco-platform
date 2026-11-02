@@ -54,6 +54,8 @@ interface UiApi {
 	hero(options: HeroOptions): string;
 	/** A section heading, which is what the page's parts are told apart by. */
 	section(options: SectionOptions): string;
+	/** The one tinted callout a page is allowed. */
+	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
 	commandScript: string;
 	runCommand(message: PageMessage): void;
 }
@@ -82,6 +84,9 @@ export const hero = ui.hero;
 
 /** A section heading, with the page's parts told apart by it. */
 export const section = ui.section;
+
+/** The one tinted callout a page is allowed: an icon, a sentence, and the thing to do about it. */
+export const callout = ui.callout;
 
 /** The script that turns a `data-command` button into a message to the module. */
 export const commandScript = ui.commandScript;

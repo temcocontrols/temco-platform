@@ -1034,6 +1034,8 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
     }),
     // The Build Center page: the same command its own Refresh button runs, so opening and refreshing are one thing.
     vscode.commands.registerCommand('temcoDocs.builds', () => docsPages.builds()),
+    // The page the site's own "Publish & Releases" links point at: declared in the manifest, so it has to exist.
+    vscode.commands.registerCommand('temcoDocs.releases', () => docsPages.releases()),
     /**
      * Which pages name any of these paths.
      *

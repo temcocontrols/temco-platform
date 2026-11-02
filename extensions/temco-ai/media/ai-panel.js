@@ -25,6 +25,10 @@
   let empty = null;
   /** The "no model yet" line inside that block — replaced every time the block is rebuilt. */
   let note = null;
+  /** What this panel is about, as the block above the acts says it — replaced on every rebuild too. */
+  let reading = null;
+  /** The last state the host sent, so a block rebuilt by a new chat can be told what is true of it. */
+  let last = null;
 
   /**
    * Puts the pre-conversation block back and binds what lives inside it.
@@ -39,6 +43,7 @@
     transcript.appendChild(emptyTemplate.content.cloneNode(true));
     empty = transcript.querySelector('.empty');
     note = byId('modelNote');
+    reading = byId('reading');
 
     const choose = byId('chooseModel');
     if (choose) {
@@ -47,10 +52,17 @@
     // An example prompt puts its words in the box rather than sending them: they are a start, not a question.
     for (const example of transcript.querySelectorAll('.ask')) {
       example.addEventListener('click', () => {
+        if (example.disabled) {
+          return;
+        }
         input.value = example.dataset.text || '';
         sync();
         input.focus();
       });
+    }
+    // The block is new, so what the host last said about the panel has to be said again to it.
+    if (last) {
+      state(last);
     }
   }
 
@@ -120,6 +132,7 @@
   }
 
   function state(next) {
+    last = next;
     const page = next.page
       ? next.page.title + (next.page.stale ? ' \u00b7 stale' : '')
       : 'no page open';
@@ -134,6 +147,31 @@
     // The one thing worth saying before anything else: without a model, none of the rest of this can happen.
     if (note) {
       note.classList.toggle('hidden', Boolean(next.model));
+    }
+    if (reading) {
+      reading.textContent = next.page
+        ? 'Reading ' + next.page.title + (next.project ? ' in ' + next.project : '') +
+          (next.page.stale ? ' \u2014 its code moved since the last review.' : '.')
+        : 'No page open yet \u2014 open one from the Workspace and this panel answers about it.';
+      reading.classList.toggle('idle', !next.page);
+    }
+    // An example that cannot work yet says so before it is clicked, not after: draft and ask are about the page in
+    // front, and the area question is about the project around it.
+    const cannot = !next.page
+      ? 'Open a page first \u2014 the AI works from the page in front.'
+      : !next.model
+        ? 'No model is installed yet.'
+        : '';
+    for (const example of transcript.querySelectorAll('.ask[data-needs="page"]')) {
+      example.disabled = cannot.length > 0;
+      example.title = cannot;
+    }
+    const noProject = !next.project && !next.page
+      ? 'Open a project first \u2014 the area question is about the pages around this one.'
+      : !next.model ? 'No model is installed yet.' : '';
+    for (const example of transcript.querySelectorAll('.ask[data-needs="project"]')) {
+      example.disabled = noProject.length > 0;
+      example.title = noProject;
     }
     apply.classList.toggle('hidden', !next.canApply);
     if (typeof next.busy === 'boolean') {

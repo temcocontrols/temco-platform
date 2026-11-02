@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 import { collectPages, countStale, roots as readRoots, totals } from './docs';
 import { Catalog, DraftRow, EventRow, selection } from './store';
-import { commandScript, escapeHtml, hero, icon, numbers, page, pageColumn, runCommand, toneMark } from './ui';
+import { callout, commandScript, escapeHtml, hero, icon, page, pageColumn, runCommand, section, toneMark } from './ui';
 
 /** The view types the dashboard opens under. */
 export const OVERVIEW_VIEW_TYPE = 'temcoWorkbench.overview';
@@ -104,7 +104,7 @@ const action = (label: string, command: string, kind?: 'primary' | 'ghost'): str
 	`<button type="button" class="btn${kind ? ` btn--${kind}` : ''}" data-command="${command}"><span>${escapeHtml(label)}</span></button>`;
 
 /** A string a person reads, marked for translation. Bundles arrive from the build; without one this is the text. */
-const t = (message: string): string => vscode.l10n.t(message);
+const t = (message: string, ...args: string[]): string => vscode.l10n.t(message, ...args);
 
 /** One event: a tone mark, what happened, and when. */
 const eventRow = (event: EventRow): string =>
@@ -112,110 +112,235 @@ const eventRow = (event: EventRow): string =>
 	${toneMark(EVENT_MARK[event.kind] ?? 'info', event.seenAt === undefined ? 'info' : 'ok')}
 	<div class="feed__main">
 		<div class="feed__title">${escapeHtml(event.detail ?? event.kind)}</div>
-		<div class="feed__meta">${escapeHtml(event.kind)} 路 ${escapeHtml(age(event.at))}</div>
+		<div class="feed__meta">${escapeHtml(event.kind)} · ${escapeHtml(age(event.at))}</div>
 	</div>
 	<div class="feed__side"><span class="feed__module">Platform</span></div>
 </li>`;
 
+/**
+ * What the Overview is made of beyond the kit.
+ *
+ * The pipeline is the one thing here the kit has no component for: five stages, in the order a page goes through
+ * them, each with the figure it is answerable for. They are drawn as rows of one strip rather than as five cards,
+ * because they are one path — a stage is not an option beside the others, it is the step after the one above it.
+ */
+const OVERVIEW_CSS = `
+.az-section__title { position: relative; padding-left: 10px; }
+.az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
+.ov-pipe { display: grid; gap: 1px; border-radius: var(--r-2); overflow: hidden; background: var(--hairline); }
+.ov-stage { display: grid; grid-template-columns: 20px 7.5em minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
+            width: 100%; padding: 9px 12px; border: 0; background: var(--surface-card); color: inherit;
+            font: inherit; text-align: left; cursor: pointer; }
+.ov-stage:hover { background: color-mix(in srgb, var(--az-blue, #0078d4) 7%, var(--surface-card)); }
+.ov-stage--wait { background: color-mix(in srgb, var(--vscode-charts-yellow, #d29922) 9%, var(--surface-card)); }
+.ov-stage__n { color: var(--ink-3); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.ov-stage__name { color: var(--ink-1); font-size: 13px; }
+.ov-stage__meta { min-width: 0; color: var(--ink-2); font-size: 12px; line-height: 17px; }
+.ov-stage__go { color: var(--az-blue, #0078d4); font-size: 12px; white-space: nowrap; }
+.ov-list { display: grid; gap: 1px; }
+.ov-row { display: flex; align-items: center; gap: var(--sp-3); width: 100%; padding: 8px 10px;
+          border: 0; border-radius: var(--r-2); background: var(--surface-card); color: inherit;
+          font: inherit; text-align: left; cursor: pointer; }
+.ov-row:hover { background: color-mix(in srgb, var(--az-blue, #0078d4) 7%, var(--surface-card)); }
+.ov-row__main { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.ov-row__title { color: var(--ink-1); font-size: 13px; line-height: 18px; }
+.ov-row__meta { color: var(--ink-3); font-size: 11.5px; line-height: 16px; }
+.ov-row__go { flex: 0 0 auto; color: var(--az-blue, #0078d4); font-size: 12px; }
+.ov-more { margin-top: var(--sp-2); }
+.ov-more > summary { padding: 2px 0; color: var(--ink-3); font-size: 12px; cursor: pointer; }
+.ov-more > summary:hover { color: var(--az-blue, #0078d4); }
+.ov-calm { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2);
+           background: var(--surface-card); color: var(--ink-2); font-size: 13px; line-height: 19px; }
+`;
+
+/** One stage of the pipeline, in the words of the figure it is answerable for. */
+interface Stage {
+	n: string;
+	name: string;
+	meta: string;
+	/** Somebody is waiting on this stage, rather than it merely having a count. */
+	wait?: boolean;
+	command: string;
+	go: string;
+}
+
+function pipeline(facts: DashboardFacts): string {
+	const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+	const stages: Stage[] = [
+		{
+			n: '01',
+			name: 'Sources',
+			meta: facts.sources === 0
+				? 'nothing is being read yet — choose a project, or open a folder with a docs/ folder'
+				: `${count(facts.sources, 'source is', 'sources are')} being read · ${facts.faults === 0
+					? 'no structural problem'
+					: `${count(facts.faults, 'structural problem', 'structural problems')} found`}`,
+			wait: facts.faults > 0,
+			command: 'temcoProjects.editProject',
+			go: 'Edit'
+		},
+		{
+			n: '02',
+			name: 'Documents',
+			meta: facts.pages === 0
+				? 'no page yet — a source that is read is where pages come from'
+				: `${count(facts.pages, 'page', 'pages')} in ${count(facts.areas, 'area', 'areas')}${facts.stale === 0 ? ', none stale' : `, ${count(facts.stale, 'stale', 'stale')} with code that moved`}`,
+			wait: false,
+			command: 'temcoDocs.documents',
+			go: 'Open'
+		},
+		{
+			n: '03',
+			name: 'Review',
+			meta: facts.drafts.length === 0
+				? `nothing waiting${facts.neverReviewed === 0 ? '' : ` · ${count(facts.neverReviewed, 'page has', 'pages have')} never been reviewed`}`
+				: `${count(facts.drafts.length, 'draft is', 'drafts are')} waiting for a person${facts.neverReviewed === 0 ? '' : ` · ${count(facts.neverReviewed, 'page', 'pages')} never reviewed`}`,
+			wait: facts.drafts.length > 0,
+			command: 'temcoDocs.review',
+			go: facts.drafts.length === 0 ? 'Open' : 'Settle'
+		},
+		{
+			n: '04',
+			name: 'Build',
+			meta: facts.faults === 0
+				? 'nothing in the pages would fail a build'
+				: `${count(facts.faults, 'problem', 'problems')} a build would fail on`,
+			wait: false,
+			command: 'temcoDocs.builds',
+			go: 'Open'
+		},
+		{
+			n: '05',
+			name: 'Publish',
+			meta: facts.releases === 0
+				? 'nothing published from this project yet — a build makes the copy, a publish puts it where a reader finds it'
+				: `${count(facts.releases, 'version', 'versions')} published, newest first in Publish & Releases`,
+			wait: false,
+			command: 'temcoDocs.releases',
+			go: 'Open'
+		}
+	];
+
+	return `<div class="ov-pipe">${stages
+		.map(
+			(stage) =>
+				`<button type="button" class="ov-stage${stage.wait ? ' ov-stage--wait' : ''}" data-command="${stage.command}">
+	<span class="ov-stage__n">${stage.n}</span>
+	<span class="ov-stage__name">${escapeHtml(t(stage.name))}</span>
+	<span class="ov-stage__meta">${escapeHtml(stage.meta)}</span>
+	<span class="ov-stage__go">${escapeHtml(t(stage.go))}</span>
+</button>`
+		)
+		.join('')}</div>`;
+}
+
 function overviewBody(facts: DashboardFacts): string {
-	const stage = (n: string, name: string, meta: string, view: string): string =>
-		`<button type="button" class="pipeline__stage" data-command="${view}">
-			<span class="pipeline__n">${n}</span>
-			<span class="pipeline__name">${escapeHtml(name)}</span>
-			<span class="pipeline__meta">${escapeHtml(meta)}</span>
-		</button>`;
-
-	const pipeline = [
-		stage('01', 'Sources', facts.sources === 1 ? '1 read' : `${facts.sources} read`, 'temcoProjects.editProject'),
-		stage('02', 'Documents', `${facts.pages} pages`, 'temcoDocs.documents'),
-		stage('03', 'Review', `${facts.drafts.length} waiting`, 'temcoDocs.review'),
-		stage('04', 'Build', `${facts.faults} problems`, 'temcoDocs.builds'),
-		stage('05', 'Publish', `${facts.releases} published`, 'temcoDocs.releases')
-	].join('');
-
 	const waiting = facts.drafts;
-	const waitingPanel = waiting.length === 0
-		? `<div class="hero-panel">
-		<div class="eyebrow">Nothing is waiting</div>
-		<div class="hero-panel__title">Nothing needs a person right now</div>
-		<p class="hero-panel__desc">No draft is waiting in the Review Center, and every page the registries declare has a file. Writing a page, reading a source or building the site will put something here.</p>
-		<div class="hero-panel__actions">${action('New Page', 'temcoDocs.newPage', 'primary')}${action('Open the Documents', 'temcoDocs.documents')}</div>
-	</div>`
-		: `<div class="hero-panel hero-panel--warn">
-		<div class="eyebrow">${escapeHtml(facts.project === undefined ? 'The project being worked on' : 'Review queue')}</div>
-		<div class="hero-panel__title">${waiting.length} ${waiting.length === 1 ? 'draft is' : 'drafts are'} waiting for a person</div>
-		<p class="hero-panel__desc">Each one is a proposal in the platform database: accepting it writes the page exactly as it reads, discarding it throws the text away. The newest is <b>${escapeHtml(waiting[0].title)}</b>.</p>
-		<div class="hero-panel__actions">${action('Open the Review Center', 'temcoDocs.review', 'primary')}${action('See What Needs Doing', 'temcoWorkbench.openNeeds')}</div>
-	</div>`;
+	const draftRow = (draft: DraftRow): string =>
+		`<button type="button" class="ov-row" data-command="temcoDocs.review">
+	${toneMark('sparkle', 'accent')}
+	<span class="ov-row__main">
+		<span class="ov-row__title">${escapeHtml(draft.title)}</span>
+		<span class="ov-row__meta"><span class="cell-mono">${escapeHtml(draft.pageId)}</span> · waiting ${escapeHtml(age(draft.createdAt))}</span>
+	</span>
+	<span class="ov-row__go">${escapeHtml(t('Review'))}</span>
+</button>`;
 
+	// Four rows are enough to see whether any of them is yours; the rest are counted rather than listed, because a
+	// page that lists a queue in full is a page nobody scrolls to the end of.
+	const shown = waiting.slice(0, 4);
+	const folded = waiting.slice(4);
 	const needs = waiting.length === 0
-		? '<p class="group-note">Nothing is waiting. The Needs page also lists structural faults, missing files and pages nobody owns.</p>'
-		: waiting.slice(0, 4).map((draft) =>
-			`<div class="record-row record-row--static">
-				${toneMark('sparkle', 'accent')}
-				<div class="record-row__main">
-					<div class="record-row__title"><span class="record-row__name">${escapeHtml(draft.title)}</span></div>
-					<div class="record-row__meta"><span class="cell-mono">${escapeHtml(draft.pageId)}</span> 路 <span>waiting ${escapeHtml(age(draft.createdAt))}</span></div>
-				</div>
-				<div class="record-row__state"><span class="badge badge--info">Draft</span></div>
-				<span class="record-row__go"></span>
-			</div>`).join('');
+		? `<div class="ov-calm">
+	<p>A draft appears here the moment the AI writes one, or when a page is started from a source. Accepting it is the only thing that writes a page.</p>
+</div>`
+		: `<div class="ov-list">${shown.map(draftRow).join('')}</div>
+${folded.length === 0 ? '' : `<details class="ov-more"><summary>${escapeHtml(t('{0} more in the Review Center', String(folded.length)))}</summary><div class="ov-list">${folded.map(draftRow).join('')}</div></details>`}`;
 
-	const activity = facts.events.length === 0
-		? '<p class="group-note">Nothing has been recorded yet. Saving a draft, building or publishing writes the first row here.</p>'
-		: `<ol class="feed">${facts.events.slice(0, 6).map(eventRow).join('')}</ol>`;
+	const events = facts.events;
+	const shownEvents = events.slice(0, 5);
+	const foldedEvents = events.slice(5);
+	const activity = events.length === 0
+		? `<div class="ov-calm"><p>Nothing has been recorded yet. Saving a draft, building or publishing writes the first row here.</p></div>`
+		: `<ol class="feed">${shownEvents.map(eventRow).join('')}</ol>
+${foldedEvents.length === 0 ? '' : `<details class="ov-more"><summary>${escapeHtml(t('{0} older', String(foldedEvents.length)))}</summary><ol class="feed">${foldedEvents.map(eventRow).join('')}</ol></details>`}`;
+
+	// The one tinted block a page is allowed: the thing a person would do next, chosen by what is actually waiting.
+	const next = waiting.length > 0
+		? callout({
+			title: waiting.length === 1
+				? t('One draft is waiting for a person')
+				: t('{0} drafts are waiting for a person', String(waiting.length)),
+			desc: t('Each is a proposal in the platform database. Accepting one writes the page exactly as it reads; discarding it throws the text away. The newest is “{0}”.', waiting[0].title),
+			mark: 'sparkle',
+			actions: `${action('Open the Review Center', 'temcoDocs.review', 'primary')}${action('See What Needs Doing', 'temcoWorkbench.openNeeds')}`
+		})
+		: facts.faults > 0
+			? callout({
+				title: facts.faults === 1
+					? t('One structural problem in the pages')
+					: t('{0} structural problems in the pages', String(facts.faults)),
+				desc: t('A build would fail on these before it wrote anything. What needs doing lists them one by one, with the file each lives in.'),
+				mark: 'warn',
+				actions: `${action('See What Needs Doing', 'temcoWorkbench.openNeeds', 'primary')}${action('Open the Builds', 'temcoDocs.builds')}`
+			})
+			: callout({
+				title: t('Nothing needs a person right now'),
+				desc: t('No draft is waiting, and no page has a structural problem — nothing is half-finished.'),
+				mark: 'check',
+				actions: `${action('New Page', 'temcoDocs.newPage', 'primary')}${action('Open the Documents', 'temcoDocs.documents')}`
+			});
 
 	return `${hero({
 		eyebrow: t('Temco Platform'),
 		title: t('Overview'),
-		desc: t('What the platform holds, what changed since you last looked, and the one thing that needs you next.'),
+		desc: t('What the platform holds, where the work stands, and the one thing that needs you next.'),
+		// Every figure below is about one project, so which one is said here rather than left to be guessed.
+		note: facts.project === undefined
+			? { text: t('No project chosen — the figures are for whatever this window is reading'), mark: 'info' }
+			: { text: facts.project, mark: 'repo', mono: true },
 		actions: [
 			{ label: t('New Project'), command: 'temcoProjects.newProject', mark: 'plus', kind: 'primary' },
 			{ label: t('Build the Site'), command: 'temcoDocs.buildSite', mark: 'play' }
 		]
 	})}
 
-${numbers([
-			{ value: String(facts.projects), label: t('Projects') },
-			{ value: String(facts.pages), label: t('Pages') },
-			{ value: String(facts.drafts.length), label: t('Drafts waiting') },
-			{ value: String(facts.neverReviewed), label: t('Never reviewed') }
-		])}
-
-<div class="mt-16">${waitingPanel}</div>
+<div class="mt-16">${next}</div>
 
 <div class="mt-24">
-	<div class="row row--between" style="margin-bottom:10px">
-		<span class="group-head__label">Documentation Pipeline</span>
-		<span class="cell-muted" style="font-size:12px">Sources → Documents → Review → Build → Publish</span>
-	</div>
-	<div class="pipeline">${pipeline}</div>
+	${section({
+		title: t('Where the work stands'),
+		desc: t('A page goes through these five in this order, and each stage is answerable for one figure. A stage in amber is the one with somebody waiting on it.')
+	})}
+	<div class="mt-8">${pipeline(facts)}</div>
 </div>
 
 <div class="mt-24 grid grid--2">
 	<div>
-		${rules('Recent Activity', facts.events.length === 1 ? '1 event' : `${facts.events.length} events`, action('All Activity', 'temcoWorkbench.activity', 'ghost'))}
-		${activity}
+		${section({
+			title: t('What needs a person'),
+			desc: t('Drafts only. A draft is a proposal: nothing is written until somebody accepts it.'),
+			actions: action('See What Needs Doing', 'temcoWorkbench.openNeeds', 'ghost')
+		})}
+		<div class="mt-8">${needs}</div>
 	</div>
 	<div>
-		${rules('Needs You', facts.drafts.length === 0 ? 'nothing' : `${facts.drafts.length} waiting`, action('Review', 'temcoWorkbench.openNeeds', 'ghost'))}
-		<div class="record-list">${needs}</div>
+		${section({
+			title: t('What happened lately'),
+			desc: t('Written by the module that did the thing, so nothing here is a second, derived history.'),
+			actions: action('All Activity', 'temcoWorkbench.activity', 'ghost')
+		})}
+		<div class="mt-8">${activity}</div>
 	</div>
 </div>
 
-<div class="mt-24 grid grid--3">
-	<div class="card"><div class="card__head"><div class="card__title">Sources</div></div><p class="card__desc">${facts.sources === 0 ? 'Nothing is being read yet: choose a project, or open a folder with a <b>docs/</b> folder.' : `${facts.sources} source${facts.sources === 1 ? ' is' : 's are'} being read. ${facts.faults === 0 ? 'None of their pages has a structural problem.' : `${facts.faults} structural problem${facts.faults === 1 ? '' : 's'} found.`}`}</p><div class="card__body">${bar(facts.sources === 0 ? 0 : 100, facts.sources === 0 ? 'nothing read' : 'all read', facts.sources === 0 ? undefined : 'ok')}</div></div>
-	<div class="card"><div class="card__head"><div class="card__title">Knowledge</div><div class="card__actions">${action('Coverage', 'temcoDocs.overview', 'ghost')}</div></div><p class="card__desc">${facts.pages} pages across ${facts.areas} area${facts.areas === 1 ? '' : 's'}. ${facts.neverReviewed} ${facts.neverReviewed === 1 ? 'page has' : 'pages have'} never been reviewed; ${facts.stale} ${facts.stale === 1 ? 'is' : 'are'} stale.</p><div class="card__body">${bar(facts.pages === 0 ? 0 : Math.round(((facts.pages - facts.neverReviewed) / facts.pages) * 100), facts.pages === 0 ? 'no pages' : `${facts.pages - facts.neverReviewed} of ${facts.pages} read`, 'ok')}</div></div>
-	<div class="card"><div class="card__head"><div class="card__title">Releases</div></div><p class="card__desc">${facts.releases === 0 ? 'Nothing has been published from this project yet. Build the site, then publish it: the copy is what a reader opens.' : `${facts.releases} version${facts.releases === 1 ? '' : 's'} published. The files stay where the build wrote them.`}</p><div class="card__body">${bar(facts.releases === 0 ? 0 : 100, facts.releases === 0 ? 'not published' : `${facts.releases} published`, facts.releases === 0 ? undefined : 'ok')}</div></div>
-</div>`;
+<p class="cell-muted" style="font-size:12px;margin-top:24px">${escapeHtml(
+		t('The figures come from the registries this window is reading and from the platform’s own record of what it did. Nothing on this page is calculated a second time.')
+	)}</p>`;
 }
 
 function rules(label: string, count: string, buttons = ''): string {
 	return `<div class="group-head"><span class="group-head__label">${escapeHtml(label)}</span><span class="group-head__rule"></span><span class="group-head__count">${escapeHtml(count)}</span>${buttons ? `<span class="group-head__actions">${buttons}</span>` : ''}</div>`;
-}
-
-function bar(pct: number, label: string, kind?: string): string {
-	return `<div class="bar"><span class="bar__fill${kind ? ` bar__fill--${kind}` : ''}" style="width:${pct}%"></span></div><div class="cell-muted" style="font-size:12px;margin-top:6px">${escapeHtml(label)}</div>`;
 }
 
 /** *Recent Activity* — every row the platform wrote about itself, newest first. */
@@ -241,11 +366,12 @@ export class DashboardPages {
 	async open(pageId: 'overview' | 'activity'): Promise<void> {
 		const existing = this.panels.get(pageId);
 		const definition = await this.body(pageId);
+		const html = page(definition.body, { title: definition.title, script: commandScript, extraCss: definition.css });
 		if (existing) {
 			// Redrawn as well as revealed: a queue or a coverage figure that was true when the tab opened need
 			// not be true now, and a page that lies quietly is worse than one that takes a moment to open.
 			existing.reveal(pageColumn());
-			existing.webview.html = page(definition.body, { title: definition.title, script: commandScript });
+			existing.webview.html = html;
 			return;
 		}
 
@@ -256,15 +382,15 @@ export class DashboardPages {
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'dashboard.svg');
 		panel.onDidDispose(() => this.panels.delete(pageId));
 		panel.webview.onDidReceiveMessage(runCommand);
-		panel.webview.html = page(definition.body, { title: definition.title, script: commandScript });
+		panel.webview.html = html;
 		this.panels.set(pageId, panel);
 	}
 
 	/** One page's body, read fresh: the registries and the catalog answer, in that order. */
-	private async body(pageId: 'overview' | 'activity'): Promise<{ type: string; title: string; body: string }> {
+	private async body(pageId: 'overview' | 'activity'): Promise<{ type: string; title: string; body: string; css?: string }> {
 		const facts = await readFacts(this.context);
 		return pageId === 'overview'
-			? { type: OVERVIEW_VIEW_TYPE, title: 'Overview', body: overviewBody(facts) }
+			? { type: OVERVIEW_VIEW_TYPE, title: 'Overview', body: overviewBody(facts), css: OVERVIEW_CSS }
 			: { type: ACTIVITY_VIEW_TYPE, title: 'Recent Activity', body: activityBody(facts) };
 	}
 

@@ -675,42 +675,37 @@ export class AiPanel implements vscode.WebviewViewProvider {
 <div id="transcript"></div>
 <template id="emptyTemplate">
   <div class="empty">
-    <p class="lede">The AI works from the page you have open. It runs on this machine, and nothing it writes is
-    applied until you accept the diff.</p>
+    <p class="lede">The AI answers about the page you have open, on this machine. Nothing it writes touches a file
+    until you accept the diff.</p>
+
+    <!-- What this panel is about right now: said first, because every act below needs it. -->
+    <p class="reading" id="reading">No page open yet.</p>
+
+    <!-- And what would stop all of it. A model is the one thing that has to be there before anything else can be. -->
+    <p id="modelNote" class="hidden">No model is installed yet, so nothing below can run.
+      <button type="button" id="chooseModel" class="choose">Choose a model&hellip;</button></p>
 
     <div class="guide">
       <section>
-        <h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 2.1l2.5 2.5M3 13l.9-3.6 7.1-7.1 2.5 2.5-7.1 7.1z"/></svg>Draft a page</h4>
-        <p>Ask for an update and it comes back as a diff. The commit range it read is named on the diff, and one
-        undo takes it back.</p>
-        <button type="button" class="ask" data-text="Draft update — say what changed since the last review">Draft update — say what changed since the last review</button>
-        <button type="button" class="ask" data-text="Draft update — the manifest format is missing from this page">Draft update — the manifest format is missing from this page</button>
+        <h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.4 2.1l2.5 2.5M3 13l.9-3.6 7.1-7.1 2.5 2.5-7.1 7.1z"/></svg>Draft an update</h4>
+        <p>The page in front, rewritten and handed back as a diff. The commits it read are named on the diff, and
+        one undo takes it back.</p>
+        <button type="button" class="ask" data-needs="page" data-text="Draft an update — say what changed since the last review">Draft an update — say what changed</button>
       </section>
 
       <section>
-        <h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>Ask about a page</h4>
-        <p>An answer about the page in front. It cites the pages it used, so you can check it yourself.</p>
-        <button type="button" class="ask" data-text="What does this page leave out?">What does this page leave out?</button>
-        <button type="button" class="ask" data-text="Where does the controller read the firmware version?">Where does the controller read the firmware version?</button>
+        <h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>Ask about this page</h4>
+        <p>An answer about the page in front, citing the pages it used so you can check it yourself.</p>
+        <button type="button" class="ask" data-needs="page" data-text="What does this page leave out?">What does this page leave out?</button>
       </section>
 
       <section>
-        <h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2l5.2 2.6L8 7.4 2.8 4.8z"/><path d="M2.8 7.6L8 10.2l5.2-2.6"/><path d="M2.8 10.4L8 13l5.2-2.6"/></svg>Ask across an area</h4>
-        <p>The pages around this one — its area and its tags. When it finds only search results, it says so instead
-        of guessing.</p>
-        <button type="button" class="ask" data-text="Which pages describe the version check?">Which pages describe the version check?</button>
-        <button type="button" class="ask" data-text="Is the manifest format documented anywhere in this area?">Is the manifest format documented anywhere in this area?</button>
-      </section>
-
-      <section>
-        <h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5h5.2L12.5 4.8v9.7h-8.5z"/><path d="M9.2 1.5v3.3h3.3"/></svg>A document for a product</h4>
-        <p>Read a project's sources from the Library — a repository at a branch you choose — and every page they
-        hold appears in the Workspace. Open one, and the AI works on it.</p>
+        <h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2l5.2 2.6L8 7.4 2.8 4.8z"/><path d="M2.8 7.6L8 10.2l5.2-2.6"/><path d="M2.8 10.4L8 13l5.2-2.6"/></svg>Ask across the area</h4>
+        <p>The pages around this one — its area and its tags. When it has only search results it says so, rather
+        than guessing.</p>
+        <button type="button" class="ask" data-needs="project" data-text="Which pages in this area describe the same thing as this one?">Which pages here overlap with this one?</button>
       </section>
     </div>
-
-    <p id="modelNote" class="hidden">No model is installed yet.
-      <button type="button" id="chooseModel" class="choose">Choose a model&hellip;</button></p>
   </div>
 </template>
 <form id="form">

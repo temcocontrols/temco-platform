@@ -16,7 +16,7 @@ import { discardWorkFolder, folderConsequence, workFolderOf } from './removal';
 import { Catalog, CatalogUnavailable, DocumentDetail, Selection, slugOf } from './store';
 import { PROJECT_VIEW_TYPE } from './surface';
 import { ORIGINS, TARGETS } from './projectFlow';
-import { escapeHtml as esc, focusLibrary, icon, page, pageColumn } from './ui';
+import { escapeHtml as esc, focusLibrary, icon, page, pageColumn, section } from './ui';
 
 /** A source as the page lists it: what it is called, and where it actually is. */
 interface KnownSource {
@@ -433,76 +433,65 @@ export class ProjectPage {
 
       .fact__note { color: var(--fg-muted); font-size: var(--fs-sm); line-height: 1.45; }
 
-      .split__note { margin: 18px 0 0; color: var(--fg-subtle); font-size: var(--fs-xs); line-height: 1.5; }
+      /* What the project is, stated once: a key in the small tier, the value at reading weight, its note under it.
 
+         Nothing here is editable — an origin is not re-answered by an edit — so nothing here looks like a field. */
 
+      .facts { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-2); }
 
-      /* A row, not a card: a mark, a name with its facts underneath, and the acts at the end. It has to hold a source
+      .fact { display: flex; flex-direction: column; gap: 1px; }
 
-         read from the catalog and a draft with three acts, so it is a grid rather than a flex
+      .fact__key { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
 
-         line — the acts column stays aligned whatever the row holds. */
+      .fact__value { color: var(--ink-1); font-weight: 600; overflow-wrap: anywhere; }
 
-      .entries { display: flex; flex-direction: column; gap: 2px; margin: 6px 0 0; }
+      .fact__note { color: var(--ink-2); font-size: 12px; line-height: 17px; }
 
-      .entry { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+      .split__note { margin: var(--sp-4) 0 0; color: var(--ink-3); font-size: 11.5px; line-height: 1.55; }
 
-               padding: 8px 10px; border-radius: var(--radius); }
+      /* The vertical indicator the section titles carry across the platform, on the rail's label too, so a long form
+         can be scanned by its parts. */
+      .split__label { position: relative; padding-left: 10px; }
 
-      .entry:hover { background: var(--bg-hover); }
+      .split__label::before {
+        content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+        width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4);
+      }
 
-      .entry__mark { display: flex; align-items: center; color: var(--fg-subtle); }
+      /* The rows this page builds in its own script: the kit's entry row, with its acts at the end of the row. */
 
-      .entry__mark .icon { width: 14px; height: 14px; }
+      .az-entry__icon .icon { width: 15px; height: 15px; }
 
-      .entry__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+      .az-entry__acts { display: flex; align-items: center; gap: var(--sp-1); }
 
-      .entry__name { color: var(--fg-strong); font-weight: 600; overflow-wrap: anywhere; }
+      .az-entry__act { padding: 1px 6px; border: 0; border-radius: var(--r-2); background: none; font: inherit;
 
-      .entry__sub { color: var(--fg-muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis;
+                       font-size: 12px; color: var(--ink-3); cursor: pointer; }
 
-                    white-space: nowrap; }
+      .az-entry__act:hover { color: var(--az-blue, #0078d4); background: var(--az-blue-selected, rgba(0, 120, 212, .1)); }
 
-      .entry__acts { display: flex; gap: 4px; align-items: center; }
+      .az-entry__act--danger:hover { color: var(--vscode-errorForeground, #a4262c);
 
-      .entry__act { border: 0; background: none; padding: 2px 6px; font: inherit; font-size: var(--fs-sm);
+                                     background: color-mix(in srgb, var(--vscode-errorForeground, #a4262c) 12%, transparent); }
 
-                    color: var(--fg-subtle); cursor: pointer; border-radius: var(--radius-sm); }
-
-      .entry__act:hover { color: var(--fg); background: var(--bg-inset); }
-
-      .entry__act.is-danger:hover { color: var(--err); background: color-mix(in srgb, var(--err) 12%, transparent); }
-
-      .entry__act:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
-
-
-
-      /* Four fields on a line where there is room, two where there is not — the kit's field and the kit's input. */
-
-      .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16em, 100%), 1fr));
-
-                   gap: 14px 20px; }
-
-      .form-grid .field { min-width: 0; }
-
-      .form-grid .input { width: 100%; }
-
-
+      .az-entry__act:focus-visible { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
 
       /* Citing is not done on this page — the list, the download and the files are the repositories page's — so the
          act is one button that goes there. */
 
-      .cite-more { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0 0; }
+      .cite-more { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin: var(--sp-4) 0 0; }
 
-      .cite-more .cell-muted { font-size: var(--fs-sm); }
+      .cite-more__note { color: var(--ink-3); font-size: 12px; line-height: 17px; }
 
+      /* The one write at the foot of the form, and the line that says what it will write. */
 
+      .save-bar { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-6) 0 0;
 
-      .actions { display: flex; gap: 12px; align-items: center; margin: 26px 0 0; padding-top: 14px;
+                  padding-top: var(--sp-3); border-top: 1px solid var(--hairline); }
 
-                 border-top: 1px solid var(--border); }
+      .save-bar__line { color: var(--ink-3); font-size: 12px; }
 
-      .actions .spacer { flex: 1 1 auto; }
+      .save-bar__spacer { flex: 1 1 auto; }
 
     `;
 
@@ -510,9 +499,9 @@ export class ProjectPage {
 
     const field = (label: string, control: string, hint?: string): string =>
 
-      `<div class="field"><label>${esc(label)}</label>${control}${
+      `<div class="az-form__field"><label class="az-form__label">${esc(label)}</label>${control}${
 
-        hint === undefined ? '' : `<div class="field__hint">${esc(hint)}</div>`
+        hint === undefined ? '' : `<div class="az-form__hint">${esc(hint)}</div>`
 
       }</div>`;
 
@@ -540,25 +529,25 @@ export class ProjectPage {
 
     const body = `
 
-  <div class="page-head">
+  <div class="az-wash">
 
-    <div class="page-head__main">
+    <header class="az-lead">
 
-      <div class="eyebrow">Project</div>
+      <div class="az-crumbs az-crumbs--eyebrow">Edit project</div>
 
-      <h1 class="page-head__title" id="heading">Project</h1>
+      <h1 class="az-title"><span class="az-title__mark">${icon('gear')}</span><span id="heading">Project</span></h1>
 
-      <p class="page-head__desc" id="summary">Reading the project…</p>
+      <p class="az-intro" id="summary">Reading the project…</p>
 
-    </div>
+      <div class="az-row">
 
-    <div class="page-head__actions">
+        <button id="remove" class="az-btn" type="button"><span>Remove…</span></button>
 
-      <button id="remove" class="btn btn--ghost" type="button">Remove…</button>
+        <button id="cancel" class="az-btn" type="button"><span>Close</span></button>
 
-      <button id="cancel" class="btn btn--ghost" type="button">Close</button>
+      </div>
 
-    </div>
+    </header>
 
   </div>
 
@@ -582,88 +571,59 @@ export class ProjectPage {
 
     <div class="split__main">
 
-      <div class="split__section">
+      ${section({ title: 'The project', desc: 'What it is called, and what it publishes as.' })}
 
-        <div class="split__section-title">The project</div>
+      <div class="az-form">
 
-        <p class="split__section-note">What it is called, and who answers for it.</p>
+        ${field('Name', '<input id="name" class="az-input" type="text" autocomplete="off" aria-label="Project name">', 'Shown in the Library, and the slug its commands use.')}
 
-        <div class="form form-grid">
-
-          ${field('Name', '<input id="name" class="input" type="text" autocomplete="off" aria-label="Project name">', 'Shown in the Library, and the slug its commands use.')}
-
-          ${field('Version', '<input id="version" class="input" type="text" autocomplete="off" aria-label="Version">', 'A project publishes one version at a time.')}
-
-        </div>
+        ${field('Version', '<input id="version" class="az-input" type="text" autocomplete="off" aria-label="Version">', 'A project publishes one version at a time.')}
 
       </div>
 
+      ${section({ title: 'Where the pages come from', desc: 'The repositories, folders and archives this project cites. A source is recorded once and read by any number of projects, so dropping a citation here and saving leaves the source itself alone.' })}
 
+      <div class="mt-8">
 
-      <div class="split__section">
+        <p class="split__note" id="noSources">This project cites nothing yet.</p>
 
-        <div class="split__section-title">Where the pages come from</div>
-
-        <p class="split__section-note">What this project reads: the repositories, folders and archives it cites. A source
-
-          is recorded once and read by any number of projects — dropping a citation here and saving leaves the source
-
-          itself alone.</p>
-
-        <p class="split__section-note" id="noSources">This project cites nothing yet.</p>
-
-        <div class="entries" id="sources"></div>
+        <div class="az-entries" id="sources"></div>
 
         <div class="cite-more">
 
-          <button id="cite-more" class="btn btn--sm" type="button">${icon('repo')}<span>Cite a source on the repositories page</span></button>
+          <button id="cite-more" class="az-btn az-btn--sm" type="button">${icon('repo')}<span>Cite a source on the repositories page</span></button>
 
-          <span class="cell-muted">Repositories are listed, downloaded and opened there. One cited from that page lands in
+          <span class="cite-more__note">Repositories are listed, downloaded and opened there. One cited from that page lands in
+
             this project.</span>
 
         </div>
 
       </div>
 
+      ${section({ title: 'What it builds', desc: 'One build produces every target ticked here — and every one of them can be turned on later in the Build Center.' })}
 
+      <div class="out-grid mt-8" id="outputs">${tiles}</div>
 
-      <div class="split__section">
+      ${section({ title: 'Drafts', desc: 'Pages the AI drafted for this project and nobody has written yet. Writing one puts it at the path it names, inside a folder you pick; copying hands it to the clipboard.' })}
 
-        <div class="split__section-title">What it builds</div>
+      <div class="mt-8">
 
-        <p class="split__section-note">One build produces every target ticked here — and every one of them can be turned
+        <p class="split__note" id="noDrafts" hidden>Nothing is drafted for this project.</p>
 
-          on later in the Build Center.</p>
-
-        <div class="out-grid" id="outputs">${tiles}</div>
-
-      </div>
-
-
-
-      <div class="split__section">
-
-        <div class="split__section-title">Drafts</div>
-
-        <p class="split__section-note">Pages the AI drafted for this project and nobody has written yet. Writing one puts
-
-          it at the path it names, inside a folder you pick; copying hands it to the clipboard.</p>
-
-        <p class="split__section-note" id="noDrafts" hidden>Nothing is drafted for this project.</p>
-
-        <div class="entries" id="drafts"></div>
+        <div class="az-entries" id="drafts"></div>
 
       </div>
 
 
 
-      <div class="actions">
+      <div class="save-bar">
 
-        <span class="cell-muted" id="footLine"></span>
+        <span class="save-bar__line" id="footLine"></span>
 
-        <span class="spacer"></span>
+        <span class="save-bar__spacer"></span>
 
-        <button id="submit" class="btn btn--primary" type="button">Save</button>
+        <button id="submit" class="az-btn az-btn--primary" type="button"><span>Save</span></button>
 
       </div>
 
@@ -751,27 +711,27 @@ export class ProjectPage {
 
     const row = document.createElement('div');
 
-    row.className = 'entry';
+    row.className = 'az-entry';
 
     const icon = document.createElement('span');
 
-    icon.className = 'entry__mark';
+    icon.className = 'az-entry__icon';
 
     icon.innerHTML = mark;
 
     const text = document.createElement('span');
 
-    text.className = 'entry__text';
+    text.className = 'az-entry__main';
 
     const title = document.createElement('span');
 
-    title.className = 'entry__name';
+    title.className = 'az-entry__title';
 
     title.textContent = name;
 
     const facts = document.createElement('span');
 
-    facts.className = 'entry__sub';
+    facts.className = 'az-entry__meta';
 
     facts.textContent = sub;
 
@@ -779,7 +739,7 @@ export class ProjectPage {
 
     const tools = document.createElement('span');
 
-    tools.className = 'entry__acts';
+    tools.className = 'az-entry__acts';
 
     acts.forEach(function (act) {
 
@@ -787,7 +747,7 @@ export class ProjectPage {
 
       button.type = 'button';
 
-      button.className = 'entry__act' + (act.danger ? ' is-danger' : '');
+      button.className = 'az-entry__act' + (act.danger ? ' az-entry__act--danger' : '');
 
       button.textContent = act.label;
 
@@ -940,11 +900,9 @@ export class ProjectPage {
 
     fact('Engine', project.document.engine || 'docfx');
 
-    fact('Sources', String(cited.size), 'all recorded');
+    // Counts are not identity: how many sources are cited and outputs ticked is said in the line under the title and
 
-    fact('Outputs', outputs().length + ' of ' + document.querySelectorAll('input[data-output]').length);
-
-    fact('Drafts', project.drafts.length === 0 ? 'none' : plural(project.drafts.length, 'not written', 'not written'));
+    // again at the foot of the form, where it is about the save. The rail holds only what an edit cannot change.
 
   }
 

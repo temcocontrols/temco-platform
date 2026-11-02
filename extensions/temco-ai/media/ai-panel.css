@@ -134,6 +134,22 @@ body {
   color: var(--vscode-foreground);
 }
 
+/* What the panel is about right now. It is the subject of every act below, so it is said before them. */
+.empty .reading {
+  margin: 0;
+  padding: 4px 8px;
+  border-left: 2px solid var(--vscode-textLink-foreground);
+  background: color-mix(in srgb, var(--vscode-textLink-foreground) 7%, transparent);
+  border-radius: 0 4px 4px 0;
+  color: var(--vscode-foreground);
+  font-size: 0.95em;
+}
+
+.empty .reading.idle {
+  border-left-color: var(--hairline);
+  background: none;
+}
+
 /* What the AI can be asked for. Only ever on screen before the first turn. */
 .guide {
   display: flex;
@@ -192,6 +208,17 @@ body {
 
 .ask:hover {
   text-decoration: underline;
+}
+
+/* An example whose subject is missing is not offered: dimmed, with the reason on hover. */
+.ask:disabled {
+  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+  cursor: default;
+  text-decoration: none;
+}
+
+.ask:disabled::before {
+  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
 }
 
 #modelNote {

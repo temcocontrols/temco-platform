@@ -26,6 +26,18 @@ interface ScriptRun {
   rewritten: string[];
 }
 
+/**
+ * The vertical indicator every section title carries across the platform.
+ *
+ * This page is one long list of seven parts, and the part a reader is in is the group head — so the head is what the
+ * bar marks. It is stated here rather than in the kit because the kit's own group head is a hairline rule, which the
+ * pages that list records keep.
+ */
+const NEEDS_CSS = `
+.group-head__label { position: relative; padding-left: 10px; }
+.group-head__label::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--accent, #0078d4); }
+`;
+
 export class NeedsPage {
   private panel: vscode.WebviewPanel | undefined;
   /** The last run of each script, by id — this session only: a run is a thing that happened, not state. */
@@ -254,11 +266,12 @@ export class NeedsPage {
     const body = `
 <div class="page-head">
 	<div class="page-head__main">
+		<div class="eyebrow">Temco Platform</div>
 		<h1 class="page-head__title">${icon('check')}What Needs Doing</h1>
 		<p class="page-head__desc">Everything that wants a person, from every source of the project being worked on — each row says what it is and where the fix is.</p>
 	</div>
 	<div class="page-head__actions">
-		<button type="button" class="btn btn--primary" data-command="temcoDocs.stalenessReport"><span>Documentation Owed</span></button>
+		<button type="button" class="btn" data-command="temcoDocs.stalenessReport" title="The same pages, cut by the person who owes each one, as a Markdown report you can keep or send. It is made when you ask, and written nowhere."><span>Owner Report</span></button>
 		<button type="button" class="btn" data-command="temcoProjects.projects.focus"><span>Projects</span></button>
 	</div>
 </div>
@@ -272,6 +285,8 @@ export class NeedsPage {
 	${fact('Unowned', String(unowned.length))}
 	${fact('Sources', String(sources.length))}
 </div>
+
+<p class="group-note">The strip counts everything below. <b>Owner Report</b> is the same facts cut by the person who owes each page, as Markdown in an untitled editor — saving it is yours to decide, and it is the one thing here that leaves this window.</p>
 
 <div class="mt-24">
 	${rule('Drafts Waiting', drafts.length === 1 ? '1 draft' : `${drafts.length} drafts`, '<button type="button" class="btn btn--sm btn--ghost" data-command="temcoDocs.review"><span>Open the Queue</span></button>')}
@@ -323,7 +338,7 @@ export class NeedsPage {
         : `<div class="record-list">${scripts.map(scriptRow).join('')}</div>`}
 </div>`;
 
-    this.panel.webview.html = page(body, { title: 'What needs doing', script: commandScript });
+    this.panel.webview.html = page(body, { title: 'What needs doing', script: commandScript, extraCss: NEEDS_CSS });
   }
 }
 

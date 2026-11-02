@@ -61,7 +61,7 @@ a view pointed at a container nobody declares, which is the mistake this consoli
 |---|---|---|---|---|
 | S1 | **Home — no project** | hero: New project · Open a source · recent | projects tree | — |
 | S2 | **Create project** | 3-step form: name/slug/version → where → what is in it | — | — |
-| S3 | **Home — project selected** | stat cards (pages, drafts, stale, issues) + *needs you* rows + last build/release | project tree | — |
+| S3 | **Home — project selected** | one callout for the one thing that needs a person, the five-stage pipeline with the figure each stage is answerable for, then *what needs a person* and *what happened lately* | project tree | — |
 | S4 | **Add source** | — | inline form in Sources | — |
 | S5 | **Docs workspace** | the page editor or a dashboard tab | **Fluent panel**: project card · search · chips · pages tree · build/release footer | Outline · Draft · Properties |
 | S6 | **Registry review** | two panes: areas ↔ pages, with issues, and *Fix* | as S5 | — |
@@ -354,6 +354,12 @@ document, so a write does not throw away the reader's scroll. `npm run build-web
 - **Tokens**: spacing 4 / 8 / 12 / 16 / 24 · radius 4 / 6 / 10 · type 20 / 16 / 14 / 13 / 11 · row 22 (compact 20) ·
   status colours taken from the VS Code chart colours, so a chip, a dot and the status bar cannot disagree.
 - **Row anatomy**, one component reused everywhere: `[icon] title · meta · status dot · hover actions`.
+- **Page anatomy**: the title block (one `h1`, one line of why, the ways in), then sections whose titles carry a 2px
+  brand bar to their left, then at most **one** tinted callout, which is the thing a person would do next. Figures live
+  beside the thing they are about — a stage of a pipeline, a row in a list — never in a strip of tiles whose only label
+  is the number itself.
+- **A list folds, it does not truncate**: the first five rows are shown and the rest are behind a native
+  `<details><summary>…</summary>`, so the count in the heading stays true.
 
 ## What was decided
 
