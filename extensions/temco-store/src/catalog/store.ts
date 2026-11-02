@@ -59,7 +59,7 @@ export class Catalog {
     if (!sqliteModule) {
       throw new CatalogUnavailable(
         'this editor does not provide `node:sqlite`, which is built into Node 22.5 and later. Update the ' +
-        'editor to a build whose extension host runs that Node, or set the store to the file fallback.'
+        'editor to a build whose extension host runs that Node: there is no second way to open the catalog.'
       );
     }
 

@@ -88,7 +88,7 @@ export interface RibbonProps {
 	onFind: () => void;
 	onOutline: () => void;
 	/** The host's own actions: preview, diff, source, properties, a picture, a capture, a link to another page. */
-	onHostAction: (action: 'preview' | 'diff' | 'source' | 'properties' | 'image' | 'capture' | 'linkPage' | 'save') => void;
+	onHostAction: (action: 'preview' | 'diff' | 'source' | 'properties' | 'image' | 'capture' | 'linkPage' | 'assist' | 'save') => void;
 	/** Enabled only when a picture is selected: annotating replaces it rather than adding a second one. */
 	onAnnotate: () => void;
 }

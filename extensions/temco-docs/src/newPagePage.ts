@@ -297,7 +297,7 @@ export class NewPagePage {
     if (assistant === undefined || assistant.modelLabel() === undefined) {
       await panel.webview.postMessage({
         type: 'analyseError',
-        message: 'No local model is chosen. Download one on the AI page, then analyse again.',
+        message: 'No local model is chosen. Download one in Server & Prompts (Temco AI), then analyse again.',
       });
       return;
     }
@@ -379,7 +379,7 @@ export class NewPagePage {
     if (assistant === undefined || assistant.modelLabel() === undefined) {
       await panel.webview.postMessage({
         type: 'draftError',
-        message: 'No local model is chosen. Download one on the AI page, then draft again.',
+        message: 'No local model is chosen. Download one in Server & Prompts (Temco AI), then draft again.',
       });
       return;
     }

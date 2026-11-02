@@ -156,9 +156,9 @@ function chatBody(): string {
 	})}
 <div class="mt-16">${callout({
 		title: 'The conversation lives in the panel',
-		desc: 'It answers beside the page you have open, and it streams as it writes. The same information, with room to stand back, is on The AI page.',
+		desc: 'It answers beside the page you have open, and it streams as it writes. The same information, with room to stand back, is on Server & Prompts.',
 		mark: 'panel',
-		actions: `${act('Open the AI Panel', 'temcoAi.openPanel', { kind: 'primary', mark: 'panel' })}${act('The AI page', 'temcoAi.page', { kind: 'link' })}`
+		actions: `${act('Open the AI Panel', 'temcoAi.openPanel', { kind: 'primary', mark: 'panel' })}${act('Server & Prompts', 'temcoAi.page', { kind: 'link' })}`
 	})}</div>
 
 <div class="mt-24">
@@ -192,7 +192,7 @@ function actionsBody(): string {
 		desc: 'The things the AI is allowed to do, and where its output goes. An action that writes anything always routes through Review Center.',
 		actions: [
 			{ label: 'Configure', command: 'temcoWorkbench.settings', mark: 'gear', kind: 'primary' },
-			{ label: 'The AI page', command: 'temcoAi.page', kind: 'link' }
+			{ label: 'Server & Prompts', command: 'temcoAi.page', kind: 'link' }
 		]
 	})}
 ${figures([`${available} actions`, blocked === 0 ? 'all of them ready' : `${blocked} needs a model first`, 'nothing writes without a person'])}
@@ -293,7 +293,7 @@ function modelsBody(context: vscode.ExtensionContext): string {
 			meta: status.running === undefined
 				? 'it starts when something needs it, and stops again when nothing does'
 				: `${status.running.label} · it stops itself when nothing has needed it for a while`,
-			actions: act(status.running === undefined ? 'The AI page' : 'Show the log', 'temcoAi.page', { kind: 'link' })
+			actions: act(status.running === undefined ? 'Server & Prompts' : 'Show the log', 'temcoAi.page', { kind: 'link' })
 		}),
 		row({
 			mark: 'package',
@@ -329,7 +329,7 @@ ${installed.length === 0
 			title: 'Nothing is installed yet',
 			desc: 'The AI refuses rather than answering from nothing. Downloading is one model file and one runtime for this machine — they stay in your own folder, and no repository ever carries them.',
 			mark: 'download',
-			actions: `${act('Choose a Model', 'temcoAi.page', { kind: 'primary', mark: 'download' })}${act('The AI page', 'temcoAi.page', { kind: 'link' })}`
+			actions: `${act('Choose a Model', 'temcoAi.page', { kind: 'primary', mark: 'download' })}${act('Server & Prompts', 'temcoAi.page', { kind: 'link' })}`
 		})}</div>`
 		: `<div class="mt-24">
 	${section({

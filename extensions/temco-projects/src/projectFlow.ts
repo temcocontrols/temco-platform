@@ -89,8 +89,9 @@ export class ProjectFlowPage {
 	async open(pinned?: PinnedRepository): Promise<void> {
 		this.pinned = pinned;
 		let unavailable: string | undefined;
+		let catalog: Catalog | undefined;
 		try {
-			const catalog = await Catalog.open(this.context);
+			catalog = await Catalog.open(this.context);
 			// A project created *from* a repository cites it, so the source exists before the form does — the same
 			// row `Start` writes on the repositories page, reached from the other end.
 			if (pinned !== undefined) {
@@ -106,6 +107,9 @@ export class ProjectFlowPage {
 		} catch (error) {
 			unavailable = error instanceof CatalogUnavailable ? error.message : String(error);
 			this.sources = [];
+		} finally {
+			// The page is static once it knows the sources: the handle is not kept for the form's lifetime.
+			catalog?.close();
 		}
 
 		const body = html(pinned, unavailable);

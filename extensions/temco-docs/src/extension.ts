@@ -609,7 +609,7 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
     const assistant = await ai();
     if (assistant === undefined || assistant.modelLabel() === undefined) {
       void vscode.window.showWarningMessage(
-        'Temco Docs: no local model is chosen, so there is nothing to draft with. Choose one on the AI page.'
+        'Temco Docs: no local model is chosen, so there is nothing to draft with. Choose one in Server & Prompts (Temco AI).'
       );
       return;
     }
