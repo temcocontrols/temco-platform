@@ -1168,6 +1168,7 @@
     "check-status": "node --experimental-strip-types scripts/check-status.mts",
     "check-grid": "node --experimental-strip-types scripts/check-grid.mts",
     "check-translate": "node --experimental-strip-types scripts/check-translate.mts",
+    "check-builds": "node --experimental-strip-types scripts/check-builds.mts",
     "build-webview": "node --experimental-strip-types scripts/build-webview.mts"
   },
   "dependencies": {

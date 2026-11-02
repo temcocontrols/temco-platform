@@ -37,6 +37,10 @@ displays it. Keeping them apart is what stops "put it in Temco Learn" from being
 
 The rest of the container is the mock's Documentation module, page for page: **Projects**, a repository, **Sources**, **Documents** and a page, a **Source Explorer**, **Review Center**, **Build Center** and **Releases** (`src/docsPages.ts`). The side bar holds the mock's sections and rows — Pages, Projects, Sources, Areas, Pipeline, Working Set — plus the page tree itself, which is why there is no separate *Docs Explorer* activity-bar icon: one icon browses one object.
 
+**The Build Center** answers three questions, in the order a person asks them, in one column: **Builds** (what has run — `#12`, when it started, how long it took counted from the two timestamps, and the verdict as a badge, newest tagged `Latest`), **What they left** (every file a build wrote, newest first, each row opening the file), and **Where a build writes** (the two scripts and the folders they fill: `docs:site → dist/site · dist/docs`, `build:help:dry → .chm in the project, or in HelpDocs beside it`). Both lists fold after five and six rows behind a native `<details>`: a site build leaves hundreds of pages, and a page that prints them all is a page nobody reads to the end.
+
+The title block carries **only the two acts this page owns** — `Build the Site` and `Build the Offline Help`. `Refresh` was removed (reopening a page re-reads it) and `Publish & Releases` became a link in the files section it belongs to: three of four buttons in a title block were navigation, which is what made the page read as a menu rather than a record.
+
 Every one of them is drawn with the shared page vocabulary from `temco-ui` (`page.css` + `page()`), so they are the pages whose look is the mock's design rather than a private `<style>` block. The pattern they establish is the one the module's other pages move to: a page describes what it draws, and `temco-ui` decides how that looks and how a click becomes a command.
 
 ## Where the platform design lives

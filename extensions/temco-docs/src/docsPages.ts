@@ -131,7 +131,7 @@ interface ArtifactFact {
 }
 
 /** What the Build Center and Releases show: the builds of the project on, every file they left, and releases. */
-interface BuildFacts {
+export interface BuildFacts {
 	project?: string;
 	builds: BuildRow[];
 	artifacts: ArtifactFact[];
@@ -1288,6 +1288,12 @@ const PIPE_CSS = `
 .az-split .az-section { margin-top: 0; }
 @media (max-width: 1180px) { .az-split { grid-template-columns: minmax(0, 1fr); } }
 .az-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+/* A long list folds after a handful of rows: a site build leaves hundreds of pages, and a page that prints them all is a
+   page nobody reads to the end of. Native summary, so it opens in place and closes again. */
+.build-more { margin-top: var(--sp-1); }
+.build-more > summary { padding: 4px 0; color: var(--az-blue, #0078d4); font-size: 12.5px; line-height: 18px; cursor: pointer; }
+.build-more > summary:hover { text-decoration: underline; }
+.build-more > summary:focus-visible { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
 `;
 
 function reviewBody(drafts: readonly DraftRow[], project: string | undefined): string {
@@ -1396,84 +1402,129 @@ function waitingSince(iso: string): string {
 	return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
-/** *Build Center* — what the catalog recorded, which is every build a person started from here. */
-function buildsBody(facts1: BuildFacts): string {
+/**
+ * *Build Center* — the builds of the project on, and the files they left.
+ *
+ * One column, in the order a person asks the questions: **what has run** (newest first, with how long each took), **what
+ * the files are** (newest first, each one a way in), and **where a build writes** — the two scripts and the folders they
+ * fill, which is the one fact this page can state that nothing else in the window does. The page keeps no split: the
+ * artifacts are not a column beside the builds, because one is the record and the other is what the record produced.
+ *
+ * Both lists fold after a handful of rows. A site build leaves hundreds of `.html` files, and a page that prints all of
+ * them is a page nobody scrolls to the end of.
+ */
+export function buildsBody(facts1: BuildFacts): string {
 	const { builds, artifacts } = facts1;
 	const succeeded = builds.filter((build) => build.status === 'succeeded').length;
 	const running = builds.filter((build) => build.status === 'running').length;
+	const newest = builds[0];
+	const last = newest === undefined ? undefined : waitingSince(newest.startedAt);
+
+	/** How long a build took, from the two timestamps the catalog keeps — never from the status. */
+	const took = (build: BuildRow): string => {
+		if (build.finishedAt === undefined) {
+			return build.status === 'running' ? 'still running' : 'no finish recorded';
+		}
+		const started = Date.parse(build.startedAt);
+		const finished = Date.parse(build.finishedAt);
+		if (Number.isNaN(started) || Number.isNaN(finished) || finished < started) {
+			return 'no finish recorded';
+		}
+		const seconds = Math.round((finished - started) / 1000);
+		return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+	};
 
 	const buildRow = (build: BuildRow): string =>
 		azRow({
-			mark: 'play',
-			tone: build.status === 'succeeded' ? 'ok' : build.status === 'running' ? 'info' : undefined,
+			mark: build.status === 'succeeded' ? 'check' : build.status === 'running' ? 'sync' : 'alert',
+			tone: build.status === 'succeeded' ? 'ok' : build.status === 'running' ? 'info' : 'warn',
 			title: `#${build.id}`,
 			mono: true,
 			tag: build.revision,
-			meta: facts([
-				`started ${waitingSince(build.startedAt)}`,
-				build.finishedAt === undefined ? 'no finish recorded' : `finished ${waitingSince(build.finishedAt)}`,
-				artifacts.length === 0 ? 'no artifacts' : 'see artifacts below'
-			]),
-			actions: badge(build.status, build.status === 'succeeded' ? 'ok' : build.status === 'running' ? 'info' : 'warn')
+			meta: facts([`started ${waitingSince(build.startedAt)}`, `took ${took(build)}`]),
+			// The status is the row's verdict, and the verdict is what a person scans for.
+			actions: (build === newest ? badge('Latest', 'accent') : '') + badge(build.status, build.status === 'succeeded' ? 'ok' : build.status === 'running' ? 'info' : 'warn')
 		});
 
 	const artifactRow = (artifact: ArtifactFact): string =>
 		azRow({
-			mark: artifact.kind === 'chm' ? 'package' : artifact.kind === 'pdf' ? 'document' : 'globe',
+			mark: artifact.kind === 'chm' ? 'package' : artifact.kind === 'pdf' ? 'document' : artifact.kind === 'search' ? 'search' : 'globe',
 			title: artifact.path.split(/[\\/]/).pop() ?? artifact.path,
 			mono: true,
 			tag: artifactLabel(artifact.kind),
-			meta: `<span class="cell-mono">${esc(artifact.path)}</span><span>built ${waitingSince(artifact.builtAt)}</span>`,
+			meta: `<span>built ${waitingSince(artifact.builtAt)}</span><span class="cell-mono">${esc(artifact.path)}</span>`,
 			command: 'temcoDocs.openArtifact',
-			args: [artifact.path]
+			args: [artifact.path],
+			go: 'Open'
 		});
 
-	return `${hero({
+	/** First `open` rows, the rest behind a native summary: no script, and it closes again. */
+	const folded = (rows: readonly string[], open: number, more: string): string =>
+		rows.length <= open
+			? azEntries(rows)
+			: `${azEntries(rows.slice(0, open))}<details class="build-more"><summary>Show ${esc(
+					`${rows.length - open} ${more}`
+				)}</summary>${azEntries(rows.slice(open))}</details>`;
+
+	const heroBlock = hero({
 		title: 'Build Center',
 		mark: 'play',
 		descWide: true,
 		desc: 'A build runs the repository’s own script as a task and is then judged by what it left: the attempt, its exit code and every file that appeared are recorded here, in the platform database.',
+		// Two acts, and only the two acts: refreshing a page is what reopening it does, and publishing has its own page.
 		actions: [
-			{ label: 'Build Site', command: 'temcoDocs.buildSite', mark: 'play', kind: 'primary' },
-			{ label: 'Build Offline Help', command: 'temcoDocs.buildHelp', mark: 'package' },
-			{ label: 'Refresh', command: 'temcoDocs.builds', mark: 'refresh' },
-			{ label: 'Publish & Releases', command: 'temcoDocs.releases', mark: 'upload' }
+			{ label: 'Build the Site', command: 'temcoDocs.buildSite', mark: 'play', kind: 'primary' },
+			{ label: 'Build the Offline Help', command: 'temcoDocs.buildHelp', mark: 'package' }
 		]
-	})}
-<p class="az-note">${facts([
+	});
+
+	const stateLine = `<p class="az-note">${facts([
 		`${builds.length} ${builds.length === 1 ? 'build' : 'builds'} recorded`,
-		`${succeeded} left an artifact`,
-		`${artifacts.length} ${artifacts.length === 1 ? 'artifact' : 'artifacts'}`,
+		last === undefined ? 'nothing has run here' : `last started ${last}`,
+		`${artifacts.length} ${artifacts.length === 1 ? 'file' : 'files'} to take`,
 		running > 0 ? `${running} running now` : 'nothing running now'
-	])}</p>
-${builds.length === 0
-			? `<div class="mt-24">${azCallout({
-				title: 'No build has run here yet',
-				desc: 'Building runs the folder’s own script (docs:site, build:help:dry) as a task and then looks for the file it should have written. The exit code is printed, never believed.',
-				mark: 'play',
-				actions: azButton('Build Site', 'temcoDocs.buildSite', { mark: 'play' })
-			})}</div>`
-			: `<div class="az-split">
-<div>
-${section({
-				title: 'Builds',
-				desc: 'Newest first. A row is written before the script runs, so a build that crashed the editor is still here.',
-				actions: azButton('Build Site', 'temcoDocs.buildSite', { small: true, mark: 'play' })
-			})}
-${azEntries(builds.map(buildRow))}
-</div>
-<div>
-${section({
-				title: 'What they left',
-				desc: artifacts.length === 0
-					? 'No build has written a file yet. A build that fails leaves none, and that is what the row above says.'
-					: 'Every file the builds above left behind, newest first. A file that is here is a file a reader can be given.',
-				actions: artifacts.length === 0 ? '' : azButton('Publish & Releases', 'temcoDocs.releases', { small: true, mark: 'upload' })
-			})}
-${azEntries(artifacts.map(artifactRow))}
-<p class="az-note">Recorded in the platform database · the files stay where the build wrote them.</p>
-</div>
-</div>`}`;
+	])}</p>`;
+
+	const whereItWrites = `${section({
+		title: 'Where a build writes',
+		desc: 'The scripts come from the repository itself, so a rename upstream is reported rather than guessed around.'
+	})}${settingsStrip([
+		{ label: 'The site build', value: 'docs:site → dist/site · dist/docs', mono: true },
+		{ label: 'The offline help', value: 'build:help:dry → .chm in the project, or in HelpDocs beside it', mono: true }
+	])}`;
+
+	// Nothing has run: the callout says what a build is, and the page still answers where it would write.
+	if (builds.length === 0) {
+		return `${heroBlock}${stateLine}<div class="mt-24">${azCallout({
+			title: 'No build has run here yet',
+			desc: 'Building runs the folder’s own script (docs:site, build:help:dry) as a task and then looks for the file it should have written. The exit code is printed, never believed.',
+			mark: 'play',
+			actions: azButton('Build the Site', 'temcoDocs.buildSite', { mark: 'play' }) + azButton('Build the Offline Help', 'temcoDocs.buildHelp', { mark: 'package' })
+		})}</div>${whereItWrites}`;
+	}
+
+	return [
+		heroBlock,
+		stateLine,
+		section({
+			title: 'Builds',
+			desc: `Newest first. A row is written before the script runs, so a build that crashed the editor is still here — ${succeeded} of ${builds.length} left a file.`,
+			actions: azButton('Build the Site', 'temcoDocs.buildSite', { small: true, mark: 'play' })
+		}),
+		folded(builds.map(buildRow), 5, 'older builds'),
+		artifacts.length === 0
+			? section({
+					title: 'What they left',
+					desc: 'Nothing yet. A build is judged by the file it writes, so a build that wrote none is not counted as one that worked.'
+				}) + azEntries([azRow({ mark: 'info', title: 'No file has been written yet', meta: esc('Build the site, and the folder it fills appears here as rows.') })])
+			: section({
+					title: 'What they left',
+					desc: `Every file the builds have written, newest first — ${artifacts.length} in all. A file that is here is a file a reader can be given.`,
+					actions: azButton('Publish & Releases', 'temcoDocs.releases', { small: true, mark: 'upload' })
+				}) + folded(artifacts.map(artifactRow), 6, 'more files'),
+		whereItWrites,
+		`<p class="az-note">Recorded in the platform database · the files stay where the build wrote them.</p>`
+	].join('\n');
 }
 
 /** *Publish & Releases* — what a build left behind, and what a reader can be given. The files are the release. */
