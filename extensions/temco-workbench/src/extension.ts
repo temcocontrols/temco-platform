@@ -22,6 +22,7 @@ import { registerSettings } from './settingsPages';
 import { registerSidebarViews } from './sidebar';
 import { OverviewTree } from './overviewTree';
 import { Catalog, selection } from './store';
+import { restoreByReopen } from './ui';
 export function activate(context: vscode.ExtensionContext): void {
 	// How many drafts a person still has to settle. A queue is not in the registry, so it is read from the catalog
 	// once per refresh and kept here — the badge is drawn synchronously, and a number that lags one refresh is
@@ -75,6 +76,27 @@ export function activate(context: vscode.ExtensionContext): void {
 		settings.pages,
 		...settings.disposables,
 		learn,
+		// A page of this module that was open when the window closed comes back with its tab. Each of these pages is
+		// one question with one answer, so there is nothing else to remember about them.
+		...restoreByReopen(context, [
+			{ viewType: 'temcoWorkbench.overview', open: () => void dashboard.open('overview') },
+			{ viewType: 'temcoWorkbench.activity', open: () => void dashboard.open('activity') },
+			{ viewType: 'temcoWorkbench.needs', open: () => needs.open() },
+			{ viewType: 'temcoWorkbench.settings.general', open: () => settings.pages.general() },
+			{ viewType: 'temcoWorkbench.settings.modules', open: () => settings.pages.modules() },
+			{ viewType: 'temcoWorkbench.settings.branding', open: () => settings.pages.branding() },
+			{ viewType: 'temcoWorkbench.settings.ai', open: () => settings.pages.ai() },
+			{ viewType: 'temcoWorkbench.settings.publishing', open: () => settings.pages.publishing() },
+			{ viewType: 'temcoWorkbench.help.welcome', open: () => help.welcome() },
+			{ viewType: 'temcoWorkbench.help.home', open: () => help.home() },
+			{ viewType: 'temcoWorkbench.help.keys', open: () => void help.keys() },
+			{ viewType: 'temcoWorkbench.help.logs', open: () => void help.logs() },
+			{ viewType: 'temcoWorkbench.help.issue', open: () => help.issue() },
+			{ viewType: 'temcoWorkbench.help.about', open: () => help.about() },
+			{ viewType: 'temcoWorkbench.learn.home', open: () => void learn.home() },
+			{ viewType: 'temcoWorkbench.learn.article', open: () => void learn.article() },
+			{ viewType: 'temcoWorkbench.learn.downloads', open: () => void learn.downloads() }
+		]),
 		vscode.commands.registerCommand('temcoWorkbench.home', () => dashboard.open('overview')),
 		vscode.commands.registerCommand('temcoWorkbench.openNeeds', () => needs.open()),
 		vscode.commands.registerCommand('temcoWorkbench.welcome', () => help.welcome()),

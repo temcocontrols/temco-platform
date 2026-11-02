@@ -20,10 +20,12 @@ import { REPOSITORY_FILE_SCHEME, RepositoryFileProvider, languageOf, repositoryF
 import { registerReadCommands, tokenOf } from './read';
 import { applyToSource } from './apply';
 import { CodeFile, Material, RepositorySource, codeFiles, readMaterials, sourceTree } from './repository';
-import { RepositoryDetailPage } from './repositoryPage';
+import { RepositoryDetailPage, REPOSITORY_DETAIL_VIEW_TYPE } from './repositoryPage';
 import { RepositoriesPage } from './repositoriesPage';
-import { DashboardPage } from './dashboard';
-import { RepositorySettingsPage } from './settingsPage';
+import { DashboardPage, DASHBOARD_VIEW_TYPE } from './dashboard';
+import { RepositorySettingsPage, REPOSITORY_SETTINGS_VIEW_TYPE } from './settingsPage';
+import { REPOSITORIES_VIEW_TYPE } from './surface';
+import { restoreByReopen } from './ui';
 import { OFFERED_SCRIPTS, OfferedScript } from './scripts';
 import { registerSourcesView } from './sourcesView';
 import { Catalog, selection, slugOf } from './store';
@@ -71,6 +73,13 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 		{ dispose: () => detail.dispose() },
 		{ dispose: () => settings.dispose() },
 		{ dispose: () => dashboard.dispose() },
+		// A page of this module that was open when the window closed comes back with its tab, on the same subject.
+		...restoreByReopen(context, [
+			{ viewType: REPOSITORIES_VIEW_TYPE, open: (arg) => repositories.open(arg) },
+			{ viewType: REPOSITORY_DETAIL_VIEW_TYPE, open: (arg) => detail.open(arg ?? '') },
+			{ viewType: REPOSITORY_SETTINGS_VIEW_TYPE, open: () => settings.open() },
+			{ viewType: DASHBOARD_VIEW_TYPE, open: () => dashboard.open() }
+		]),
 		vscode.commands.registerCommand('temcoRepositories.page', (project?: unknown) =>
 			repositories.open(undefined, typeof project === 'string' && project.length > 0 ? project : undefined)
 		),

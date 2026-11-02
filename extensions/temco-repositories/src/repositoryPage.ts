@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 import { sourceTree, CodeFile, RepositorySource } from './repository';
 import { Catalog, RepositoryCacheRow, Selection, slugOf } from './store';
-import { page, pageColumn } from './ui';
+import { page, pageColumn, remember } from './ui';
 import { cloneSize, hasClone } from './workarea';
 
 export const REPOSITORY_DETAIL_VIEW_TYPE = 'temcoRepositories.repositoryDetail';
@@ -58,6 +58,7 @@ export class RepositoryDetailPage {
   ) { }
 
   open(name: string, organisation?: string): void {
+    remember(this.context, REPOSITORY_DETAIL_VIEW_TYPE, name);
     this.name = name;
     this.organisation = organisation;
     if (this.panel) {

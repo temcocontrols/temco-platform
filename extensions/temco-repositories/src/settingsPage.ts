@@ -9,7 +9,7 @@
 
 import * as vscode from 'vscode';
 import { tokenOf } from './read';
-import { callout, hero, icon, page, pageColumn, section } from './ui';
+import { callout, hero, icon, page, pageColumn, remember, section } from './ui';
 import { workRoot } from './workarea';
 
 export const REPOSITORY_SETTINGS_VIEW_TYPE = 'temcoRepositories.settings';
@@ -29,6 +29,7 @@ export class RepositorySettingsPage {
   constructor(private readonly context: vscode.ExtensionContext, private readonly refresh: () => void) { }
 
   open(): void {
+    remember(this.context, REPOSITORY_SETTINGS_VIEW_TYPE);
     if (this.panel) {
       this.panel.reveal(pageColumn());
       void this.send();

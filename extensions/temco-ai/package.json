@@ -28,7 +28,13 @@
   "activationEvents": [
     "onView:temcoAi.panel",
     "onView:temcoAi.draft",
-    "onView:temcoAi.model"
+    "onView:temcoAi.model",
+    "onWebviewPanel:temcoAi.page",
+    "onWebviewPanel:temcoAi.chat",
+    "onWebviewPanel:temcoAi.actions",
+    "onWebviewPanel:temcoAi.citations",
+    "onWebviewPanel:temcoAi.localModels",
+    "onWebviewPanel:temcoAi.stale"
   ],
   "contributes": {
     "viewsContainers": {

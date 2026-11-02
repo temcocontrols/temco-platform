@@ -26,7 +26,11 @@
     "temcocontrols.temco-ui"
   ],
   "activationEvents": [
-    "onView:temcoRepositories.list"
+    "onView:temcoRepositories.list",
+    "onWebviewPanel:temcoRepositories.page",
+    "onWebviewPanel:temcoRepositories.repositoryDetail",
+    "onWebviewPanel:temcoRepositories.settings",
+    "onWebviewPanel:temcoRepositories.dashboard"
   ],
   "contributes": {
     "views": {

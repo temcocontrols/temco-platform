@@ -12,7 +12,7 @@
 import * as vscode from 'vscode';
 import { Catalog, CatalogUnavailable, Selection } from './store';
 import { PROJECTS_PAGE_VIEW_TYPE } from './surface';
-import { callout, commandScript, escapeHtml as esc, hero, icon, page, pageColumn, runCommand } from './ui';
+import { callout, commandScript, escapeHtml as esc, hero, icon, page, pageColumn, remember, runCommand } from './ui';
 
 /** One row of the list: the catalog's own fields, plus what the four queries beside it counted. */
 interface ProjectRow {
@@ -38,6 +38,7 @@ export class ProjectsPage {
 	) { }
 
 	async open(): Promise<void> {
+    remember(this.context, PROJECTS_PAGE_VIEW_TYPE);
 		const rows = await this.read();
 		if (this.panel !== undefined) {
 			this.panel.reveal(pageColumn());

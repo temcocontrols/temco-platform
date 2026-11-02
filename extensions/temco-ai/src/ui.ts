@@ -45,8 +45,7 @@ export interface SectionOptions {
 }
 
 /** The UI module's exports. */
-interface UiApi {
-	pageColumn(): vscode.ViewColumn;
+interface UiApi {	pageColumn(): vscode.ViewColumn;
 	page(body: string, options?: { title?: string; script?: string; extraCss?: string }): string;
 	escapeHtml(text: string): string;
 	icon(name: string, cls?: string): string;
@@ -56,8 +55,22 @@ interface UiApi {
 	section(options: SectionOptions): string;
 	/** The one tinted callout a page is allowed. */
 	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
+	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
+	/** One serializer per page, so the window can bring a page's tab back after a restart. */
+	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
+	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
 	commandScript: string;
 	runCommand(message: PageMessage): void;
+}
+
+/** One page of this module, as the window needs it back. */
+export interface RestorablePage {
+	/** The view type the panel was created with. */
+	viewType: string;
+	/** Opens the page, drawing into the panel the window handed back. */
+	open(panel?: vscode.WebviewPanel, arg?: string): void;
 }
 
 const extension = vscode.extensions.getExtension<UiApi>(UI_EXTENSION_ID);
@@ -88,8 +101,17 @@ export const section = ui.section;
 /** The one tinted callout a page is allowed: an icon, a sentence, and the thing to do about it. */
 export const callout = ui.callout;
 
+/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+export const remember = ui.remember;
+
+/** One serializer per page, so the window can bring a page's tab back after a restart. */
+export const restore = ui.restore;
+
 /** The script that turns a `data-command` button into a message to the module. */
 export const commandScript = ui.commandScript;
 
 /** What the module does with that message: run the command it names. */
 export const runCommand = ui.runCommand;
+
+/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+export const restoreByReopen = ui.restoreByReopen;

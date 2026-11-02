@@ -17,6 +17,12 @@ interface UiApi {
 	icon(name: string, cls?: string): string;
 	toneMark(name: string, tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent'): string;
 	/** The script a page runs to post `data-command` clicks back to the module that opened it. */
+	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
+	/** One serializer per page, so the window can bring a page's tab back after a restart. */
+	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
+	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
 	commandScript: string;
 	/** Runs one of those messages: `{ command, args }`. */
 	runCommand(message: { command?: unknown; args?: unknown }): void;
@@ -82,6 +88,21 @@ export const escapeHtml = ui.escapeHtml;
 /** One glyph from the page's sprite. */
 export const icon = ui.icon;
 
+
+
+/** One page of this module, as the window needs it back. */
+export interface RestorablePage {
+	/** The view type the panel was created with. */
+	viewType: string;
+	/** Opens the page, drawing into the panel the window handed back. */
+	open(panel?: vscode.WebviewPanel, arg?: string): void;
+}
+
+/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+export const remember = ui.remember;
+
+/** One serializer per page, so the window can bring a page's tab back after a restart. */
+export const restore = ui.restore;
 /** One glyph in a tinted circle: a state you can see before you read it. */
 export const toneMark = ui.toneMark;
 
@@ -128,3 +149,6 @@ export async function focusLibrary(): Promise<void> {
 		available.includes('temcoProjects.projects.focus') ? 'temcoProjects.projects.focus' : 'workbench.view.explorer'
 	);
 }
+
+/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+export const restoreByReopen = ui.restoreByReopen;

@@ -12,7 +12,7 @@ import { describeMachine, machine as thisMachine } from './ai/machine';
 import { aiStatus } from './ai/runtime';
 import { ACTIONS, CITATIONS } from './aiSample';
 import { DocsRoot, collectPages, docs } from './docs';
-import { commandScript, escapeHtml as esc, callout, hero, icon, page, pageColumn, runCommand, section } from './ui';
+import { RestorablePage, commandScript, escapeHtml as esc, callout, hero, icon, page, pageColumn, runCommand, section } from './ui';
 
 export const CHAT_VIEW_TYPE = 'temcoAi.chat';
 export const ACTIONS_VIEW_TYPE = 'temcoAi.actions';
@@ -99,14 +99,27 @@ export class AiPages {
 
 	/** Pages the generator says are stale: the code they document moved after their last review. */
 	stale(): void {
-		let roots: readonly DocsRoot[] = [];
+		this.open('stale', STALE_VIEW_TYPE, 'Update a Page the Code Moved', staleBody(this.roots()));
+	}
+
+	/** The pages this module can be asked to bring back, one serializer each. */
+	restorable(): RestorablePage[] {
+		return [
+			{ viewType: CHAT_VIEW_TYPE, open: (panel) => this.open('chat', CHAT_VIEW_TYPE, 'Temco AI', chatBody(), panel) },
+			{ viewType: ACTIONS_VIEW_TYPE, open: (panel) => this.open('actions', ACTIONS_VIEW_TYPE, 'Actions', actionsBody(), panel) },
+			{ viewType: CITATIONS_VIEW_TYPE, open: (panel) => this.open('citations', CITATIONS_VIEW_TYPE, 'Citations', citationsBody(), panel) },
+			{ viewType: MODELS_VIEW_TYPE, open: (panel) => this.open('models', MODELS_VIEW_TYPE, 'Local Models', modelsBody(this.context), panel) },
+			{ viewType: STALE_VIEW_TYPE, open: (panel) => this.open('stale', STALE_VIEW_TYPE, 'Update a Page the Code Moved', staleBody(this.roots()), panel) }
+		];
+	}
+
+	/** The documentation set being read, or nothing when the documentation module is not installed. */
+	private roots(): readonly DocsRoot[] {
 		try {
-			roots = docs().roots();
+			return docs().roots();
 		} catch {
-			// No documentation module: the page still opens and says there is nothing to compare against.
-			roots = [];
+			return [];
 		}
-		this.open('stale', STALE_VIEW_TYPE, 'Update a Page the Code Moved', staleBody(roots));
 	}
 
 	dispose(): void {
@@ -116,7 +129,7 @@ export class AiPages {
 		this.panels.clear();
 	}
 
-	private open(key: string, viewType: string, title: string, body: string): void {
+	private open(key: string, viewType: string, title: string, body: string, restored?: vscode.WebviewPanel): void {
 		const html = page(body, { title, script: commandScript, extraCss: AI_CSS });
 		const existing = this.panels.get(key);
 		if (existing) {
@@ -124,10 +137,12 @@ export class AiPages {
 			existing.webview.html = html;
 			return;
 		}
-		const panel = vscode.window.createWebviewPanel(viewType, title, pageColumn(), {
+		// A restored tab is drawn into rather than replaced, so it keeps its place in the group.
+		const panel = restored ?? vscode.window.createWebviewPanel(viewType, title, pageColumn(), {
 			enableScripts: true,
 			localResourceRoots: []
 		});
+		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'ai.svg');
 		panel.webview.onDidReceiveMessage(runCommand);
 		panel.webview.html = html;

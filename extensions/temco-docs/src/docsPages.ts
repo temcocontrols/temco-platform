@@ -14,7 +14,7 @@ import { capturesOf } from './media';
 import { pagesTarget } from './pages';
 import { firstVersionReport } from './versionReport';
 import { BuildRow, Catalog, DocumentRow, DraftRow, ReleaseRow, ScanRow, selection, slugOf } from './store';
-import { callout as azCallout, cards, commandScript, entryRow, escapeHtml as esc, hero, icon, numbers, page, pageColumn, runCommand, section, toneMark } from './ui';
+import { callout as azCallout, cards, commandScript, entryRow, escapeHtml as esc, hero, icon, numbers, page, pageColumn, remember, runCommand, section, toneMark } from './ui';
 
 /** The view types, one per surface. `pagePanel` is a panel this dashboard opens, not the editor's `temcoEditor.markdown`. */
 export const PROJECTS_VIEW_TYPE = 'temcoDocs.projects';
@@ -188,6 +188,7 @@ export class DocsPages {
 
 	/** The project the window is on, as a page: what it is made of, what it produces, and the acts on it. */
 	project(slug?: string): void {
+		remember(this.context, 'temcoDocs.projectPage', slug);
 		void this.openProjectPage(slug);
 	}
 
@@ -383,6 +384,7 @@ ${never.length === 0 ? '' : `<div class="mt-24">${group({
 	}
 
 	repository(name?: string): void {
+		remember(this.context, REPOSITORY_VIEW_TYPE, name);
 		void this.openRepository(name);
 	}
 
@@ -428,10 +430,12 @@ ${never.length === 0 ? '' : `<div class="mt-24">${group({
 	}
 
 	documents(area?: string): void {
+		remember(this.context, DOCUMENTS_VIEW_TYPE, area);
 		this.open('documents', DOCUMENTS_VIEW_TYPE, 'Documents', documentsBody(this.roots(), area));
 	}
 
 	pageOf(title?: string, area?: string): void {
+		remember(this.context, PAGE_VIEW_TYPE, title);
 		void this.openPage(title, area);
 	}
 
@@ -442,6 +446,7 @@ ${never.length === 0 ? '' : `<div class="mt-24">${group({
 	}
 
 	source(repo?: string): void {
+		remember(this.context, SOURCE_VIEW_TYPE, repo);
 		void this.openSource(repo);
 	}
 

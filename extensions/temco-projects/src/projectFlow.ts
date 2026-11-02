@@ -20,7 +20,7 @@ import * as path from 'node:path';
 import { draftProjectPage } from './aiModule';
 import { RepositoryFile, RepositorySource, repositoryFiles, repositoryMaterial } from './repositories';
 import { Catalog, CatalogUnavailable, Selection, slugOf, SourceRow } from './store';
-import { actionBar, callout, checkCards, choiceCards, escapeHtml as esc, formFields, hero, icon, page, pageColumn, section } from './ui';
+import { actionBar, callout, checkCards, choiceCards, escapeHtml as esc, formFields, hero, icon, page, pageColumn, remember, section } from './ui';
 
 export const NEW_PROJECT_VIEW_TYPE = 'temcoProjects.newProject';
 
@@ -87,6 +87,7 @@ export class ProjectFlowPage {
 	) { }
 
 	async open(pinned?: PinnedRepository): Promise<void> {
+		remember(this.context, NEW_PROJECT_VIEW_TYPE);
 		this.pinned = pinned;
 		let unavailable: string | undefined;
 		let catalog: Catalog | undefined;

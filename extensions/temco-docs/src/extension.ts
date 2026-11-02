@@ -25,7 +25,7 @@ import { registerImportCommand } from './importer';
 import { looseByRoot } from './loose';
 import { pagesTarget } from './pages';
 import { generateSite } from './site';
-import { rowSlug } from './ui';
+import { restoreByReopen, rowSlug } from './ui';
 import { DocsPages } from './docsPages';
 import { PagePropertiesPanel } from './draftView';
 import { registerMediaCommands } from './media';
@@ -134,6 +134,24 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
   // It reads the registries this window is reading, so a page it lists is the file a build would read.
   const docsPages = new DocsPages(context, () => roots);
   context.subscriptions.push(docsPages);
+  // A page of this module that was open when the window closed comes back with its tab, on the same subject.
+  context.subscriptions.push(
+    ...restoreByReopen(context, [
+      { viewType: 'temcoDocs.projects', open: () => docsPages.projects() },
+      { viewType: 'temcoDocs.projectPage', open: (arg) => docsPages.project(arg) },
+      { viewType: 'temcoDocs.needsPage', open: () => docsPages.needsYou() },
+      { viewType: 'temcoDocs.repository', open: (arg) => docsPages.repository(arg) },
+      { viewType: 'temcoDocs.documents', open: (arg) => docsPages.documents(arg) },
+      { viewType: 'temcoDocs.pagePanel', open: (arg) => docsPages.pageOf(arg) },
+      { viewType: 'temcoDocs.source', open: (arg) => docsPages.source(arg) },
+      { viewType: 'temcoDocs.review', open: () => docsPages.review() },
+      { viewType: 'temcoDocs.exports', open: () => docsPages.exports() },
+      { viewType: 'temcoDocs.registryPage', open: () => docsPages.registry() },
+      { viewType: 'temcoDocs.builds', open: () => docsPages.builds() },
+      { viewType: 'temcoDocs.releases', open: () => docsPages.releases() },
+      { viewType: 'temcoDocs.overview', open: () => overviewPage.open() }
+    ])
+  );
   // A published release, served on loopback while somebody looks at it. One per window: one address in the bar.
   // The documentation itself, as a page: counts, areas, what is behind its source, and the checks.
   const overviewPage = new OverviewPage(context, () => roots);

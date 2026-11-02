@@ -14,7 +14,7 @@
 import * as vscode from 'vscode';
 import { Catalog, OrganisationRow, RepositoryCacheRow, Selection, slugOf } from './store';
 import { REPOSITORIES_VIEW_TYPE } from './surface';
-import { page, pageColumn } from './ui';
+import { page, pageColumn, remember } from './ui';
 import { listRepositories } from './repository';
 import { cloneSize, hasClone, workRoot } from './workarea';
 
@@ -92,6 +92,7 @@ export class RepositoriesPage {
 
   /** Opens the page, or brings it forward if it is already open. One instance, always. */
   open(slug?: string, citeTarget?: string): void {
+    remember(this.context, REPOSITORIES_VIEW_TYPE, slug ?? citeTarget ?? '');
     // Opened *for* one organisation — the panel asks for its own row, not for whatever was last shown.
     if (slug !== undefined) {
       this.showing = slug;

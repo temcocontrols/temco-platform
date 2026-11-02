@@ -22,6 +22,7 @@ import { PROMPT_VERSION, analysePrompt, newPagePrompt, systemPrompt } from './ai
 import { AiStatus, aiStatus, complete, disposeAi } from './ai/runtime';
 import { docs } from './docs';
 import { AiPages, registerAiViews } from './aiPages';
+import { restore } from './ui';
 
 /** What one analysis needs: a source, its files, the pages it already has, and the note the person added. */
 export interface AnalyseRequest {
@@ -98,6 +99,8 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 	registerAiViews(context);
 	context.subscriptions.push(
 		pages,
+		// A page of this module that was open when the window closed comes back with its tab.
+		...restore(context, pages.restorable()),
 		vscode.commands.registerCommand('temcoAi.chat', () => pages.chat()),
 		vscode.commands.registerCommand('temcoAi.actions', () => pages.actions()),
 		vscode.commands.registerCommand('temcoAi.citations', () => pages.citations()),

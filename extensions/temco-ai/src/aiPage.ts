@@ -14,7 +14,7 @@ import { bestModel, describeMachine, fitsModel, machine } from './ai/machine';
 import { PROMPT_VERSION } from './ai/prompts';
 import { aiStatus, showAiLog, startAiServer, stopAiServer } from './ai/runtime';
 import { pageColumn } from './docs';
-import { hero, page, runCommand, section } from './ui';
+import { hero, page, remember, runCommand, section } from './ui';
 import { AI_PAGE_VIEW_TYPE } from './surface';
 
 /** Somewhere on the page a caller can ask to be put: the list of what can be downloaded. */
@@ -42,22 +42,25 @@ export class AiPage {
    * Opens the page, or brings it forward.
    *
    * A caller that already knows what the reader came for passes it — "choose a model" means the downloads, not
-   * the top of a page about the AI in general.
+   * the top of a page about the AI in general. A window bringing the tab back passes the panel it restored, which is
+   * then drawn into rather than replaced, so the tab keeps its place.
    */
-  open(section?: AiSection): void {
+  open(section?: AiSection, restored?: vscode.WebviewPanel): void {
     this.wanted = section;
+    remember(this.context, AI_PAGE_VIEW_TYPE, section);
     if (this.panel) {
       this.panel.reveal(pageColumn());
       void this.seed();
       return;
     }
 
-    this.panel = vscode.window.createWebviewPanel(
+    this.panel = restored ?? vscode.window.createWebviewPanel(
       AI_PAGE_VIEW_TYPE,
       'Server & Prompts',
       pageColumn(),
       { enableScripts: true, localResourceRoots: [] }
     );
+    this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
     this.panel.webview.html = html();
     this.panel.webview.onDidReceiveMessage((message: AiPageMessage) => void this.receive(message));
     this.panel.onDidDispose(() => {

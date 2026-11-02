@@ -8,6 +8,8 @@ import { AiPage } from '../aiPage';
 import { CatalogEntry, MODELS, entryById, formatBytes, runtimeFor } from './catalog';
 import { InstalledArtifact, install, installedArtifacts, modelRoot, uninstall } from './install';
 import { aiStatus, showAiLog, stopAiServer } from './runtime';
+import { AI_PAGE_VIEW_TYPE } from '../surface';
+import { restore } from '../ui';
 
 interface Choice extends vscode.QuickPickItem {
   entry?: CatalogEntry;
@@ -37,7 +39,14 @@ export function registerAiCommands(context: vscode.ExtensionContext): void {
       await vscode.env.openExternal(vscode.Uri.file(modelRoot(context)));
     }),
     vscode.commands.registerCommand('temcoAi.dockRight', () => dockRight()),
-    vscode.commands.registerCommand('temcoAi.status', () => showAiStatus(context))
+    vscode.commands.registerCommand('temcoAi.status', () => showAiStatus(context)),
+    // The page that was open when the window closed comes back with its tab, on the section it was showing.
+    ...restore(context, [
+      {
+        viewType: AI_PAGE_VIEW_TYPE,
+        open: (panel, arg) => page.open(arg === 'downloads' ? 'downloads' : undefined, panel)
+      }
+    ])
   );
 }
 

@@ -27,7 +27,11 @@
     "temcocontrols.temco-repositories"
   ],
   "activationEvents": [
-    "onView:temcoProjects.projects"
+    "onView:temcoProjects.projects",
+    "onWebviewPanel:temcoProjects.project",
+    "onWebviewPanel:temcoProjects.projectsPage",
+    "onWebviewPanel:temcoProjects.newProject",
+    "onWebviewPanel:temcoProjects.addSource"
   ],
   "contributes": {
     "commands": [

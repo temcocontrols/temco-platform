@@ -23,7 +23,11 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onStartupFinished",
-    "onView:temcoLearn.panel"
+    "onView:temcoLearn.panel",
+    "onWebviewPanel:temcoLearn.overview",
+    "onWebviewPanel:temcoLearn.site",
+    "onWebviewPanel:temcoLearn.downloads",
+    "onWebviewPanel:temcoLearn.publishing"
   ],
   "contributes": {
     "viewsContainers": {

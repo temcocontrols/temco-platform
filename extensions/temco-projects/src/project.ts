@@ -8,14 +8,15 @@
 // summary page between the list and the work was a second place to read the same counts.
 
 import * as vscode from 'vscode';
-import { ProjectFlowPage } from './projectFlow';
+import { ProjectFlowPage, NEW_PROJECT_VIEW_TYPE } from './projectFlow';
 import { ProjectList } from './projectList';
 import { ProjectPage } from './projectPage';
 import { ProjectsPage } from './projectsPage';
 import { discardWorkFolder, folderConsequence, workFolderOf } from './removal';
-import { AddSourcePage } from './sourceFlow';
+import { AddSourcePage, ADD_SOURCE_VIEW_TYPE } from './sourceFlow';
 import { Catalog, CatalogUnavailable, Selection, slugOf } from './store';
-import { focusLibrary, rowSlug } from './ui';
+import { focusLibrary, restoreByReopen, rowSlug } from './ui';
+import { PROJECTS_PAGE_VIEW_TYPE, PROJECT_VIEW_TYPE } from './surface';
 
 /** A slug, or the sidebar row that stands for a project — the two things a command argument can be. */
 type ProjectArgument = string | object | undefined;
@@ -67,6 +68,13 @@ export function registerProjectCommands(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('temcoProjects.newProject', () => void flow.open()),
+    // A page of this module that was open when the window closed comes back with its tab, on the same project.
+    ...restoreByReopen(context, [
+      { viewType: PROJECT_VIEW_TYPE, open: (arg) => page.openEdit(arg ?? '') },
+      { viewType: PROJECTS_PAGE_VIEW_TYPE, open: () => void projects.open() },
+      { viewType: NEW_PROJECT_VIEW_TYPE, open: () => void flow.open() },
+      { viewType: ADD_SOURCE_VIEW_TYPE, open: () => source.open() }
+    ]),
     // The projects page: one list of everything the catalog holds.
     vscode.commands.registerCommand('temcoProjects.projectsPage', () => void projects.open()),
     // *New project* from a repository row carries the repository in: the flow opens already answering "where do the

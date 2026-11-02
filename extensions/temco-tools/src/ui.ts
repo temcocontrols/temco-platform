@@ -27,6 +27,12 @@ interface UiApi {
 	escapeHtml(text: string): string;
 	icon(name: string, cls?: string): string;
 	toneMark(name: string, tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent'): string;
+	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
+	/** One serializer per page, so the window can bring a page's tab back after a restart. */
+	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
+	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
 	commandScript: string;
 	runCommand(message: PageMessage): void;
 }
@@ -51,6 +57,21 @@ export const escapeHtml = ui.escapeHtml;
 export const esc = ui.escapeHtml;
 
 /** One glyph from the page's sprite. */
+
+
+/** One page of this module, as the window needs it back. */
+export interface RestorablePage {
+	/** The view type the panel was created with. */
+	viewType: string;
+	/** Opens the page, drawing into the panel the window handed back. */
+	open(panel?: vscode.WebviewPanel, arg?: string): void;
+}
+
+/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+export const remember = ui.remember;
+
+/** One serializer per page, so the window can bring a page's tab back after a restart. */
+export const restore = ui.restore;
 export const icon = ui.icon;
 
 /** One glyph in a tinted circle: a state you can see before you read it. */
@@ -61,3 +82,6 @@ export const commandScript = ui.commandScript;
 
 /** Runs the message a page's buttons send. */
 export const runCommand = ui.runCommand;
+
+/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+export const restoreByReopen = ui.restoreByReopen;

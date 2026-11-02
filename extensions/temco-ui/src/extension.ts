@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { fileColumn, pageColumn } from './columns';
 import { ActionBarOptions, CalloutOptions, CheckCardsOptions, ChoiceCardsOptions, CodeOptions, EntryRowOptions, FeatureCard, FormField, HeroOptions, NumberItem, OptionCard, Question, SectionOptions, actionBar, callout, cards, checkCards, choiceCards, code, entryRow, floatAction, formFields, hero, icon, numbers, optionCards, questions, section, toneMark } from './components';
 import { COMMAND_SCRIPT, PageMessage, PageOptions, escapeHtml, page, runPageCommand } from './page';
+import { RestorablePage, remember, remembered, restore, restoreByReopen } from './restore';
 import { rowSlug } from './rows';
 
 /** What this module offers the rest of the platform. */
@@ -59,6 +60,14 @@ export interface TemcoUiApi {
 	commandScript: string;
 	/** Runs one of those messages. The module's `onDidReceiveMessage` calls this. */
 	runCommand(message: PageMessage): void;
+	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
+	/** The subject this view type was last opened on. */
+	remembered(context: vscode.ExtensionContext, viewType: string): string | undefined;
+	/** One serializer per page, so the window can bring a page's tab back after a restart. */
+	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
+	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
 }
 
 export function activate(context: vscode.ExtensionContext): TemcoUiApi {
@@ -85,7 +94,11 @@ export function activate(context: vscode.ExtensionContext): TemcoUiApi {
 		code,
 		floatAction,
 		commandScript: COMMAND_SCRIPT,
-		runCommand: runPageCommand
+		runCommand: runPageCommand,
+		remember,
+		remembered,
+		restore,
+		restoreByReopen
 	};
 }
 

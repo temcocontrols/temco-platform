@@ -39,7 +39,20 @@
     "onView:temcoDocs.queue",
     "onView:temcoDocs.forum",
     "onCustomEditor:temcoDocs.grid",
-    "onView:temcoDocs.section.pipeline"
+    "onView:temcoDocs.section.pipeline",
+    "onWebviewPanel:temcoDocs.projects",
+    "onWebviewPanel:temcoDocs.projectPage",
+    "onWebviewPanel:temcoDocs.needsPage",
+    "onWebviewPanel:temcoDocs.repository",
+    "onWebviewPanel:temcoDocs.documents",
+    "onWebviewPanel:temcoDocs.pagePanel",
+    "onWebviewPanel:temcoDocs.source",
+    "onWebviewPanel:temcoDocs.review",
+    "onWebviewPanel:temcoDocs.exports",
+    "onWebviewPanel:temcoDocs.registryPage",
+    "onWebviewPanel:temcoDocs.builds",
+    "onWebviewPanel:temcoDocs.releases",
+    "onWebviewPanel:temcoDocs.overview"
   ],
   "contributes": {
     "customEditors": [

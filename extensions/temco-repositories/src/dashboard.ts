@@ -20,7 +20,7 @@ import { execFile } from 'child_process';
 import { existsSync } from 'fs';
 import * as vscode from 'vscode';
 import { Catalog, Selection, SourceRow } from './store';
-import { page, pageColumn } from './ui';
+import { page, pageColumn, remember } from './ui';
 
 export const DASHBOARD_VIEW_TYPE = 'temcoRepositories.dashboard';
 
@@ -190,6 +190,7 @@ export class DashboardPage {
 	) { }
 
 	open(): void {
+		remember(this.context, DASHBOARD_VIEW_TYPE);
 		if (this.panel !== undefined) {
 			this.panel.reveal(pageColumn());
 			void this.render();

@@ -23,6 +23,10 @@ interface UiApi {
 	hero(options: { title: string; mark?: string; desc?: string; descWide?: boolean; actions?: readonly unknown[] }): string;
 	section(options: { title: string; desc?: string; actions?: string }): string;
 	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
+	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
+	/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+	restoreByReopen(context: vscode.ExtensionContext, pages: readonly { viewType: string; open(arg?: string): void }[]): vscode.Disposable[];
 }
 
 const extension = vscode.extensions.getExtension<UiApi>(UI_EXTENSION_ID);
@@ -55,3 +59,9 @@ export const section = ui.section;
 
 /** The one tinted callout a page is allowed. */
 export const callout = ui.callout;
+
+/** One serializer per page for a module that makes its own panel: the tab returns, its old position may not. */
+export const restoreByReopen = ui.restoreByReopen;
+
+/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
+export const remember = ui.remember;

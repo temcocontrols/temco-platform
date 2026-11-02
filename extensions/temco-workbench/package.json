@@ -31,7 +31,24 @@
     "onStartupFinished",
     "onView:temcoWorkbench.overviewView",
     "onView:temcoWorkbench.settings",
-    "onView:temcoLearn.panel"
+    "onView:temcoLearn.panel",
+    "onWebviewPanel:temcoWorkbench.overview",
+    "onWebviewPanel:temcoWorkbench.activity",
+    "onWebviewPanel:temcoWorkbench.needs",
+    "onWebviewPanel:temcoWorkbench.settings.general",
+    "onWebviewPanel:temcoWorkbench.settings.modules",
+    "onWebviewPanel:temcoWorkbench.settings.branding",
+    "onWebviewPanel:temcoWorkbench.settings.ai",
+    "onWebviewPanel:temcoWorkbench.settings.publishing",
+    "onWebviewPanel:temcoWorkbench.help.welcome",
+    "onWebviewPanel:temcoWorkbench.help.home",
+    "onWebviewPanel:temcoWorkbench.help.keys",
+    "onWebviewPanel:temcoWorkbench.help.logs",
+    "onWebviewPanel:temcoWorkbench.help.issue",
+    "onWebviewPanel:temcoWorkbench.help.about",
+    "onWebviewPanel:temcoWorkbench.learn.home",
+    "onWebviewPanel:temcoWorkbench.learn.article",
+    "onWebviewPanel:temcoWorkbench.learn.downloads"
   ],
   "contributes": {
     "configurationDefaults": {

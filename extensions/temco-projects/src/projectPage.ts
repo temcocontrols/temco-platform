@@ -16,7 +16,7 @@ import { discardWorkFolder, folderConsequence, workFolderOf } from './removal';
 import { Catalog, CatalogUnavailable, DocumentDetail, Selection, slugOf } from './store';
 import { PROJECT_VIEW_TYPE } from './surface';
 import { ORIGINS, TARGETS } from './projectFlow';
-import { escapeHtml as esc, focusLibrary, icon, page, pageColumn, section } from './ui';
+import { escapeHtml as esc, focusLibrary, icon, page, pageColumn, remember, section } from './ui';
 
 /** A source as the page lists it: what it is called, and where it actually is. */
 interface KnownSource {
@@ -51,6 +51,7 @@ export class ProjectPage {
 
   /** An existing project, filled in. Creating one is `flow/new-project` (`projectFlow.ts`). */
   openEdit(slug: string): void {
+    remember(this.context, PROJECT_VIEW_TYPE, slug);
     this.slug = slug;
     this.show('Project');
   }

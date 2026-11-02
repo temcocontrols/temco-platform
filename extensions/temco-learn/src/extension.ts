@@ -15,22 +15,23 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { findArtifacts } from './artifacts';
 import { Build, findBuilds } from './builds';
-import { DownloadPage } from './downloadPage';
-import { OverviewPage } from './overview';
+import { DownloadPage, DOWNLOAD_VIEW_TYPE } from './downloadPage';
+import { OverviewPage, OVERVIEW_VIEW_TYPE } from './overview';
 import { Preview } from './preview';
 import { PublishLog } from './publishLog';
-import { PublishFacts, PublishPage } from './publishPage';
+import { PublishFacts, PublishPage, PUBLISH_VIEW_TYPE } from './publishPage';
 import { ensureRepo, publishSite, PublishSink } from './publish';
 import { Server } from './server';
 import { importBuild, readSite, Site, workRoot } from './site';
 import { pageUrl, repoReady, sitePort, siteRepo } from './siteRepo';
 import { readRepoFacts } from './siteFacts';
 import { SiteLog } from './siteLog';
-import { SitePage, SitePageFacts } from './sitePage';
+import { SitePage, SitePageFacts, SITE_VIEW_TYPE } from './sitePage';
 import { describe, SiteRunner, SiteStatus } from './siteRunner';
 import { Snapshot } from './snapshot';
 import { readPublishedState } from './state';
 import { BrowseTree, DownloadTree, OverviewTree, Reads, registerBadges, VIEWS } from './tree';
+import { restoreByReopen, remember } from './ui';
 
 const plural = (count: number, one: string, many?: string): string =>
 	String(count) + ' ' + (count === 1 ? one : many === undefined ? one + 's' : many);
@@ -180,6 +181,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	 * an address that answers.
 	 */
 	const showSite = async (target?: { project?: string; version?: string; href?: string }): Promise<void> => {
+		remember(context, SITE_VIEW_TYPE);
 		// With no clone there is nothing to preview, and a folder dialog is not an explanation: the page that says what the
 		// site is, where it goes, and how to get it is.
 		if (!repoReady(repo())) {
@@ -463,6 +465,13 @@ export function activate(context: vscode.ExtensionContext): void {
 		downloads,
 		...views,
 		output,
+		// A page of this module that was open when the window closed comes back with its tab.
+		...restoreByReopen(context, [
+			{ viewType: OVERVIEW_VIEW_TYPE, open: () => overview.open() },
+			{ viewType: SITE_VIEW_TYPE, open: () => sitePage.open() },
+			{ viewType: DOWNLOAD_VIEW_TYPE, open: () => downloads.open() },
+			{ viewType: PUBLISH_VIEW_TYPE, open: () => publishing.open() }
+		]),
 
 		// The folder and the port are settings, so a hand-edited setting reaches the panel and the page as well.
 		vscode.workspace.onDidChangeConfiguration((event) => {
@@ -474,14 +483,17 @@ export function activate(context: vscode.ExtensionContext): void {
 
 		// The module's own page: what it is for, the three steps, and where the website goes. Never the website itself.
 		vscode.commands.registerCommand('temcoLearn.overview', () => {
+			remember(context, OVERVIEW_VIEW_TYPE);
 			overview.open();
 		}),
 
 		vscode.commands.registerCommand('temcoLearn.publishing', () => {
+			remember(context, PUBLISH_VIEW_TYPE);
 			publishing.open();
 		}),
 
 		vscode.commands.registerCommand('temcoLearn.downloads', () => {
+			remember(context, DOWNLOAD_VIEW_TYPE);
 			downloads.open();
 		}),
 

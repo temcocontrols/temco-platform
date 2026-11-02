@@ -8,7 +8,7 @@
 import * as https from 'https';
 import * as vscode from 'vscode';
 import { Catalog, CatalogUnavailable, slugOf } from './store';
-import { escapeHtml as esc, icon, page, pageColumn } from './ui';
+import { escapeHtml as esc, icon, page, pageColumn, remember } from './ui';
 
 export const ADD_SOURCE_VIEW_TYPE = 'temcoProjects.addSource';
 
@@ -314,6 +314,7 @@ export class AddSourcePage {
 	constructor(private readonly context: vscode.ExtensionContext) { }
 
 	open(): void {
+		remember(this.context, ADD_SOURCE_VIEW_TYPE);
 		const body = html();
 		if (this.panel) {
 			this.panel.reveal(pageColumn());
