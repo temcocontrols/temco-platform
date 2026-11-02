@@ -38,6 +38,11 @@ export function registerAiCommands(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('temcoAi.openModelFolder', async () => {
       await vscode.env.openExternal(vscode.Uri.file(modelRoot(context)));
     }),
+    // The three offered models are a starting point, not a fence: any GGUF build the engine can read works, so the
+    // way to the rest of them is one click out rather than a link written into the page's prose.
+    vscode.commands.registerCommand('temcoAi.browseModels', async () => {
+      await vscode.env.openExternal(vscode.Uri.parse('https://huggingface.co/models?library=gguf&sort=trending'));
+    }),
     vscode.commands.registerCommand('temcoAi.dockRight', () => dockRight()),
     vscode.commands.registerCommand('temcoAi.status', () => showAiStatus(context)),
     // The page that was open when the window closed comes back with its tab, on the section it was showing.

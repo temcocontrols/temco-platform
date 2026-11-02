@@ -1,23 +1,18 @@
-// The AI Hub's pages and its two side-bar groups, rebuilt from the mock.
+// The AI Hub's pages and its three side-bar groups.
 //
-// The subject of each page is the mock's (`docs/mock/js/views.platform.js` — `ai/chat`, `ai/actions`, `ai/citations`,
-// `ai/models`, `ai/knowledge`), but the pages themselves are drawn in the application's own vocabulary: the title block,
-// the section heading with its brand bar, and one row per thing. Nothing here is a card grid or a table any more — a
-// model, an action and a citation are all one row each, because that is what a person reads them as.
+// Two of these pages are the mock's subject (`docs/mock/js/views.platform.js` — `ai/actions`, `ai/citations`), drawn
+// in the application's own vocabulary and filled from what the platform really knows: the acts the module performs,
+// and the citations the answers actually made, kept in the platform database. Nothing here is a card grid or a table
+// any more — an action and a citation are one row each, because that is what a person reads them as. The chat has no
+// page of its own: the conversation lives in the panel, and a page describing it was a third copy of one subject.
 
 import * as vscode from 'vscode';
-import { entryById, formatBytes } from './ai/catalog';
-import { installedArtifacts } from './ai/install';
-import { describeMachine, machine as thisMachine } from './ai/machine';
-import { aiStatus } from './ai/runtime';
-import { ACTIONS, CITATIONS } from './aiSample';
 import { DocsRoot, collectPages, docs } from './docs';
+import { Catalog, CitationRow } from './ai/store';
 import { RestorablePage, commandScript, escapeHtml as esc, callout, hero, icon, page, pageColumn, runCommand, section } from './ui';
 
-export const CHAT_VIEW_TYPE = 'temcoAi.chat';
 export const ACTIONS_VIEW_TYPE = 'temcoAi.actions';
 export const CITATIONS_VIEW_TYPE = 'temcoAi.citations';
-export const MODELS_VIEW_TYPE = 'temcoAi.localModels';
 export const STALE_VIEW_TYPE = 'temcoAi.stale';
 
 interface ActionOptions {
@@ -53,48 +48,35 @@ const rows = (items: readonly string[]): string => `<div class="az-entries">${it
 const figures = (parts: readonly string[]): string =>
 	`<p class="ai-line">${parts.map((part) => `<span>${esc(part)}</span>`).join('')}</p>`;
 
-const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /** A date as a person reads it: the day, not the timestamp the manifest kept. */
-const dayOf = (iso: string): string => {
-	const at = new Date(iso);
-	if (Number.isNaN(at.getTime())) {
-		return 'an unknown day';
-	}
-	return `${at.getDate()} ${MONTH[at.getMonth()]} ${at.getFullYear()}`;
-};
+
 
 /** The brand bar every section title carries, so the AI pages read like the rest of the application. */
 const AI_CSS = `
-.az-section__title { position: relative; padding-left: 10px; }
-.az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
 .ai-line { display: flex; flex-wrap: wrap; gap: 0 var(--sp-2); margin: var(--sp-3) 0 0; color: var(--ink-3); font-size: 12px; line-height: 18px; }
 .ai-line span + span::before { content: '·'; margin-right: var(--sp-2); }
 /* A row's second line here is prose about the thing, not a path: the kit sets it in the mono face for paths. */
 .az-entry__meta { font-family: inherit; }
-.ai-foot { margin: var(--sp-6) 0 0; color: var(--ink-3); font-size: 12px; line-height: 18px; max-width: 72ch; }
+.ai-foot { margin: var(--sp-6) 0 0; color: var(--ink-3); font-size: 12px; line-height: 18px; }
 `;
 
-/** The five surfaces, one panel each. */
+/** The four surfaces, one panel each. */
 export class AiPages {
 	private readonly panels = new Map<string, vscode.WebviewPanel>();
 
 	constructor(private readonly context: vscode.ExtensionContext) { }
-
-	chat(): void {
-		this.open('chat', CHAT_VIEW_TYPE, 'Temco AI', chatBody());
-	}
 
 	actions(): void {
 		this.open('actions', ACTIONS_VIEW_TYPE, 'Actions', actionsBody());
 	}
 
 	citations(): void {
-		this.open('citations', CITATIONS_VIEW_TYPE, 'Citations', citationsBody());
+		void this.openCitations();
 	}
 
-	models(): void {
-		this.open('models', MODELS_VIEW_TYPE, 'Local Models', modelsBody(this.context));
+	/** The citations are read from the platform's own record, so opening the page is a read, not a draw. */
+	private async openCitations(restored?: vscode.WebviewPanel): Promise<void> {
+		await this.open('citations', CITATIONS_VIEW_TYPE, 'Citations', await citationsBody(this.roots()), restored);
 	}
 
 	/** Pages the generator says are stale: the code they document moved after their last review. */
@@ -105,10 +87,8 @@ export class AiPages {
 	/** The pages this module can be asked to bring back, one serializer each. */
 	restorable(): RestorablePage[] {
 		return [
-			{ viewType: CHAT_VIEW_TYPE, open: (panel) => this.open('chat', CHAT_VIEW_TYPE, 'Temco AI', chatBody(), panel) },
 			{ viewType: ACTIONS_VIEW_TYPE, open: (panel) => this.open('actions', ACTIONS_VIEW_TYPE, 'Actions', actionsBody(), panel) },
-			{ viewType: CITATIONS_VIEW_TYPE, open: (panel) => this.open('citations', CITATIONS_VIEW_TYPE, 'Citations', citationsBody(), panel) },
-			{ viewType: MODELS_VIEW_TYPE, open: (panel) => this.open('models', MODELS_VIEW_TYPE, 'Local Models', modelsBody(this.context), panel) },
+			{ viewType: CITATIONS_VIEW_TYPE, open: (panel) => void this.openCitations(panel) },
 			{ viewType: STALE_VIEW_TYPE, open: (panel) => this.open('stale', STALE_VIEW_TYPE, 'Update a Page the Code Moved', staleBody(this.roots()), panel) }
 		];
 	}
@@ -152,225 +132,225 @@ export class AiPages {
 }
 
 /**
- * *Chat* — the conversation itself.
+ * *Actions* — the five things the AI can be asked to do, and the button that starts each.
  *
- * A page cannot hold a conversation that streams, and this module already has the surface that can: the panel, docked
- * beside the page it answers about. So this page says that, and then states what the panel is given and what it hands
- * back — the two things a person deciding whether to trust an answer needs.
+ * One section, because the page's job is to be a launcher: what each act starts, and where its output lands, is said
+ * on the act's own row rather than in a second list beside it. The two rules that are not per-act — nothing writes
+ * without a draft, and every answer names what it read — are said once, under the rows, instead of as four rows of
+ * their own.
  */
-function chatBody(): string {
-	return `${hero({
-		eyebrow: 'Temco AI',
-		title: 'Chat',
-		mark: 'sparkle',
-		desc: 'A local model over your own pages. It reads the page in front, the project around it and the registry; it never writes one — every draft lands in Review Center as a diff.',
-		actions: [
-			{ label: 'Open the AI Panel', command: 'temcoAi.openPanel', mark: 'panel', kind: 'primary' },
-			{ label: 'Local Models', command: 'temcoAi.localModels', mark: 'chip', kind: 'link' }
-		]
-	})}
-<div class="mt-16">${callout({
-		title: 'The conversation lives in the panel',
-		desc: 'It answers beside the page you have open, and it streams as it writes. The same information, with room to stand back, is on Server & Prompts.',
-		mark: 'panel',
-		actions: `${act('Open the AI Panel', 'temcoAi.openPanel', { kind: 'primary', mark: 'panel' })}${act('Server & Prompts', 'temcoAi.page', { kind: 'link' })}`
-	})}</div>
-
-<div class="mt-24">
-	${section({ title: 'What it is given', desc: 'Everything below is read once per question. Nothing is sent anywhere, and nothing is remembered between chats.' })}
-	<div class="mt-8">${rows([
-		row({ mark: 'document', title: 'The page in front', meta: 'its text, its headings and the registry entry that describes it', actions: act('Show the page', 'temcoDocs.pages.focus', { kind: 'link' }) }),
-		row({ mark: 'folder', title: 'The project around it', meta: 'the sources it cites, and the areas those sources produced', actions: act('Edit the project', 'temcoProjects.editProject', { kind: 'link' }) }),
-		row({ mark: 'list', title: 'The registry', meta: 'the generator’s own record: what each page claims to document, and whether that code moved', actions: act('Documents', 'temcoDocs.documents', { kind: 'link' }) })
-	])}</div>
-</div>
-
-<div class="mt-24">
-	${section({ title: 'What it hands back', desc: 'An answer is read in the panel; a draft is a proposal, and nothing writes a page except a person accepting one.' })}
-	<div class="mt-8">${rows([
-		row({ mark: 'sparkle', title: 'An answer', meta: 'in the panel, with the pages and files it used named under it', actions: act('Citations', 'temcoAi.citations', { kind: 'link' }) }),
-		row({ mark: 'check', title: 'A draft', meta: 'a page written beside the original, settled in Review Center as a diff', actions: act('Review Center', 'temcoDocs.review', { kind: 'link' }) }),
-		row({ mark: 'sync', title: 'A page update', meta: 'the pages whose code moved after their last review, ready to draft one at a time', actions: act('Open', 'temcoAi.stale', { kind: 'link' }) })
-	])}</div>
-</div>`;
-}
-
-/** *Actions* — what the AI is allowed to do, and where each answer goes. */
 function actionsBody(): string {
-	const available = ACTIONS.length;
-	const blocked = ACTIONS.filter((action) => action.tone !== 'ok').length;
-
 	return `${hero({
 		eyebrow: 'Temco AI',
 		title: 'Actions',
 		mark: 'play',
-		desc: 'The things the AI is allowed to do, and where its output goes. An action that writes anything always routes through Review Center.',
+		desc: 'Five things the model can be asked to do. Each row starts the act where the act really lives, so nothing here is a second copy of that surface.',
+		descWide: true,
 		actions: [
-			{ label: 'Configure', command: 'temcoWorkbench.settings', mark: 'gear', kind: 'primary' },
-			{ label: 'Server & Prompts', command: 'temcoAi.page', kind: 'link' }
+			{ label: 'Open the AI Panel', command: 'temcoAi.openPanel', mark: 'panel', kind: 'primary' }
 		]
 	})}
-${figures([`${available} actions`, blocked === 0 ? 'all of them ready' : `${blocked} needs a model first`, 'nothing writes without a person'])}
 <div class="mt-24">
-	${section({ title: 'What it can do', desc: 'An action whose model is not loaded says so here, rather than failing halfway through a draft.' })}
-	<div class="mt-8">${rows(ACTIONS.map((action) => row({
-		mark: action.tone === 'ok' ? 'play' : 'info',
-		title: action.name,
-		meta: `${action.desc} · ${action.state}`,
-		actions: action.tone === 'ok'
-			? act('Run', 'temcoAi.openPanel', { mark: 'arrow-right' })
-			: act('Load Model', 'temcoAi.localModels', { mark: 'chip' })
-	})))}</div>
-</div>
-<div class="mt-24">
-	${section({ title: 'Where the output goes', desc: 'Nothing an action produces is a silent write: each one lands somewhere a person already looks.' })}
+	${section({ title: 'What it can be asked to do' })}
 	<div class="mt-8">${rows([
-		row({ mark: 'document', title: 'Drafts', meta: 'Review Center, as a diff against the page it would replace', actions: act('Open', 'temcoDocs.review', { kind: 'link' }) }),
-		row({ mark: 'sparkle', title: 'Answers', meta: 'the AI panel, with the citations that back them', actions: act('The panel', 'temcoAi.openPanel', { kind: 'link' }) }),
-		row({ mark: 'check', title: 'Suggestions', meta: 'the Gaps list of the area the question was about', actions: act('Cite them', 'temcoAi.citations', { kind: 'link' }) })
+		row({
+			mark: 'sparkle',
+			title: 'Ask about the page in front',
+			meta: 'an answer in the panel, with the pages it read named under it',
+			actions: act('Open the panel', 'temcoAi.openPanel', { kind: 'primary' })
+		}),
+		row({
+			mark: 'document',
+			title: 'Draft a new page',
+			meta: 'a draft in Review Center, written from the sources you pick',
+			actions: act('New Page', 'temcoDocs.newPage')
+		}),
+		row({
+			mark: 'sync',
+			title: 'Update a page the code moved',
+			meta: 'the pages whose code changed after their last review, one draft at a time',
+			actions: act('Open the list', 'temcoAi.stale')
+		}),
+		row({
+			mark: 'repo',
+			title: 'Read or analyse a source',
+			meta: 'the pages a source declares, and what its page does not cover',
+			actions: act('Sources', 'temcoRepositories.list.focus')
+		}),
+		row({
+			mark: 'users',
+			title: 'Answer a forum thread',
+			meta: 'a suggestion saved on the topic, and streamed into the panel',
+			actions: act('The forum', 'temcoDocs.forum')
+		})
 	])}</div>
 </div>
-<div class="mt-24">
-	${section({ title: 'Guard rails', desc: 'Fixed on purpose. Changing one of these is a platform change, not a setting, so none of them is switchable here.' })}
-	<div class="mt-8">${rows([
-		row({ mark: 'check', title: 'Never write a page without a draft' }),
-		row({ mark: 'check', title: 'Always name the page or source each answer used' }),
-		row({ mark: 'check', title: 'Refuse when the local model is not loaded, rather than answer from nothing' }),
-		row({ mark: 'check', title: 'Keep prompts and answers out of the repository' })
-	])}</div>
-</div>`;
+<div class="mt-16">${callout({
+		mark: 'check',
+		title: 'Nothing here writes a page on its own',
+		desc: 'An act that writes proposes a draft, and Review Center is where a person settles it. An answer names the pages it used, and those pointers are kept — so Citations can look them up again later.',
+		actions: `${act('Review Center', 'temcoDocs.review', { kind: 'primary' })}${act('Citations', 'temcoAi.citations', { kind: 'link' })}`
+	})}</div>`;
 }
 
-/** *Citations* — every answer names what it read. */
-function citationsBody(): string {
+/** How long ago something was cited, in words a person reads at a glance. */
+function ago(iso: string): string {
+	const at = new Date(iso).getTime();
+	if (Number.isNaN(at)) {
+		return 'just now';
+	}
+	const minutes = Math.floor((Date.now() - at) / 60_000);
+	if (minutes < 1) {
+		return 'just now';
+	}
+	if (minutes < 60) {
+		return `${minutes} min ago`;
+	}
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) {
+		return `${hours} h ago`;
+	}
+	const days = Math.floor(hours / 24);
+	return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+/** One page the AI has leant on, as the citations log knows it and as the registries see it today. */
+interface CitedPage {
+	/** The page id the answer named. */
+	id: string;
+	/** The page's title today, when a registry still has it. */
+	title?: string;
+	times: number;
+	last: string;
+	/** What the answers were: `answer`, `topic`, or `draft`. */
+	kinds: string[];
+	/** True when a registry knows the page, and it is the same page the answer named. */
+	exists: boolean;
+	/** True when a registry knew it at the time the answer was given. */
+	knownThen: boolean;
+	/** True when the page's own record says the code it documents moved. */
+	stale: boolean;
+}
+
+/**
+ * What the AI has cited, checked again.
+ *
+ * The log holds one row per citation, which is the right shape to write and the wrong shape to read: the question a
+ * person has is "which pages does the AI lean on, and are they still there?" — so the rows are folded per page, and
+ * each page is looked up in the registries this window is reading now. A page that was cited and has since gone is
+ * the one thing on this page that is worth a colour.
+ */
+async function citedPages(roots: readonly DocsRoot[]): Promise<CitedPage[]> {
+	let rows: CitationRow[] = [];
+	let catalog: Catalog | undefined;
+	try {
+		catalog = await Catalog.open();
+		rows = catalog.citations(400);
+	} catch {
+		return [];
+	} finally {
+		catalog?.close();
+	}
+	if (rows.length === 0) {
+		return [];
+	}
+
+	const pages = new Map(roots.flatMap((root) => collectPages(root)).map((page) => [page.id, page]));
+	const folded = new Map<string, CitedPage>();
+	for (const row of rows) {
+		const page = pages.get(row.citationId);
+		const seen = folded.get(row.citationId);
+		if (seen === undefined) {
+			folded.set(row.citationId, {
+				id: row.citationId,
+				title: page?.title,
+				times: 1,
+				last: row.at,
+				kinds: [row.answerKind],
+				exists: page !== undefined,
+				knownThen: row.citationKnown,
+				stale: page?.provenance?.stale === true
+			});
+			continue;
+		}
+		seen.times += 1;
+		seen.knownThen = seen.knownThen || row.citationKnown;
+		if (row.at > seen.last) {
+			seen.last = row.at;
+		}
+		if (!seen.kinds.includes(row.answerKind)) {
+			seen.kinds.push(row.answerKind);
+		}
+	}
+	// The broken ones first, then the most leant on, then the most recent: that is the order a person triages in.
+	return [...folded.values()].sort((one, other) => {
+		const missing = Number(one.exists) - Number(other.exists);
+		return missing !== 0 ? missing : other.times - one.times || other.last.localeCompare(one.last);
+	});
+}
+
+/**
+ * What to say about a page that is not in a registry now.
+ *
+ * Two different faults, and they are not the same fault: a page that *was* a page and has gone means the documentation
+ * lost something an answer leant on; a name that was never a page means the model invented a citation. The second is
+ * the one worth knowing about, so it says so in its own words.
+ */
+function missingNote(page: CitedPage): string {
+	if (page.exists) {
+		return '';
+	}
+	return page.knownThen
+		? ` · ${esc(page.id)} is no longer in a registry this window reads`
+		: ` · ${esc(page.id)} was never a page here — the answer named something that does not exist`;
+}
+
+/** *Citations* — what the AI leant on, and whether it is still there. */
+async function citationsBody(roots: readonly DocsRoot[]): Promise<string> {
+	const cited = await citedPages(roots);
+	const gone = cited.filter((page) => !page.exists).length;
+	const moved = cited.filter((page) => page.exists && page.stale).length;
+	const invented = cited.filter((page) => !page.exists && !page.knownThen).length;
+	const times = cited.reduce((total, page) => total + page.times, 0);
+
 	return `${hero({
 		eyebrow: 'Temco AI',
 		title: 'Citations',
 		mark: 'link',
-		desc: 'Every answer names where it came from. A citation opens the page or the file it points at — the AI is checked by reading it, not by trusting it.',
+		desc: 'Every answer names the pages and files it read, and each of those pointers is kept in the platform database. This page reads them back and looks each one up again: a page the AI leant on is a page this documentation had better still have, and a page whose code moved since is an answer worth re-reading.',
+		descWide: true,
 		actions: [
 			{ label: 'The panel', command: 'temcoAi.openPanel', mark: 'panel', kind: 'primary' },
 			{ label: 'Documents', command: 'temcoDocs.documents', kind: 'link' }
 		]
 	})}
-${figures([`${CITATIONS.length} cited`, `${CITATIONS.filter((citation) => citation.kind === 'page').length} of them pages`, 'kept with the answer that used them'])}
+${figures([
+		`${times} ${times === 1 ? 'citation' : 'citations'}`,
+		`${cited.length} ${cited.length === 1 ? 'page' : 'pages'}`,
+		// The verdict is one sentence, worst first: a name that never existed is a worse fault than a page that moved.
+		invented > 0 ? `${invented} named a page that does not exist`
+			: gone > 0 ? `${gone} no longer in a registry`
+				: moved > 0 ? `${moved} behind its code`
+					: 'every one still current'
+	])}
 <div class="mt-24">
-	${section({ title: 'Cited so far', desc: 'A citation is kept beside the answer that used it, so a reader can check the AI without leaving the page it was asked about.' })}
-	<div class="mt-8">${rows(CITATIONS.map((citation) => row({
-		mark: citation.kind === 'page' ? 'document' : citation.kind === 'source' ? 'repo' : 'package',
-		title: citation.title,
-		meta: `${citation.where} · ${citation.kind} · ${citation.usedIn}`,
-		actions: act('Open', 'temcoDocs.page', { args: [citation.title] })
-	})))}</div>
-</div>`;
-}
-
-/**
- * *Local Models* — what is actually on this machine, and what is answering with it.
- *
- * The figures are the runtime's own: the manifest of installed artifacts, the two settings that name the choice, and
- * the server if it is up. A page about what is downloaded cannot be an illustration of what could be downloaded.
- */
-function modelsBody(context: vscode.ExtensionContext): string {
-	const status = aiStatus(context);
-	const installed = installedArtifacts(context);
-	const configuration = vscode.workspace.getConfiguration('temcoAi');
-	const chosenModel = configuration.get<string>('model', '');
-	const chosenRuntime = configuration.get<string>('runtime', '');
-	const total = installed.reduce((sum, artifact) => sum + artifact.bytes, 0);
-	const models = installed.filter((artifact) => artifact.kind === 'model');
-	const runtimes = installed.filter((artifact) => artifact.kind !== 'model');
-	const label = (id: string): string => entryById(id)?.label ?? id;
-
-	const modelRows = models.map((artifact) => {
-		const chosen = artifact.id === chosenModel || artifact.id === status.model?.id;
-		return row({
-			mark: chosen ? 'chip' : 'package',
-			title: label(artifact.id),
-			meta: `${chosen ? 'answering now · ' : ''}${formatBytes(artifact.bytes)} · added ${dayOf(artifact.installedAt)} · ${artifact.path}`,
-			actions: chosen
-				? act('Rechoose', 'temcoAi.models', { kind: 'link' })
-				: act('Use this one', 'temcoAi.models', { kind: 'link' })
-		});
-	});
-
-	const runtimeRows = runtimes.map((artifact) => row({
-		mark: 'activity',
-		title: label(artifact.id),
-		meta: `${artifact.id === chosenRuntime || artifact.id === status.runtime?.id ? 'chosen · ' : ''}${formatBytes(artifact.bytes)} · added ${dayOf(artifact.installedAt)}`,
-		actions: act('Rechoose', 'temcoAi.models', { kind: 'link' })
-	}));
-
-	const engine = [
-		row({
-			mark: 'activity',
-			title: status.running === undefined ? 'The server is not running' : `Listening on ${status.running.baseUrl}`,
-			meta: status.running === undefined
-				? 'it starts when something needs it, and stops again when nothing does'
-				: `${status.running.label} · it stops itself when nothing has needed it for a while`,
-			actions: act(status.running === undefined ? 'Server & Prompts' : 'Show the log', 'temcoAi.page', { kind: 'link' })
-		}),
-		row({
-			mark: 'package',
-			title: 'Where they are kept',
-			meta: installed.length === 0
-				? 'a folder of your own, outside every repository — a clone never carries a model'
-				: `${formatBytes(total)} in a folder of your own, outside every repository — a clone never carries a model`
-		}),
-		row({ mark: 'check', title: 'Nothing leaves this machine', meta: 'the server listens on loopback; prompts stay in the platform database' })
-	];
-
-	return `${hero({
-		eyebrow: 'Temco AI',
-		title: 'Local Models',
-		mark: 'chip',
-		desc: 'The models and runtimes downloaded to this machine, and which two of them answer. Nothing is sent anywhere: a model is downloaded once and kept in the user’s folder.',
-		actions: [
-			{ label: 'Download a Model', command: 'temcoAi.page', mark: 'download', kind: 'primary' },
-			{ label: 'The panel', command: 'temcoAi.openPanel', mark: 'panel', kind: 'link' }
-		]
-	})}
-${figures(installed.length === 0
-		? ['nothing installed yet', 'nothing leaves this machine']
-		: [
-			`${models.length} ${models.length === 1 ? 'model' : 'models'} on disk`,
-			`${runtimes.length} ${runtimes.length === 1 ? 'runtime' : 'runtimes'}`,
-			formatBytes(total),
-			status.running === undefined ? 'server not running' : 'server running'
-		])}
-
-${installed.length === 0
-		? `<div class="mt-24">${callout({
-			title: 'Nothing is installed yet',
-			desc: 'The AI refuses rather than answering from nothing. Downloading is one model file and one runtime for this machine — they stay in your own folder, and no repository ever carries them.',
-			mark: 'download',
-			actions: `${act('Choose a Model', 'temcoAi.page', { kind: 'primary', mark: 'download' })}${act('Server & Prompts', 'temcoAi.page', { kind: 'link' })}`
-		})}</div>`
-		: `<div class="mt-24">
 	${section({
-		title: 'On this machine',
-		desc: 'What is downloaded, newest first. A chat model and an embedding model can answer at once; everything else waits its turn.'
+		title: 'What it has leant on',
+		desc: cited.length === 0
+			? 'Nothing yet. An answer that names a page is what writes the first row here.'
+			: 'The pages an answer or a draft named, most leant on first. The state is said in words: a page that is gone is the one thing here worth a colour.'
 	})}
-	<div class="mt-8">${rows([...modelRows, ...runtimeRows])}</div>
-</div>`}
-
-<div class="mt-24">
-	${section({ title: 'The engine', desc: 'One runtime per machine, chosen when it is downloaded and never switched behind the reader’s back.' })}
-	<div class="mt-8">${rows(engine)}</div>
+	<div class="mt-8">${cited.length === 0
+			? rows([row({ mark: 'info', title: 'Nothing has been cited yet', meta: 'ask something in the panel; the pages the answer names are recorded as it is given' })])
+			: rows(cited.map((page) => row({
+				mark: page.exists ? (page.stale ? 'alert' : 'document') : 'alert',
+				title: page.title ?? page.id,
+				meta: `${page.times} ${page.times === 1 ? 'citation' : 'citations'} · ${page.kinds.join(' · ')} · last ${ago(page.last)}${missingNote(page)}`,
+				actions: page.exists ? act('Open', 'temcoDocs.page', { args: [page.id] }) : ''
+			})))}</div>
 </div>
-
-<p class="ai-foot">${esc(
-		`This machine: ${describeMachine(thisMachine())}. Removing a model deletes that one file and nothing else — the choice is kept, and the page says the model is missing until another is installed.`
-	)}</p>`;
+<p class="az-note">The pointers are read from the platform database, never from the model: an answer's footnotes are its own claim, and this page is where that claim is checked.</p>`;
 }
-
-/**
- * *Update a page the code moved* — the one page about drafting that needs no model call to be useful.
- *
- * The generator records, per page, the code paths it documents and whether they moved after the last human review.
- * That is the list: a page, where it sits, and the files that moved under it, with the two acts a person actually has —
- * open the page, or take it to the panel to draft the update.
- */
 function staleBody(roots: readonly DocsRoot[]): string {
 	const pages = roots.flatMap((root) => collectPages(root));
 	const stale = pages.filter((page) => page.exists && page.provenance?.stale === true);
@@ -390,6 +370,7 @@ function staleBody(roots: readonly DocsRoot[]): string {
 			title: 'Update a Page the Code Moved',
 			mark: 'sync',
 			desc: 'The generator judges each page against the code it names. This list is what it flagged: a page whose code moved after the last review is not wrong yet — it is unverified.',
+			descWide: true,
 			actions: [{ label: 'Open a project', command: 'temcoDocs.projects', mark: 'folder', kind: 'primary' }]
 		})}
 ${figures(['nothing is being read'])}
@@ -406,6 +387,7 @@ ${figures(['nothing is being read'])}
 		title: 'Update a Page the Code Moved',
 		mark: 'sync',
 		desc: 'The generator judges each page against the code it names. These moved after the last review — the page is not wrong yet, it is unverified. A draft is written beside the page and settled in Review Center; nothing here overwrites a file.',
+		descWide: true,
 		actions: [{ label: 'Open the AI Panel', command: 'temcoAi.openPanel', mark: 'sparkle', kind: 'primary' }]
 	})}
 ${figures([
@@ -445,10 +427,11 @@ interface Row {
 }
 
 /**
- * Three groups, because there are three questions: what am I drafting, what is drafting it, and what has it produced.
+ * Three groups, because there are three questions: what am I drafting, what can I ask it for, and what is answering.
  *
  * The old single *Runtime* group held the model and a Knowledge Base that nothing read; the base is gone, and what is
- * left is arranged around the work — a draft, the model behind it, and the drafts waiting for a person.
+ * left is arranged around the work — the draft, the acts that produce one, and the machine behind them. Every page
+ * this module draws has a row here, so the side bar is a way in and not a partial list of the module.
  */
 const GROUPS: { id: string; rows: Row[] }[] = [
 	{
@@ -459,15 +442,23 @@ const GROUPS: { id: string; rows: Row[] }[] = [
 		]
 	},
 	{
-		id: 'model',
+		// What it does, and what it did it with: the acts, and the pages those acts leant on. Two rows, one subject —
+		// the work this module performs — where calling the group *Answers* named only half of it.
+		id: 'whatItDoes',
 		rows: [
-			{ label: 'Local Models', note: 'what is downloaded, and what is loaded', mark: 'chip', command: 'temcoAi.localModels' },
-			{ label: 'Server & Prompts', note: 'what a draft is told, and what answers it', mark: 'gear', command: 'temcoAi.page' }
+			{ label: 'Actions', note: 'the five acts, and the surface each one starts on', mark: 'play', command: 'temcoAi.actions' },
+			{ label: 'Citations', note: 'the pages the answers leant on, looked up again in the registries read now', mark: 'book', command: 'temcoAi.citations' }
+		]
+	},
+	{
+		id: 'server',
+		rows: [
+			{ label: 'Server & Prompts', note: 'what answers a draft: the runtime, the model, and what it is told', mark: 'gear', command: 'temcoAi.page' }
 		]
 	}
 ];
 
-/** Registers the two group views the AI Hub container shows. */
+/** Registers the three group views the AI Hub container shows. */
 export function registerAiViews(context: vscode.ExtensionContext): void {
 	for (const group of GROUPS) {
 		const rows = group.rows;

@@ -14,7 +14,7 @@ import { bestModel, describeMachine, fitsModel, machine } from './ai/machine';
 import { PROMPT_VERSION } from './ai/prompts';
 import { aiStatus, showAiLog, startAiServer, stopAiServer } from './ai/runtime';
 import { pageColumn } from './docs';
-import { hero, page, remember, runCommand, section } from './ui';
+import { button, entries, entry, escapeHtml, hero, icon, page, remember, runCommand, section } from './ui';
 import { AI_PAGE_VIEW_TYPE } from './surface';
 
 /** Somewhere on the page a caller can ask to be put: the list of what can be downloaded. */
@@ -210,6 +210,10 @@ export class AiPage {
         bytes: formatBytes(artifact.bytes),
         at: artifact.installedAt.slice(0, 16).replace('T', ' '),
       })),
+      // What the Local Models page summarised in one figure: how much of this machine the model folder holds.
+      onDisk: installed.length === 0
+        ? 'nothing downloaded yet'
+        : `${formatBytes(installed.reduce((sum, artifact) => sum + artifact.bytes, 0))} on disk · ${installed.length} ${installed.length === 1 ? 'file' : 'files'}`,
       runtimes: RUNTIMES.map(describe),
       models: MODELS.map(describe),
     });
@@ -248,7 +252,6 @@ function html(): string {
   // button that opens the list of what can answer, so a choice shows what it is before it is made.
   const style = `
     /* The brand bar every section title carries across the platform. */
-    .az-section__title { position: relative; padding-left: 10px; }
     .az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
 
     /* --- the server: a banded section, no side edges — the verdict and the repair acts on the first line, the two
@@ -327,7 +330,7 @@ function html(): string {
     .ai-more > summary:hover { color: var(--az-blue, #0078d4); }
     .ai-hidden { display: none !important; }
     .ai-foot { margin: var(--sp-6) 0 0; padding-top: var(--sp-3); border-top: 1px solid var(--hairline);
-               color: var(--ink-3); font-size: 12px; line-height: 18px; max-width: 72ch; }
+               color: var(--ink-3); font-size: 12px; line-height: 18px; }
   `;
 
   const body = `${hero({
@@ -335,28 +338,63 @@ function html(): string {
     title: 'Server & Prompts',
     mark: 'server',
     desc: 'What answers your questions, and what it is told before it answers. The server listens on loopback only, starts when something needs it, and stops itself when nothing has for a while — nothing leaves this machine.',
+    descWide: true,
     actions: [
       { label: 'Show the panel', command: 'temcoAi.openPanel', mark: 'panel', kind: 'primary' as const },
-      { label: 'Local Models', command: 'temcoAi.localModels', mark: 'chip', kind: 'link' as const }
     ]
   })}
 <div class="mt-24">
   ${section({ title: 'The server', desc: 'The two things it starts with, and the instructions it is given. Both choices are settings, so they survive a restart — and neither switches behind the reader’s back.' })}
   <div class="mt-8" id="status"></div>
 </div>
+<div class="mt-24">
+  ${section({ title: 'What it is given', desc: 'Everything below is read once per question. Nothing is sent anywhere, and nothing is remembered between questions.' })}
+  <div class="mt-8 az-entries az-entries--row az-entries--plain">${[
+    card('document', 'The page in front', 'its text, its headings, and the registry entry that describes it', 'Show the page', 'temcoDocs.pages.focus'),
+    card('folder', 'The project around it', 'the sources it cites, and the areas those sources produced', 'Edit the project', 'temcoProjects.editProject'),
+    card('list', 'The registry', 'what each page claims to document, and whether that code moved', 'Documents', 'temcoDocs.documents')
+  ].join('')}</div>
+</div>
+<div class="mt-24">
+  ${section({ title: 'What it hands back', desc: 'An answer is read in the panel; a draft is a proposal, and nothing writes a page except a person accepting one.' })}
+  <div class="mt-8 az-entries az-entries--row az-entries--plain">${[
+    card('sparkle', 'An answer', 'in the panel, with the pages it used named under it — and recorded, so they can be checked again', 'Citations', 'temcoAi.citations'),
+    card('check', 'A draft', 'a page written beside the original, settled in Review Center as a diff', 'Review Center', 'temcoDocs.review'),
+    card('sync', 'A page update', 'the pages whose code moved after their last review, drafted one at a time', 'Open the list', 'temcoAi.stale')
+  ].join('')}</div>
+</div>
 <div id="downloads">
   <div class="mt-24">${section({ title: 'Runtimes', desc: 'The engine that does the work, compiled per platform — the build marked suggested is the one for this machine.' })}</div>
   <div id="runtimes"></div>
   <div class="mt-24" id="modelList">
-    ${section({ title: 'Models', desc: 'What the engine reads. Permissive licences only; each shows its licence and what it needs before it is downloaded.' })}
+    ${section({
+      title: 'Models',
+      desc: 'One file each, read directly — the row says what it costs and what this machine reports. A model this machine cannot hold stays on the list.'
+    })}
     <div id="models"></div>
+    ${entries(entry({
+      mark: 'link',
+      title: 'More models on Hugging Face',
+      meta: ['any GGUF build works — download one and drop it in the model folder, and it shows up under “Also in the folder”'],
+      actions: `${button('Browse Hugging Face', 'temcoAi.browseModels', { kind: 'primary', small: true, mark: 'external' })}${button('Open the folder', 'temcoAi.openModelFolder', { small: true, kind: 'ghost', mark: 'folder' })}`
+    }))}
   </div>
-  <div class="mt-24 ai-hidden" id="alsoWrap">${section({ title: 'Also in the folder', desc: 'Files in the model folder that this list does not know about — installed elsewhere, or left by an older version.' })}<div id="also"></div></div>
+  <div class="mt-24 ai-hidden" id="alsoWrap">${section({ title: 'Also in the folder', desc: 'Files in the model folder this list does not know about.' })}<div id="also"></div></div>
 </div>
 <p class="ai-foot" id="foot"></p>
 `;
 
   return page(body, { title: 'Server & Prompts', extraCss: style, script: CLIENT });
+}
+
+/**
+ * One card of the two lists: the mark, the title with its way out on the same line, and the facts under them.
+ *
+ * The link sits at the far end of the title's line rather than on one of its own, which is what keeps a three-across
+ * card two lines tall — and the facts keep the card's full width instead of being squeezed beside a button.
+ */
+function card(mark: string, title: string, meta: string, label: string, command: string): string {
+	return `<div class="az-entry"><span class="az-entry__icon">${icon(mark)}</span><div class="az-entry__main"><span class="az-entry__headline"><span class="az-entry__title">${escapeHtml(title)}</span>${button(label, command, { kind: 'link' })}</span><span class="az-entry__meta">${escapeHtml(meta)}</span></div></div>`;
 }
 
 const CLIENT = `
@@ -633,7 +671,12 @@ function renderEntry(item) {
   const lines = [parts.filter(Boolean).join(' · ')];
   if (item.fit && !item.suggested) { lines.push(item.fit); }
   if (!item.pinned) { lines.push('checksum not pinned — the download is checked against the recorded size only'); }
-  if (item.path) { lines.push('Installed: ' + item.path); }
+  // What the Local Models page used to say on its own: when this file arrived, and where it sits. The date was the
+  // one fact that had no other home, so it is here rather than lost with the page.
+  if (item.path) {
+    const added = item.installedAt ? item.installedAt.slice(0, 10) + ' · ' : '';
+    lines.push('Installed ' + added + item.path);
+  }
 
   const trailing = [];
   if (item.installed) {
@@ -702,10 +745,11 @@ function renderAlso(data) {
 }
 
 /** The one line under the page: what removing costs, and the repair for a panel that was dragged somewhere else. */
-function renderFoot() {
+function renderFoot(data) {
   const foot = $('foot');
   foot.replaceChildren(
     el('span', null,
+      (data.onDisk ? data.onDisk + '. ' : '') +
       'Removing one deletes that file and nothing else: the settings keep the choice, and the server says it is ' +
       'missing until another is installed. '),
     button('Put the panel back in the right side bar', 'link',
@@ -718,7 +762,7 @@ function render(data) {
   renderRuntimes(data);
   renderModels(data);
   renderAlso(data);
-  renderFoot();
+  renderFoot(data);
 }
 
 window.addEventListener('message', (event) => {

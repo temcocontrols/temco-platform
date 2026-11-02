@@ -22,18 +22,18 @@
   ],
   "main": "./out/extension.js",
   "extensionDependencies": [
+    "temcocontrols.temco-store",
     "temcocontrols.temco-ui",
     "temcocontrols.temco-docs"
   ],
   "activationEvents": [
     "onView:temcoAi.panel",
     "onView:temcoAi.draft",
-    "onView:temcoAi.model",
+    "onView:temcoAi.server",
+    "onView:temcoAi.whatItDoes",
     "onWebviewPanel:temcoAi.page",
-    "onWebviewPanel:temcoAi.chat",
     "onWebviewPanel:temcoAi.actions",
     "onWebviewPanel:temcoAi.citations",
-    "onWebviewPanel:temcoAi.localModels",
     "onWebviewPanel:temcoAi.stale"
   ],
   "contributes": {
@@ -60,18 +60,16 @@
           "name": "Draft"
         },
         {
-          "id": "temcoAi.model",
-          "name": "Model"
+          "id": "temcoAi.whatItDoes",
+          "name": "What it does"
+        },
+        {
+          "id": "temcoAi.server",
+          "name": "Server"
         }
       ]
     },
     "commands": [
-      {
-        "command": "temcoAi.chat",
-        "title": "Chat",
-        "icon": "$(sparkle)",
-        "category": "Temco AI"
-      },
       {
         "command": "temcoAi.actions",
         "title": "Actions",
@@ -82,12 +80,6 @@
         "command": "temcoAi.citations",
         "title": "Citations",
         "icon": "$(link)",
-        "category": "Temco AI"
-      },
-      {
-        "command": "temcoAi.localModels",
-        "title": "Local Models",
-        "icon": "$(chip)",
         "category": "Temco AI"
       },
       {
@@ -130,6 +122,12 @@
         "command": "temcoAi.openModelFolder",
         "title": "Open Model Folder",
         "icon": "$(file-directory)",
+        "category": "Temco AI"
+      },
+      {
+        "command": "temcoAi.browseModels",
+        "title": "More Models on Hugging Face",
+        "icon": "$(link-external)",
         "category": "Temco AI"
       },
       {

@@ -5,6 +5,7 @@
 // installed the panel still opens and says what to do, so the extension never looks broken.
 
 import * as vscode from 'vscode';
+import { Catalog } from './store';
 import { DocsRoot, PageEntry, Selection, collectPages, pageForUri } from '../docs';
 import { entryById } from './catalog';
 import {
@@ -245,7 +246,7 @@ export class AiPanel implements vscode.WebviewViewProvider {
         return '';
       }
       this.remember(question, text);
-      this.verify(text, question, 'ask');
+      this.verify(text, question, 'topic');
       return text;
     } catch (error) {
       this.post({ type: 'error', text: messageOf(error) });
@@ -516,7 +517,7 @@ export class AiPanel implements vscode.WebviewViewProvider {
    * the pages whose words match the question are offered instead of the synthesis — the design's rule for a
    * low-confidence answer, and the honest thing to do with a small model.
    */
-  private verify(text: string, question: string, kind: 'ask' | 'area' | 'draft'): void {
+  private verify(text: string, question: string, kind: 'ask' | 'area' | 'draft' | 'topic'): void {
     if (kind === 'draft') {
       return;
     }
@@ -554,6 +555,43 @@ export class AiPanel implements vscode.WebviewViewProvider {
           })),
         });
       }
+    }
+
+    // Kept, so the citations can be read back after the answer has been scrolled away: a page a draft or an answer
+    // relied on is a fact about this documentation set, not only about the one conversation.
+    void this.keepCitations(kind, known, unknown);
+  }
+
+  /**
+   * Writes what an answer cited into the platform's own record.
+   *
+   * The ids only — never the question or the answer. A citation is a pointer, and a conversation is not something
+   * this platform keeps.
+   */
+  private async keepCitations(
+    kind: 'ask' | 'area' | 'draft' | 'topic',
+    known: readonly PageEntry[],
+    unknown: readonly string[]
+  ): Promise<void> {
+    if (known.length === 0 && unknown.length === 0) {
+      return;
+    }
+    let catalog: Catalog | undefined;
+    try {
+      catalog = await Catalog.open();
+      catalog.recordCitations({
+        answerKind: kind === 'area' ? 'answer' : kind,
+        documentSlug: this.selection.project(),
+        pageId: this.page()?.id,
+        citations: [
+          ...known.map((page) => ({ id: page.id, known: true })),
+          ...unknown.map((id) => ({ id, known: false })),
+        ],
+      });
+    } catch {
+      // No catalogue, no record: the answer has already been given, and this is its footnote rather than its body.
+    } finally {
+      catalog?.close();
     }
   }
 

@@ -45,7 +45,8 @@ export interface SectionOptions {
 }
 
 /** The UI module's exports. */
-interface UiApi {	pageColumn(): vscode.ViewColumn;
+interface UiApi {
+	pageColumn(): vscode.ViewColumn;
 	page(body: string, options?: { title?: string; script?: string; extraCss?: string }): string;
 	escapeHtml(text: string): string;
 	icon(name: string, cls?: string): string;
@@ -55,6 +56,20 @@ interface UiApi {	pageColumn(): vscode.ViewColumn;
 	section(options: SectionOptions): string;
 	/** The one tinted callout a page is allowed. */
 	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
+	/** A button, rendered the one way this application renders them. */
+	button(label: string, command: string, options?: { kind?: 'primary' | 'ghost' | 'link'; mark?: string; args?: unknown; small?: boolean }): string;
+	/** One row: the glyph, the thing, the facts about it, its state, and what can be done to it. */
+	entry(options: {
+		mark?: string;
+		tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent';
+		title: string;
+		meta?: readonly (string | undefined)[];
+		state?: string;
+		actions?: string;
+		aside?: string;
+	}): string;
+	/** The list a part's rows lie in. */
+	entries(rows: string): string;
 	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
 	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
 	/** One serializer per page, so the window can bring a page's tab back after a restart. */
@@ -98,6 +113,15 @@ export const section = ui.section;
 
 /** The one tinted callout a page is allowed: an icon, a sentence, and the thing to do about it. */
 export const callout = ui.callout;
+
+/** A button, rendered the one way this application renders them: the kit's own, so a page cannot drift from it. */
+export const button = ui.button;
+
+/** One row of a page: the glyph, the thing, the facts about it, and what can be done to it. */
+export const entry = ui.entry;
+
+/** The list a part's rows lie in. */
+export const entries = ui.entries;
 
 /** Records the subject a page is being opened on, so a restored tab opens on the same one. */
 export const remember = ui.remember;

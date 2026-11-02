@@ -94,17 +94,16 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 
 	registerAiCommands(context);
 
-	// The AI Hub's five surfaces and its two side-bar groups (Assistant, Runtime), rebuilt from the mock.
+	// The AI Hub's four surfaces and its three side-bar groups: what is being drafted, what can be asked for and what
+	// those acts rested on, and what answers at all. The chat is the panel, not a page.
 	const pages = new AiPages(context);
 	registerAiViews(context);
 	context.subscriptions.push(
 		pages,
 		// A page of this module that was open when the window closed comes back with its tab.
 		...restore(context, pages.restorable()),
-		vscode.commands.registerCommand('temcoAi.chat', () => pages.chat()),
 		vscode.commands.registerCommand('temcoAi.actions', () => pages.actions()),
 		vscode.commands.registerCommand('temcoAi.citations', () => pages.citations()),
-		vscode.commands.registerCommand('temcoAi.localModels', () => pages.models()),
 		vscode.commands.registerCommand('temcoAi.stale', () => pages.stale()),
 		// One forum thread, answered in the panel so it can be read and followed up: the docs module stores the answer
 		// against the topic and shows it there as well.
