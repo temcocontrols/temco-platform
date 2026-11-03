@@ -11,12 +11,11 @@ import * as vscode from 'vscode';
 import { ProjectFlowPage, NEW_PROJECT_VIEW_TYPE } from './projectFlow';
 import { ProjectList } from './projectList';
 import { ProjectPage } from './projectPage';
-import { ProjectsPage } from './projectsPage';
 import { discardWorkFolder, folderConsequence, workFolderOf } from './removal';
 import { AddSourcePage, ADD_SOURCE_VIEW_TYPE } from './sourceFlow';
 import { Catalog, CatalogUnavailable, Selection, slugOf } from './store';
 import { focusLibrary, restore, rowSlug } from './ui';
-import { PROJECTS_PAGE_VIEW_TYPE, PROJECT_VIEW_TYPE } from './surface';
+import { PROJECT_VIEW_TYPE } from './surface';
 
 /** A slug, or the sidebar row that stands for a project — the two things a command argument can be. */
 type ProjectArgument = string | object | undefined;
@@ -46,10 +45,8 @@ export function registerProjectCommands(
   };
 
   const page = new ProjectPage(context, selection, redraw);
-  // The list of every project, opened from the Projects view's title bar: the tree answers "which page", this
-  // answers "which project needs me".
-  const projects = new ProjectsPage(context, selection);
-  context.subscriptions.push(projects);
+  // The list of every project is the Home panel's Projects tree — the tree answers "which project", and the project's
+  // own page answers "what is in it".
   // New Project is the mock's `flow/new-project`: a wizard rather than the edit form opened empty.
   const flow = new ProjectFlowPage(context, selection, redraw);
   context.subscriptions.push(flow);
@@ -72,12 +69,10 @@ export function registerProjectCommands(
     // panel the window restored is drawn into, so the tab keeps its place and there is never a second copy of it.
     ...restore(context, [
       { viewType: PROJECT_VIEW_TYPE, open: (panel, arg) => page.openEdit(arg ?? '', panel) },
-      { viewType: PROJECTS_PAGE_VIEW_TYPE, open: (panel) => void projects.open(panel) },
       { viewType: NEW_PROJECT_VIEW_TYPE, open: (panel) => void flow.open(undefined, panel) },
       { viewType: ADD_SOURCE_VIEW_TYPE, open: (panel) => source.open(panel) }
     ]),
     // The projects page: one list of everything the catalog holds.
-    vscode.commands.registerCommand('temcoProjects.projectsPage', () => void projects.open()),
     // *New project* from a repository row carries the repository in: the flow opens already answering "where do the
     // pages come from", and asks only what is inside it. The arguments are the row's own facts, so no lookup by name
     // has to guess which organisation the repository belongs to.

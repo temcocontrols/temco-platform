@@ -8,7 +8,7 @@
 import * as https from 'https';
 import * as vscode from 'vscode';
 import { Catalog, CatalogUnavailable, slugOf } from './store';
-import { escapeHtml as esc, icon, page, pageColumn, remember } from './ui';
+import { escapeHtml as esc, head, icon, notice, page, pageColumn, remember } from './ui';
 
 export const ADD_SOURCE_VIEW_TYPE = 'temcoProjects.addSource';
 
@@ -435,7 +435,6 @@ export class AddSourcePage {
 
 const field = (label: string, control: string, hint?: string): string =>
 	`<div class="field"><label>${esc(label)}</label>${control}${hint ? `<div class="field__hint">${esc(hint)}</div>` : ''}</div>`;
-
 const choice = (kind: { value: string; label: string; desc: string }): string =>
 	`<label class="choice"><input type="radio" name="kind" value="${esc(kind.value)}"${kind.value === DEFAULTS.kind ? ' checked' : ''}><span class="choice__text"><span class="choice__label">${esc(kind.label)}</span><span class="choice__desc">${esc(kind.desc)}</span></span></label>`;
 
@@ -464,14 +463,14 @@ function html(): string {
 		`${index > 0 ? '<span class="step__arrow" aria-hidden="true">→</span>' : ''}<button type="button" class="step${index === 0 ? ' is-active' : ''}" data-step="${index}" role="tab" aria-selected="${index === 0}"><span class="step__n">${index + 1}.</span><span class="step__label">${esc(label)}</span></button>`
 	).join('');
 
-	return `<div class="page-head">
-	<div class="page-head__main">
-		<div class="eyebrow">Documentation</div>
-		<h1 class="page-head__title">${icon('repo')}Add Source</h1>
-		<p class="page-head__desc">A source is somewhere documentation is read from: a repository, a document, or a folder.</p>
-	</div>
-	<div class="page-head__actions"><button type="button" class="btn btn--ghost" id="wizard-cancel">${icon('close')}<span>Cancel</span></button></div>
-</div>
+	return `${head({
+		studio: 'Documentation',
+		title: 'Add Source',
+		mark: 'repo',
+		desc: 'A source is somewhere documentation is read from: a repository, a document, or a folder.',
+		// The wizard's own cancel: it has an id its script reads, so the button is drawn here rather than as data.
+		actionsHtml: `<button type="button" class="az-btn" id="wizard-cancel">${icon('close')}<span>Cancel</span></button>`
+	})}
 
 <div class="wizard">
 	<div class="wizard__steps" role="tablist">${rail}</div>
@@ -487,14 +486,18 @@ function html(): string {
 		<div data-step-body="1" hidden>
 			<div class="wizard__title">Where is it?</div>
 			<p class="wizard__hint" id="location-hint">The repository is cloned into the working area; nothing is pushed back.</p>
-			<div class="source-note" data-when="repo"><div class="callout">${icon('info')}<div><b>An enterprise, then a repository.</b> Type <code>github.com/temcocontrols</code> and press <b>Load Repositories</b> to see what that enterprise publishes — choose one from the list and its address is filled in for you. Asking GitHub is optional: the address can also be typed by hand.</div></div></div>
+			<div class="source-note" data-when="repo">${notice({
+				mark: 'info',
+				title: 'An enterprise, then a repository',
+				desc: 'Type github.com/temcocontrols and press Load Repositories to see what that enterprise publishes — choose one from the list and its address is filled in for you. Asking GitHub is optional: the address can also be typed by hand.'
+			})}</div>
 			<div class="form">
-				<div data-when="repo">${field('Enterprise', `<input class="input" data-field="enterprise" value="${esc(DEFAULTS.enterprise)}" aria-label="Enterprise"><button type="button" class="btn" id="load-repos">${icon('download')}<span>Load Repositories</span></button>`, 'The owner on GitHub — an enterprise, an organisation, or a personal account. A name such as temcocontrols works, or the full address github.com/temcocontrols.')}<div class="repo-status" id="repo-status" hidden></div></div>
-				<div data-when="repo" id="repo-pick-wrap" hidden>${field('Repository', `<div class="checklist repo-list" id="repo-list" role="radiogroup" aria-label="Repositories"></div>`, 'Choose one of the repositories this enterprise publishes; the address is filled from it.')}</div>
+				<div data-when="repo">${field('Enterprise', `<input class="az-input" data-field="enterprise" value="${esc(DEFAULTS.enterprise)}" aria-label="Enterprise"><button type="button" class="az-btn" id="load-repos">${icon('download')}<span>Load Repositories</span></button>`, 'The owner on GitHub — an enterprise, an organisation, or a personal account. A name such as temcocontrols works, or the full address github.com/temcocontrols.')}<div class="repo-status" id="repo-status" hidden></div></div>
+				<div data-when="repo" id="repo-pick-wrap" hidden>${field('Repository', '<div class="checklist repo-list" id="repo-list" role="radiogroup" aria-label="Repositories"></div>', 'Choose one of the repositories this enterprise publishes; the address is filled from it.')}</div>
 				<div class="field">
 					<label>Location</label>
-					<input class="input" data-field="location" value="${esc(DEFAULTS.location)}" placeholder="https://github.com/temcocontrols/t3000webview" aria-label="Location">
-					<button type="button" class="btn" id="browse" hidden>${icon('folder')}<span>Choose…</span></button>
+					<input class="az-input" data-field="location" value="${esc(DEFAULTS.location)}" placeholder="https://github.com/temcocontrols/t3000webview" aria-label="Location">
+					<button type="button" class="az-btn" id="browse" hidden>${icon('folder')}<span>Choose…</span></button>
 					<div class="field__hint" id="location-note">A Git address such as https://github.com/temcocontrols/t3000webview.</div>
 				</div><div class="repo-status" id="location-status" hidden></div>
 				<div data-when="repo"><div class="field"><label>Branch</label><label class="check"><input type="checkbox" data-field="useMain" checked><span>Read from <code>main</code> — the branch almost every repository publishes its documentation from.</span></label><div class="field__hint">Untick it to let the repository decide which branch it reads.</div></div></div>
@@ -505,17 +508,21 @@ function html(): string {
 			<p class="wizard__hint">Reading records what the source contains. It is safe to repeat.</p>
 			<dl class="kv" id="review"></dl>
 			<label class="check" style="margin-top:14px"><input type="checkbox" data-field="readNow"${DEFAULTS.readNow ? ' checked' : ''}><span>Read the source now, after it is added</span></label>
-			<div class="mt-16"><div class="callout">${icon('info')}<div>A source is never edited. The pages a read finds are recorded in the platform database; the source stays the only copy of its own content.</div></div></div>
+			<div class="mt-16">${notice({
+				mark: 'info',
+				title: 'A source is never edited',
+				desc: 'The pages a read finds are recorded in the platform database; the source stays the only copy of its own content.'
+			})}</div>
 		</div>
 		<div class="wizard__error" id="wizard-error" hidden></div>
 	</div>
 	<div class="wizard__foot">
 		<span class="cell-muted" style="font-size:12px" id="wizard-count">Step 1 of 3</span>
 		<span class="wizard__spacer"></span>
-		<button type="button" class="btn" id="wizard-back" hidden>${icon('chevron-left')}<span>Back</span></button>
-		<button type="button" class="btn btn--primary" data-next="0">${icon('chevron-right')}<span>Next: Location</span></button>
-		<button type="button" class="btn btn--primary" data-next="1" hidden>${icon('chevron-right')}<span>Next: Read</span></button>
-		<button type="button" class="btn btn--primary" data-next="2" hidden>${icon('check')}<span>Add Source</span></button>
+		<button type="button" class="az-btn" id="wizard-back" hidden>${icon('chevron-left')}<span>Back</span></button>
+		<button type="button" class="az-btn az-btn--primary" data-next="0">${icon('chevron-right')}<span>Next: Location</span></button>
+		<button type="button" class="az-btn az-btn--primary" data-next="1" hidden>${icon('chevron-right')}<span>Next: Read</span></button>
+		<button type="button" class="az-btn az-btn--primary" data-next="2" hidden>${icon('check')}<span>Add Source</span></button>
 	</div>
 </div>`;
 }

@@ -29,7 +29,6 @@
   "activationEvents": [
     "onView:temcoProjects.projects",
     "onWebviewPanel:temcoProjects.project",
-    "onWebviewPanel:temcoProjects.projectsPage",
     "onWebviewPanel:temcoProjects.newProject",
     "onWebviewPanel:temcoProjects.addSource"
   ],
@@ -39,12 +38,6 @@
         "command": "temcoProjects.newProject",
         "title": "Create a Project",
         "icon": "$(new-folder)"
-      },
-      {
-        "command": "temcoProjects.projectsPage",
-        "title": "Projects Overview",
-        "category": "Temco Projects",
-        "icon": "$(layout)"
       },
       {
         "command": "temcoProjects.newProjectFromRepository",
@@ -120,11 +113,6 @@
           "command": "temcoProjects.newProject",
           "when": "view == temcoProjects.projects",
           "group": "navigation@0"
-        },
-        {
-          "command": "temcoProjects.projectsPage",
-          "when": "view == temcoProjects.projects",
-          "group": "navigation@1"
         },
         {
           "command": "temcoProjects.removeAllProjects",

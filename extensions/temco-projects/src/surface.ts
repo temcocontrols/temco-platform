@@ -6,5 +6,3 @@
 
 export const PROJECT_VIEW_TYPE = 'temcoProjects.project';
 
-/** The list of every project. Opened from the Projects view's title bar, never by clicking a row. */
-export const PROJECTS_PAGE_VIEW_TYPE = 'temcoProjects.projectsPage';
