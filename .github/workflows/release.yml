@@ -27,6 +27,11 @@ on:
 permissions:
   contents: write
 
+# The branch the product lives on. `main` mirrors microsoft/vscode and carries none of this repository's work, so a
+# release must be cut from here — the guard refuses a tag that is not on it.
+env:
+  RELEASE_BRANCH: t3000
+
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
@@ -58,6 +63,23 @@ jobs:
             exit 1
           fi
           echo "Building $tag ($version)."
+
+      # `main` is a mirror of microsoft/vscode, so a tag on it would build something with none of this product in it.
+      - name: Check the tag is on the release branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.check.outputs.tag }}
+        run: |
+          set -euo pipefail
+          status="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${RELEASE_BRANCH}...${TAG}" --jq .status)"
+          case "$status" in
+            identical|ahead) echo "Tag $TAG is on $RELEASE_BRANCH." ;;
+            *)
+              echo "::error::Tag $TAG is not on $RELEASE_BRANCH (compare status: $status)."
+              echo "Releases are cut from $RELEASE_BRANCH; main mirrors upstream and is never released from."
+              exit 1
+              ;;
+          esac
 
   build:
     needs: guard

@@ -142,28 +142,104 @@ A container with no views is not shown, so a container may be declared before it
 9. A build engine sits behind the content-package contract ([content-package.md](../temco-learn/content-package.md)); nothing outside the engine's own folder names it.
 10. Runtimes and models are downloaded on request into the user's own folder; the engine runs on loopback only.
 
-## Releasing
+## Branches
 
-A release is a **tag**. GitHub builds the installers from it and attaches them to a draft Release named after the tag.
+This repository is a fork of `microsoft/vscode`, so the two jobs are kept on two branches.
 
-```text
-1. bump "version" in package.json, commit it
-2. git tag -a v<that version> -m "Temco Platform <that version>"
-3. git push origin v<that version>
+| Branch | Is | Receives |
+|---|---|---|
+| `main` | a **mirror** of `upstream/main` — no Temco file, no Temco commit | upstream only, fast-forwarded |
+| `t3000` | **the product**: the shell, every module, the product identity | every Temco change, and each upstream sync |
+| `t3000-platform` | an earlier product branch | — |
+
+`main` is never edited and never carries a release: a tag on it would build an app with none of this product in it. Everything Temco is committed on `t3000`, which is 154 commits ahead of `main` with `main` as its merge base.
+
+**Set `t3000` as the repository's default branch** (*Settings → General → Default branch*) — it is `main` today. GitHub only reads `workflow_dispatch` from the default branch, so while `main` is default the release workflow has no *Run workflow* button at all, and a clone lands on upstream's source rather than on the product. A ruleset blocking direct pushes to `main` is worth adding at the same time: the release guards stop a *release* from `main`, not a *commit* to it.
+
+Syncing upstream into `main`:
+
+```bash
+git fetch origin --prune && git fetch upstream --prune
+git switch main
+git reset --hard upstream/main
+git push --force-with-lease origin main
 ```
 
-`.github/workflows/release.yml` then runs on three runners — Windows x64, Linux x64, macOS arm64 — and produces the
-Windows installer plus a portable zip, a `.deb` and a Linux tarball, and a macOS zip. The workflow refuses to build when
-the tag and `package.json` disagree: the installer takes its version from `package.json`, not from the tag, so a release
-called `v1.2.3` that installs itself as `1.144.0` is one nobody can support. To rebuild an existing tag, run the workflow
-by hand and give it the tag's name.
+Bringing that merge into the product — a **merge**, never a rebase: 154 shared commits rewritten on every upstream release would make `t3000` unusable for anyone who has cloned it.
 
-Two things the packaging chain does **not** do on its own, and the workflow therefore does first: `compile-extensions`
-and `build-webviews`. A module's webview bundles are esbuild output under its own `out/`, outside VS Code's own media
-pipeline — a package built without them ships empty surfaces.
+```bash
+git switch t3000
+git merge main            # conflicts land on package.json (version), product.json, resources/**
+```
+
+## Releasing
+
+A release is a **tag on `t3000`**. GitHub builds the installers from it and attaches them to a draft Release named after the tag. The workflow is [`.github/workflows/release.yml`](../../.github/workflows/release.yml).
+
+### The first release, in order
+
+1. **Commit the workflow and this page on `t3000`**, and push.
+   ```bash
+   git add .github/workflows/release.yml docs/temco-platform/README.md
+   git commit -m "Add a tag-triggered release workflow, and the branch model it releases from"
+   git push origin t3000
+   ```
+2. **Make `t3000` the default branch** — *Settings → General → Default branch*. Until this is done the workflow has no *Run workflow* button. Add a ruleset blocking direct pushes to `main` while you are there.
+3. **Choose the version.** `package.json` says `1.144.0`, which is upstream's number and means nothing on an installer — pick a scheme (`2026.1.0`, or `1.144.0-2026.1` if you want the upstream base visible), edit `"version"`, and commit it.
+4. **Tag that commit and push the tag.**
+   ```bash
+   git tag -a v<version> -m "Temco Platform <version>"
+   git push origin v<version>
+   ```
+   *Actions → Release* then builds on three runners and leaves a draft Release. Check the assets, publish it.
+
+### Cutting a release
+
+```bash
+# 1. the version the installer will report, and the tag, are the same number
+#    edit "version" in package.json
+git commit -am "Temco Platform <version>"
+git push origin t3000
+
+# 2. the tag is the release
+git tag -a v<version> -m "Temco Platform <version>"
+git push origin v<version>
+```
+
+Then open *Actions → Release*. Three runners build in parallel — Windows x64, Linux x64, macOS arm64 — and a **draft**
+Release named `Temco Platform <version>` is created with:
+
+| Asset | Is |
+|---|---|
+| `TemcoPlatform-win32-x64-<version>.zip` | the unpacked app: run `Temco Platform.exe` |
+| `*Setup*.exe` | the per-user Windows installer, no admin rights needed |
+| `temco-platform_<version>_amd64.deb` | the Debian/Ubuntu package |
+| `temco-platform-linux-x64-<version>.tar.gz` | the unpacked Linux app |
+| `TemcoPlatform-darwin-arm64-<version>.zip` | Apple silicon only |
+
+Check the assets, then publish the draft. Nothing is released while it is a draft.
+
+### Two guards, and why they exist
+
+Both fail in seconds, before the 40-minute build:
+
+1. **The tag must equal `v<version>`** in `package.json`. The installer takes its version from `package.json`, not from the tag, so a release called `v1.2.3` that installs itself as `1.144.0` is one nobody can support.
+2. **The tag must be on `t3000`.** `main` mirrors upstream, so a tag there would build an application with none of this product in it.
+
+### Rebuilding a tag
+
+Run the workflow by hand (*Actions → Release → Run workflow*) with the tag's name. Nothing is re-tagged and the draft of a failed run is replaced. A failed run leaves its tag behind — delete it (`git push --delete origin v<version>`) before tagging again, or the next push is rejected as unchanged.
+
+### Two things the workflow does that packaging does not
+
+`compile-extensions` and `build-webviews`, in that order, before the gulp packaging task. A module ships as `out/**` (the manifest's `main` is `./out/extension.js`, and `.vscodeignore` excludes `src/**` but not `out/**`), and its webview bundles are esbuild output under that same `out/` — outside VS Code's own media pipeline. A package built without them installs and runs, with an empty surface where each module's page should be.
+
+### What a release is not
 
 Nothing is signed: there is no code-signing certificate, so Windows shows "unknown publisher" on first run and macOS needs
-right-click → Open. Nothing updates itself either — a new version is a new download.
+right-click → Open (or `xattr -d com.apple.quarantine`). Nothing updates itself either — a new version is a new download, not
+an update. Both are later work, and both are secrets-only changes to the same workflow: a Windows certificate and an Apple
+Developer ID.
 
 ## Phases
 
