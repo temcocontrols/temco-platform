@@ -20,7 +20,7 @@ import * as vscode from 'vscode';
 import { categoryUrl, latestUrl, readCategories, readCategoryTopics, readLatestTopics, readTopic, topicUrl } from './forumSource';
 import { DocsRoot, PageEntry, collectPages } from './registry';
 import { Catalog, ForumCategoryRow, ForumPostRow, ForumTopicRow, selection } from './store';
-import { commandScript, escapeHtml as esc, hero, icon, numbers, page, pageColumn, runCommand, section } from './ui';
+import { button, commandScript, escapeHtml as esc, hero, icon, n, notice, page, pageColumn, section, toneMark, runCommand } from './ui';
 
 export const FORUM_VIEW_ID = 'temcoDocs.forum';
 export const FORUM_PAGE_TYPE = 'temcoDocs.forumPage';
@@ -644,10 +644,7 @@ const FORUM_CSS = `
 .forum-summary__note { margin-top: 10px; }
 .forum-say { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .forum-say__text { white-space: pre-wrap; line-height: 1.55; }
-.forum-topic__title { line-height: 1.4; }
-.forum-topic__title .az-state { margin-right: 6px; }
-.forum-topic__meta { color: var(--fg-subtle); font-size: var(--fs-xs); margin-top: 2px; }
-.forum-when { color: var(--fg-muted); }
+.forum-say__when { color: var(--fg-subtle); font-size: var(--fs-xs); }
 .people { display: inline-flex; gap: 3px; flex-wrap: wrap; }
 .person { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
   background: var(--bg-inset); color: var(--fg-muted); font-size: 10px; font-weight: 600; }
@@ -657,27 +654,52 @@ const FORUM_CSS = `
 .post__who { font-weight: 600; }
 .post__when { color: var(--fg-subtle); font-size: var(--fs-xs); white-space: nowrap; }
 .post__text { margin-top: 6px; line-height: 1.55; white-space: pre-wrap; }
+/* A topic row: the title leads, the two numbers that decide whether to open it sit at the row's right-hand end. */
+.forum-topics { gap: var(--sp-1); }
+.forum-topics > .forum-topic { padding: var(--sp-3); }
+.forum-topics > .forum-topic:hover { border-color: transparent; box-shadow: none; background: var(--bg-hover); }
+.forum-topics > .forum-topic:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--az-blue); }
+.forum-topics > .forum-topic .az-entry__title { font-weight: 600; color: var(--ink-1); }
+.forum-topics > .forum-topic .az-entry__headline { gap: var(--sp-2); flex-wrap: wrap; }
+.forum-topics > .forum-topic .az-entry__meta { font-family: inherit; font-size: 12px; }
+.forum-topic__aside { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.forum-topic__counts { display: inline-flex; align-items: baseline; gap: var(--sp-4); }
+.forum-topic__count { display: inline-flex; align-items: baseline; gap: 4px; }
+.forum-topic__count b { color: var(--ink-1); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.forum-topic__count i { color: var(--fg-subtle); font-size: 11px; font-style: normal; }
+.person--more { background: transparent; border: 1px solid var(--hairline); }
+@media (max-width: 760px) {
+  .forum-topic__aside .people { display: none; }
+}
 `;
 
-/** One row of the topics table, as the forum's own table draws it. */
+/** One row of the topics list: the title, what it is worth knowing, and the two counts that decide which to open. */
 function topicRow(topic: ForumTopicRow, categories: readonly ForumCategoryRow[]): string {
 	const category = categories.find((candidate) => candidate.id === topic.categoryId);
 	const waiting = topic.replies === 0 && !topic.closed && ageDays(topic.lastPostedAt ?? topic.createdAt) >= AGING_DAYS;
 	const people = topic.posters.length === 0
 		? ''
 		: `<span class="people">${topic.posters
-			.slice(0, 4)
+			.slice(0, 3)
 			.map((poster) => `<span class="person" title="${esc(poster.name ?? poster.username)}">${esc(initials(poster.name ?? poster.username))}</span>`)
-			.join('')}</span>`;
+			.join('')}${topic.posters.length > 3 ? `<span class="person person--more">+${topic.posters.length - 3}</span>` : ''}</span>`;
+	const marks = [
+		topic.pinned ? `<span class="az-state">pinned</span>` : '',
+		waiting ? `<span class="az-state az-state--warn">no reply yet</span>` : '',
+		topic.closed ? `<span class="az-state">closed</span>` : ''
+	].join('');
 	const args = esc(JSON.stringify({ id: topic.id, slug: topic.slug, title: topic.title }));
-	return `<tr class="forum-topic" data-command="temcoDocs.forumTopic" data-args="${args}">
-<td><div class="forum-topic__title">${topic.pinned ? '<span class="az-state">pinned</span>' : ''}${esc(topic.title)}</div>
-<div class="forum-topic__meta">${esc(category?.name ?? '')}${waiting ? ' · <strong>no reply yet</strong>' : ''}${topic.closed ? ' · closed' : ''}</div></td>
-<td>${people}</td>
-<td class="az-grid__num">${topic.replies}</td>
-<td class="az-grid__num">${reads(topic.views)}</td>
-<td class="forum-when">${when(topic.lastPostedAt ?? topic.createdAt)}</td>
-</tr>`;
+	return `<div class="az-entry az-entry--action forum-topic" data-command="temcoDocs.forumTopic" data-args="${args}">
+	<span class="az-entry__icon">${toneMark(topic.pinned ? 'book' : 'users', waiting ? 'warn' : topic.pinned ? 'accent' : undefined)}</span>
+	<div class="az-entry__main">
+		<span class="az-entry__headline"><span class="az-entry__title">${esc(topic.title)}</span>${marks}</span>
+		<span class="az-entry__meta">${esc(category?.name ?? '')} · ${esc(when(topic.lastPostedAt ?? topic.createdAt))}</span>
+	</div>
+	<span class="az-entry__aside forum-topic__aside">${people}<span class="forum-topic__counts">
+		<span class="forum-topic__count"><b>${topic.replies}</b><i>${topic.replies === 1 ? 'reply' : 'replies'}</i></span>
+		<span class="forum-topic__count"><b>${reads(topic.views)}</b><i>${topic.views === 1 ? 'read' : 'reads'}</i></span>
+	</span></span>
+</div>`;
 }
 
 /** The page, as HTML: one category's topics, in the forum's own five columns. */
@@ -697,8 +719,15 @@ export function topicListBody(state: {
 	const address = state.category === undefined ? latestUrl() : categoryUrl(state.category);
 
 	const table = state.topics.length === 0
-		? `<div class="mt-24"><div class="az-card"><p class="az-card__desc">${state.syncedAt === undefined ? 'Nothing has been read from the forum yet.' : 'This category has no topics in the last read.'} <button type="button" class="az-btn az-btn--sm az-btn--primary" data-command="temcoDocs.forumSync"${readArgs === undefined ? '' : ` data-args="${esc(JSON.stringify(readArgs))}"`}>Read the forum</button></p></div></div>`
-		: `<div class="mt-24"><div class="az-grid"><table><thead><tr><th>Topic</th><th>Participants</th><th class="az-grid__num">Replies</th><th class="az-grid__num">Views</th><th class="forum-when">Activity</th></tr></thead><tbody>${state.topics.map((topic) => topicRow(topic, state.categories)).join('')}</tbody></table></div></div>`;
+		? `<div class="mt-24">${notice({
+			mark: 'users',
+			title: state.syncedAt === undefined ? 'Nothing has been read from the forum yet' : 'This category has no topics in the last read',
+			desc: state.syncedAt === undefined
+				? 'Reading the forum copies its categories and topics into this window so they can be searched, compared and answered offline. Nothing is posted.'
+				: 'The last read found the category, and no topics in it. Reading again asks the site now.',
+			actions: button('Read the forum', 'temcoDocs.forumSync', { kind: 'primary', mark: 'refresh', args: readArgs })
+		})}</div>`
+		: `<div class="mt-16"><div class="az-entries az-entries--plain forum-topics">${state.topics.map((topic) => topicRow(topic, state.categories)).join('')}</div></div>`;
 
 	return `${hero({
 		title,
@@ -712,17 +741,20 @@ export function topicListBody(state: {
 			{ label: 'Read the forum', command: 'temcoDocs.forumSync', args: readArgs, mark: 'refresh', kind: 'primary' as const },
 			{ label: 'Copy', command: 'temcoDocs.copyText', args: address, kind: 'link' as const },
 			{ label: 'Open on the forum', command: 'temcoDocs.openForum', args: address, mark: 'link', kind: 'link' as const }
+		],
+		stats: [
+			{ value: String(state.topics.length), label: state.topics.length === 1 ? 'topic' : 'topics' },
+			{ value: String(replies), label: replies === 1 ? 'reply' : 'replies' },
+			{ value: String(unanswered), label: 'with no reply' },
+			{ value: String(views), label: 'reads' }
 		]
 	})}
-${numbers([
-		{ value: String(state.topics.length), label: state.topics.length === 1 ? 'topic' : 'topics' },
-		{ value: String(replies), label: replies === 1 ? 'reply' : 'replies' },
-		{ value: String(unanswered), label: 'with no reply' },
-		{ value: String(views), label: 'reads' }
-	])}
 ${section({
 		title: state.category === undefined ? 'Latest topics' : 'Topics',
-		desc: state.syncedAt === undefined ? undefined : `read ${state.syncedAt.slice(0, 10)}${state.project === undefined ? '' : ` · project ${state.project}`}`
+		desc: [
+			n(state.topics.length, 'topic', 'topics'),
+			state.syncedAt === undefined ? '' : `read ${state.syncedAt.slice(0, 10)}${state.project === undefined ? '' : ` · project ${state.project}`}`
+		].filter((part) => part.length > 0).join(' · ')
 	})}
 ${table}`;
 }

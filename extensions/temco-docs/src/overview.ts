@@ -45,68 +45,13 @@ interface OwnerRow {
 export const OVERVIEW_VIEW_TYPE = 'temcoDocs.overview';
 
 /**
- * The two shapes this page gives the kit.
+ * The one shape this page gives the kit.
  *
- * The figures are one line of facts beside the ways in rather than a block under them — the number and its noun on a
- * shared baseline, a hairline between the pairs — so the title block is the title, the sentence, and one row carrying
- * both the acts and the numbers. The six surfaces read across in threes, because they are one subject, and a column of
- * six makes the reader scroll a page that has nothing to scroll.
+ * The six surfaces read across in threes, because they are one subject — where the work lives — and a column of six
+ * makes the reader scroll a page that has nothing to scroll. The figures and the ways in share the title block's last
+ * row, which is the kit's own lead now, so nothing about them is decided here.
  */
 const OVERVIEW_CSS = `
-/* The figures stand beside the ways in rather than under them: one line across the band, the acts at the left and the
-   numbers at the right, so the header is the title, the sentence, and one row of facts. */
-.az-lead {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	column-gap: var(--sp-6);
-	align-items: center;
-}
-
-.az-lead > .az-crumbs,
-.az-lead > .az-title,
-.az-lead > .az-intro,
-.az-lead > .az-note {
-	grid-column: 1 / -1;
-}
-
-.az-lead__stats {
-	margin-top: 0;
-	padding-top: 0;
-	border-top: 0;
-	align-items: baseline;
-	gap: var(--sp-2) var(--sp-4);
-	justify-content: flex-end;
-}
-
-/* Narrow: the numbers go back under the acts and wrap, rather than squeezing the buttons into two lines. */
-@media (max-width: 1100px) {
-	.az-lead {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.az-lead__stats {
-		margin-top: var(--sp-3);
-		justify-content: flex-start;
-	}
-}
-
-.az-stat {
-	flex-direction: row;
-	align-items: baseline;
-	gap: 6px;
-	min-width: 0;
-}
-
-.az-stat + .az-stat {
-	padding-left: var(--sp-4);
-	border-left: 1px solid var(--az-blue-pale);
-}
-
-.az-stat__value {
-	font-size: 15px;
-	line-height: 22px;
-}
-
 .az-entries--row {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 }

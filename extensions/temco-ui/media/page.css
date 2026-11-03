@@ -3487,27 +3487,58 @@ body {
 	background: var(--az-wash-gradient);
 }
 
-/* The figures a page opens on, on the panel's own floor: one hairline marks where the header ends. */
+/*
+ * The lead is two columns: the eyebrow, the title, the sentence and the note across the whole width, then the ways in
+ * at the left of the last row and the figures at its right-hand end. A page opens on its own facts, and the figures
+ * belong to the sentence above them rather than to a panel under it.
+ *
+ * A figure is one fact on one baseline — the number and its noun together — with a hairline between the pairs, so five
+ * of them read as a line of facts instead of a column of tiles. The panel variant (`az-wash--panel`) puts the same
+ * figures and ways in one column to the right of the sentence; the rules below are the band's own shape.
+ */
+.az-lead {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: var(--sp-6);
+	align-items: center;
+	min-width: 0;
+}
+
+.az-lead > .az-crumbs,
+.az-lead > .az-title,
+.az-lead > .az-intro,
+.az-lead > .az-note {
+	grid-column: 1 / -1;
+}
+
 .az-lead__stats {
 	display: flex;
 	flex-wrap: wrap;
-	gap: var(--sp-4) var(--sp-8);
-	margin-top: var(--sp-4);
-	padding-top: var(--sp-3);
-	border-top: 1px solid var(--az-blue-pale);
+	align-items: baseline;
+	justify-content: flex-end;
+	gap: var(--sp-2) var(--sp-4);
+	margin-top: 0;
+	padding-top: 0;
+	border-top: 0;
 }
 
 .az-stat {
 	display: flex;
-	flex-direction: column;
-	gap: 1px;
-	min-width: 88px;
+	flex-direction: row;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+}
+
+.az-stat + .az-stat {
+	padding-left: var(--sp-4);
+	border-left: 1px solid var(--az-blue-pale);
 }
 
 .az-stat__value {
 	color: var(--ink-1);
-	font-size: 20px;
-	line-height: 26px;
+	font-size: 15px;
+	line-height: 22px;
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
@@ -3516,6 +3547,19 @@ body {
 	color: var(--fg-subtle);
 	font-size: 12px;
 	line-height: 16px;
+	white-space: nowrap;
+}
+
+/* Narrow: the numbers go back under the ways in and wrap, rather than squeezing the buttons into two lines. */
+@media (max-width: 1100px) {
+	.az-lead {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.az-lead__stats {
+		justify-content: flex-start;
+		margin-top: var(--sp-3);
+	}
 }
 
 /* The panel: the same wash, inset, and no border — a header the page wears rather than a box drawn round it. */
@@ -3576,10 +3620,6 @@ body {
 	.az-wash--panel .az-lead__stats {
 		justify-content: flex-start;
 	}
-}
-
-.az-lead {
-	min-width: 0;
 }
 
 .az-crumbs {

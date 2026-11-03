@@ -28,7 +28,7 @@ export const EXPORTS_VIEW_TYPE = 'temcoDocs.exports';
 export const REGISTRY_VIEW_TYPE = 'temcoDocs.registryPage';
 
 interface ActionOptions {
-	kind?: 'primary' | 'ghost';
+	kind?: 'primary' | 'ghost' | 'link';
 	mark?: string;
 	args?: unknown;
 	small?: boolean;
@@ -238,7 +238,7 @@ export class DocsPages {
 		} finally {
 			catalog?.close();
 		}
-		this.open('projects', PROJECTS_VIEW_TYPE, 'Projects', projectsBody(rows, selection.project()), 'document', undefined, restored, PROJECTS_SCRIPT);
+		this.open('projects', PROJECTS_VIEW_TYPE, 'Projects', projectsBody(rows, selection.project()), 'document', PROJECTS_CSS, restored, PROJECTS_SCRIPT);
 	}
 
 	/** The project the window is on, as a page: what it is made of, what it produces, and the acts on it. */
@@ -722,11 +722,119 @@ interface ProjectRow {
 }
 
 /**
+ * The projects list's own two shapes.
+ *
+ * A card is wide enough for the name and the facts beside it, and the two ways in sit at its foot as words: the list is
+ * read before it is acted on, so nothing here is a box inside a box. The facts wrap rather than being ellipsised —
+ * "v1.4 · 2 sources · 1 not local · 128 pages" is a sentence, not an identifier.
+ */
+const PROJECTS_CSS = `
+.prj-cards {
+	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.prj-cards > .az-entry > .az-entry__main > .az-entry__meta {
+	white-space: normal;
+	overflow: visible;
+	font-family: inherit;
+}
+
+/* A long project name is cut on one line rather than pushing the Current chip out of the card. */
+.prj-cards > .az-entry > .az-entry__main > .az-entry__headline > .az-entry__title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+	color: var(--ink-1);
+}
+
+/* A card is already a filled surface: hovering it does not draw a border round it, and focusing it draws one ring
+   rather than a box on top of the box. */
+.prj-cards > .az-entry--action:hover {
+	border-color: transparent;
+	box-shadow: none;
+	background: var(--bg-hover);
+}
+
+.prj-cards > .az-entry--action:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 1px var(--az-blue);
+}
+
+.prj-cards > .az-entry > .az-entry__state {
+	display: flex;
+	gap: var(--sp-3);
+	align-items: center;
+}
+
+/* The two ways in are words at the card's foot, so they line up with the facts rather than with a control column. */
+.prj-cards > .az-entry > .az-entry__state .az-btn--link {
+	font-size: 12px;
+	line-height: 16px;
+}
+
+/* The search and the sort on one line, the count at the far end. Neither draws a ring: a filter field is a place you
+   type in, not a control you select — the caret is the only thing a focus needs to say. */
+.prj-tools {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-2);
+	flex-wrap: wrap;
+	margin: var(--sp-4) 0 var(--sp-2);
+}
+
+.prj-tools .az-input {
+	height: 26px;
+	outline: none;
+	box-shadow: none;
+}
+
+.prj-tools .az-input:focus {
+	border-color: var(--az-blue);
+	box-shadow: none;
+	outline: none;
+}
+
+.prj-filter {
+	flex: 1 1 200px;
+	min-width: 0;
+	max-width: 300px;
+}
+
+.prj-sort {
+	flex: 0 0 auto;
+	max-width: 190px;
+}
+
+.az-toolbar__check {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--fg-muted);
+	font-size: 12px;
+	line-height: 16px;
+	cursor: pointer;
+}
+
+.az-toolbar__check input {
+	margin: 0;
+}
+
+.prj-count {
+	margin-left: auto;
+	color: var(--fg-subtle);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+`;
+
+/**
  * *Projects* — the list every other page is about.
  *
  * One subject: which documentation set this window is working on, and how each one is doing. What a project is *made
  * of* — its sources, its outputs, the drafts it holds — is the project page's job, so this page stays a list you can
- * scan, filter and sort, and each row carries the two ways in: make it current, or open it.
+ * scan, filter and sort: one card per project, the card itself makes it current, and the two ways in are words at the
+ * card's foot rather than buttons competing with it.
  */
 function projectsBody(rows: readonly ProjectRow[], current: string | undefined): string {
 	const sources = rows.reduce((total, row) => total + row.sources, 0);
@@ -763,46 +871,48 @@ ${cards([
 		actions: [
 			{ label: t('New Project'), command: 'temcoProjects.newProject', mark: 'plus', kind: 'primary' },
 			{ label: t('Add a Source'), command: 'temcoProjects.addSource', mark: 'repo' }
+		],
+		stats: [
+			{ value: String(rows.length), label: rows.length === 1 ? t('project') : t('projects') },
+			{ value: String(sources), label: sources === 1 ? t('source') : t('sources') },
+			{ value: waiting === 0 ? t('none') : String(waiting), label: t('with drafts waiting') },
+			{ value: built === undefined ? t('never') : waitingSince(built), label: t('last build') }
 		]
 	})}
-${numbers([
-		{ value: String(rows.length), label: rows.length === 1 ? t('Project') : t('Projects') },
-		{ value: String(sources), label: sources === 1 ? t('Source') : t('Sources') },
-		{ value: waiting === 0 ? t('none') : String(waiting), label: t('with drafts waiting') },
-		{ value: built === undefined ? t('never') : waitingSince(built), label: t('Last build') }
-	])}
 <div class="mt-24">
-	${section({
+	${part({
 		title: t('All Projects'),
-		desc: on === undefined
+		count: n(rows.length, t('project'), t('projects')),
+		note: on === undefined
 			? undefined
-			: t('Working on {0}. A row makes a project current; Open shows what it is made of.', on.name)
+			: t('Working on {0}. A card makes a project current; Open and Edit are at its foot.', on.name),
+		actions: button(t('Show the tree'), 'temcoProjects.projects.focus', { kind: 'link', mark: 'list' })
 	})}
-	<div class="az-toolbar">
-		<input type="search" class="az-input" id="prj-filter" placeholder="${t('Filter projects')}" aria-label="${t('Filter projects')}" style="max-width:260px">
-		<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-muted)"><input type="checkbox" id="prj-only-current">${t('Current only')}</label>
-		<select class="az-input" id="prj-sort" aria-label="${t('Sort projects')}" style="max-width:180px">
+	<div class="prj-tools">
+		<input type="search" class="az-input prj-filter" id="prj-filter" placeholder="${t('Filter projects')}" aria-label="${t('Filter projects')}">
+		<select class="az-input prj-sort" id="prj-sort" aria-label="${t('Sort projects')}">
 			<option value="current">${t('Current first')}</option>
 			<option value="name">${t('Name')}</option>
 			<option value="built">${t('Recently built')}</option>
 			<option value="pages">${t('Most pages')}</option>
 			<option value="drafts">${t('Most drafts')}</option>
 		</select>
-		<span class="az-toolbar__facts" id="prj-count">${n(rows.length, 'project', 'projects')}</span>
+		<label class="az-toolbar__check"><input type="checkbox" id="prj-only-current">${t('Current only')}</label>
+		<span class="prj-count" id="prj-count">${n(rows.length, 'project', 'projects')}</span>
 	</div>
-	<div class="az-entries" id="prj-list">${rows.map((row) => projectRow(row, row.slug === current)).join('')}</div>
+	<div class="az-entries az-entries--row az-entries--plain prj-cards" id="prj-list">${rows.map((row) => projectCard(row, row.slug === current)).join('')}</div>
 </div>
 <p class="az-note">${t('Every figure is read from the platform database as it stands now: pages as the last read recorded them, drafts as they are waiting, and the build time of the last file written.')}</p>`;
 }
 
 /**
- * One project, as a row.
+ * One project, as a card.
  *
- * The facts are the ones a person triages by — how big it is, when it last built, whether anything is waiting — and the
- * state is words at the right-hand end rather than a pill. `data-` attributes carry what the filter and the sort read,
- * so the page's script never has to parse the text back out of the row.
+ * The name and its state lead, the facts sit under them, and the two ways in are words at the foot — a card is a thing
+ * you read before you act on it, so the acts stay out of the way of the reading. `data-` attributes carry what the
+ * filter and the sort read, so the page's script never has to parse the text back out of the card.
  */
-function projectRow(row: ProjectRow, current: boolean): string {
+function projectCard(row: ProjectRow, current: boolean): string {
 	const facts = [
 		row.version === undefined ? '' : `v${row.version}`,
 		n(row.sources, 'source', 'sources'),
@@ -816,10 +926,13 @@ function projectRow(row: ProjectRow, current: boolean): string {
 		data-name="${esc(row.name.toLowerCase())}" data-current="${current}" data-pages="${row.pages}" data-drafts="${row.drafts}" data-built="${esc(row.builtAt ?? '')}">
 	<span class="az-entry__icon">${toneMark(current ? 'layers' : 'folder', current ? 'accent' : undefined)}</span>
 	<div class="az-entry__main">
-		<span class="az-entry__title">${esc(row.name)}${current ? `<span class="az-state az-state--accent">${t('Current')}</span>` : ''}</span>
+		<span class="az-entry__headline">
+			<span class="az-entry__title">${esc(row.name)}</span>
+			${current ? `<span class="az-state az-state--accent">${t('Current')}</span>` : ''}
+		</span>
 		<span class="az-entry__meta">${esc(facts)}</span>
 	</div>
-	<span class="az-entry__state">${azButton(t('Open'), 'temcoDocs.projectPage', { small: true, kind: 'ghost', args: [row.slug] })}${azButton(t('Edit'), 'temcoProjects.editProject', { small: true, kind: 'ghost', args: [row.slug] })}</span>
+	<span class="az-entry__state">${button(t('Open'), 'temcoDocs.projectPage', { kind: 'link', args: [row.slug] })}${button(t('Edit'), 'temcoProjects.editProject', { kind: 'link', args: [row.slug] })}</span>
 </div>`;
 }
 
