@@ -1,8 +1,20 @@
 # Temco Platform
 
-Temco Platform is the desktop application Temco uses to produce the documentation that ships with its products. It reads a product's pages, builds the site and the offline help from them, and publishes the result to [Temco Learn](https://github.com/temcocontrols/temco-learn), where it is released, downloaded and shipped inside the product.
+Temco Platform is the desktop application Temco uses to produce the documentation that ships with its products. It reads a product repository's pages, builds the site and the offline help from them, and publishes the result to [Temco Learn](https://github.com/temcocontrols/temco-learn), where it is released, downloaded, and shipped inside the product.
 
-It is built on VS Code, so the editor, the terminal, source control and the extension model are the familiar ones. The work itself happens in Temco's own modules, layered on top of the parts nobody edits.
+The application is built on VS Code - the open-source Code - OSS tree, base `1.144.0` - so the editor, the terminal, source control and the extension model are the familiar ones. Everything Temco adds is a module: a real extension with one namespace and one purpose, compiled into the application, with nothing to install.
+
+## At a glance
+
+| | |
+|---|---|
+| Application | `temco-platform` in `product.json`, window title **Temco Platform** |
+| Branch that ships | `t3000-platform` - the default branch, and the only branch a release is cut from |
+| Branch that mirrors upstream | `main` - never edited, never released |
+| Distance from `main` | 156 commits: 153 authored, 3 upstream sync merges |
+| Modules | 14 folders: 10 active, 4 reserved |
+| Seams into VS Code | 2 additive lines ([entry-points.md](docs/temco-platform/entry-points.md)) |
+| A release is | a tag `v<version>` on `t3000-platform`, built by [`.github/workflows/release.yml`](.github/workflows/release.yml) |
 
 ## What it replaces
 
@@ -47,7 +59,7 @@ Nothing is produced from a page that is not in the registry, and nothing is publ
 
 ## Modules
 
-Everything Temco adds is a module: a real extension, built into the application, with one namespace and one purpose.
+A module is folder under `extensions/`. It becomes **active** when it has a manifest, a `tsconfig.json` and `src/`, and the build then compiles and ships it; a **reserved** folder holds a `README.md` only, so the build ignores it and no surface appears.
 
 | Module | Purpose | State |
 |---|---|---|
@@ -66,14 +78,12 @@ Everything Temco adds is a module: a real extension, built into the application,
 | `temco-bacnet` | objects, points, trends | reserved |
 | `temco-device-manager` | fleets, firmware, health | reserved |
 
-A reserved folder carries a `README.md` and nothing else, so the build ignores it and no surface appears. A module becomes active the day it has its first real feature.
-
 ## Branches
 
 | Branch | Is | Released from |
 |---|---|---|
 | `main` | a mirror of [`microsoft/vscode`](https://github.com/microsoft/vscode). It carries none of this product's work, and nothing is ever committed to it. | no |
-| `t3000` | the product. The default branch, and the only branch a release is cut from. | yes |
+| `t3000-platform` | the product: the shell, every module, the product identity. The default branch. | yes |
 
 Syncing with upstream, on `main`:
 
@@ -82,11 +92,11 @@ git fetch upstream
 git checkout main
 git merge --ff-only upstream/main
 git push origin main
-git checkout t3000
+git checkout t3000-platform
 git merge main
 ```
 
-A merge that reports conflicts in `README.md` is expected, and is resolved by keeping this file: the upstream README describes VS Code, and it stays on `main` where it is true.
+Use a merge, never a rebase: rewriting the shared commits would make every existing clone unusable. A merge that reports conflicts in `README.md` is expected, and is resolved by keeping this file - the upstream README describes VS Code, and it stays on `main`, where it is true.
 
 ## Build and run
 
@@ -104,28 +114,35 @@ scripts\code.bat       # Windows
 ./scripts/code.sh      # macOS and Linux
 ```
 
-## Release
+## The first release, in order
 
-A tag is the release. The workflow builds the installers for Windows, macOS and Linux and attaches them to a draft GitHub Release named after the tag; nothing becomes public until a person opens the draft and presses Publish.
-
-1. Set `version` in `package.json` to the release number, and commit it.
-2. Tag that commit, and push the tag:
+1. **Commit what is pending on `t3000-platform`** and push it.
 
    ```bash
-   git tag -a v1.0.0 -m "Temco Platform 1.0.0"
-   git push origin v1.0.0
+   git add .github/workflows/release.yml README.md docs/temco-platform/README.md
+   git commit -m "Release workflow, and the branch model it releases from"
+   git push origin t3000-platform
    ```
 
-3. Wait for the run, open the draft release, and press Publish.
+2. **Make `t3000-platform` the default branch** - *Settings > General > Default branch*. GitHub only reads `workflow_dispatch` from the default branch, so until this is done the workflow has no *Run workflow* button, and a clone lands on upstream's source instead of the product. A ruleset blocking direct pushes to `main` belongs here too: the guards stop a *release* from `main`, not a *commit* to it.
+
+3. **Leave `version` in `package.json` at `1.144.0`.** It is not a marketing number: every module declares `engines.vscode: ^1.143.0`, so a lower or prerelease value makes all ten incompatible and the application starts as plain VS Code with no Temco surface. A Temco release number is a package-wide change - the manifests and this field together - never an edit here alone.
+
+4. **Tag that commit and push the tag.**
+
+   ```bash
+   git tag -a v1.144.0 -m "Temco Platform 1.144.0"
+   git push origin v1.144.0
+   ```
+
+5. **Wait for the run, then publish the draft.** *Actions > Release* builds three installers in parallel - Windows x64, Linux x64, macOS arm64 - and leaves a **draft** release named after the tag. Open it, check the assets, press **Publish** (tick *Set as a pre-release* for a trial build).
 
 Two rules the workflow enforces before it builds anything:
 
 | Rule | Why |
 |---|---|
-| the tag is `v` followed by `version` in `package.json` | the installer takes its version from the manifest, so a release named after something else installs a version nobody can support |
-| the tagged commit is on `t3000` | `main` is the upstream mirror, and a build from it would contain none of this product |
-
-`version` carries the VS Code base (`1.144.0` today), and it has to stay inside the range every module declares in `engines.vscode` (`^1.143.0`). A lower or prerelease number makes each module incompatible, and the application starts as plain VS Code with none of Temco's surfaces. A Temco release number is therefore a change to the manifests and this field together, never to this field alone.
+| the tag is `v` followed by `version` in `package.json` | the installer reports the manifest's version, so a release named after something else installs a version nobody can support |
+| the tagged commit is on `t3000-platform` | `main` is the upstream mirror, and a build from it would contain none of this product |
 
 ## Documentation
 
@@ -135,6 +152,7 @@ Two rules the workflow enforces before it builds anything:
 | [`docs/temco-platform/modules/README.md`](docs/temco-platform/modules/README.md) | the module register, ownership, and how two modules may talk |
 | [`docs/temco-platform/naming.md`](docs/temco-platform/naming.md) | every identifier, title and namespace |
 | [`docs/temco-platform/entry-points.md`](docs/temco-platform/entry-points.md) | the two seams where product code joins VS Code |
+| [`docs/temco-platform/catalog.md`](docs/temco-platform/catalog.md) | the catalog the platform reads and writes |
 | [`docs/temco-learn/README.md`](docs/temco-learn/README.md) | the published site: content model, engine, offline artifacts, review flow |
 | [`docs/temco-learn/content-package.md`](docs/temco-learn/content-package.md) | what a product ships for the site to build |
 | [`docs/README.md`](docs/README.md) | the map of all of the above |

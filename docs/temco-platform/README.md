@@ -149,12 +149,11 @@ This repository is a fork of `microsoft/vscode`, so the two jobs are kept on two
 | Branch | Is | Receives |
 |---|---|---|
 | `main` | a **mirror** of `upstream/main` — no Temco file, no Temco commit | upstream only, fast-forwarded |
-| `t3000` | **the product**: the shell, every module, the product identity | every Temco change, and each upstream sync |
-| `t3000-platform` | an earlier product branch | — |
+| `t3000-platform` | **the product**: the shell, every module, the product identity | every Temco change, and each upstream sync |
 
-`main` is never edited and never carries a release: a tag on it would build an app with none of this product in it. Everything Temco is committed on `t3000`, which is 154 commits ahead of `main` with `main` as its merge base.
+`main` is never edited and never carries a release: a tag on it would build an app with none of this product in it. Everything Temco is committed on `t3000-platform`, which is 156 commits ahead of `main` with `main` as its merge base.
 
-**Set `t3000` as the repository's default branch** (*Settings → General → Default branch*) — it is `main` today. GitHub only reads `workflow_dispatch` from the default branch, so while `main` is default the release workflow has no *Run workflow* button at all, and a clone lands on upstream's source rather than on the product. A ruleset blocking direct pushes to `main` is worth adding at the same time: the release guards stop a *release* from `main`, not a *commit* to it.
+**Set `t3000-platform` as the repository's default branch** (*Settings → General → Default branch*) — it is `main` today. GitHub only reads `workflow_dispatch` from the default branch, so while `main` is default the release workflow has no *Run workflow* button at all, and a clone lands on upstream's source rather than on the product. A ruleset blocking direct pushes to `main` is worth adding at the same time: the release guards stop a *release* from `main`, not a *commit* to it.
 
 Syncing upstream into `main`:
 
@@ -165,27 +164,27 @@ git reset --hard upstream/main
 git push --force-with-lease origin main
 ```
 
-Bringing that merge into the product — a **merge**, never a rebase: 154 shared commits rewritten on every upstream release would make `t3000` unusable for anyone who has cloned it.
+Bringing that merge into the product — a **merge**, never a rebase: 156 shared commits rewritten on every upstream release would make `t3000-platform` unusable for anyone who has cloned it.
 
 ```bash
-git switch t3000
+git switch t3000-platform
 git merge main            # conflicts land on package.json (version), product.json, resources/**
 ```
 
 ## Releasing
 
-A release is a **tag on `t3000`**. GitHub builds the installers from it and attaches them to a draft Release named after the tag. The workflow is [`.github/workflows/release.yml`](../../.github/workflows/release.yml).
+A release is a **tag on `t3000-platform`**. GitHub builds the installers from it and attaches them to a draft Release named after the tag. The workflow is [`.github/workflows/release.yml`](../../.github/workflows/release.yml).
 
 ### The first release, in order
 
-1. **Commit the workflow and this page on `t3000`**, and push.
+1. **Commit the workflow, this page and the root `README.md` on `t3000-platform`**, and push.
    ```bash
-   git add .github/workflows/release.yml docs/temco-platform/README.md
+   git add .github/workflows/release.yml README.md docs/temco-platform/README.md
    git commit -m "Add a tag-triggered release workflow, and the branch model it releases from"
-   git push origin t3000
+   git push origin t3000-platform
    ```
-2. **Make `t3000` the default branch** — *Settings → General → Default branch*. Until this is done the workflow has no *Run workflow* button. Add a ruleset blocking direct pushes to `main` while you are there.
-3. **Choose the version.** `package.json` says `1.144.0`, which is upstream's number and means nothing on an installer — pick a scheme (`2026.1.0`, or `1.144.0-2026.1` if you want the upstream base visible), edit `"version"`, and commit it.
+2. **Make `t3000-platform` the default branch** — *Settings → General → Default branch*. Until this is done the workflow has no *Run workflow* button. Add a ruleset blocking direct pushes to `main` while you are there.
+3. **Keep `package.json`'s version inside the base range.** Every module declares `engines.vscode: ^1.143.0`, so a number below that — `2026.1.0`, `0.1.0`, or a prerelease such as `1.144.0-2026.1` — makes all of them incompatible and the application starts as plain VS Code with no Temco surface. Leave the version at the VS Code base (`1.144.0`) and tag `v1.144.0`; renumber only as a package-wide change to the manifests and this field together.
 4. **Tag that commit and push the tag.**
    ```bash
    git tag -a v<version> -m "Temco Platform <version>"
@@ -199,7 +198,7 @@ A release is a **tag on `t3000`**. GitHub builds the installers from it and atta
 # 1. the version the installer will report, and the tag, are the same number
 #    edit "version" in package.json
 git commit -am "Temco Platform <version>"
-git push origin t3000
+git push origin t3000-platform
 
 # 2. the tag is the release
 git tag -a v<version> -m "Temco Platform <version>"
@@ -224,7 +223,7 @@ Check the assets, then publish the draft. Nothing is released while it is a draf
 Both fail in seconds, before the 40-minute build:
 
 1. **The tag must equal `v<version>`** in `package.json`. The installer takes its version from `package.json`, not from the tag, so a release called `v1.2.3` that installs itself as `1.144.0` is one nobody can support.
-2. **The tag must be on `t3000`.** `main` mirrors upstream, so a tag there would build an application with none of this product in it.
+2. **The tag must be on `t3000-platform`.** `main` mirrors upstream, so a tag there would build an application with none of this product in it.
 
 ### Rebuilding a tag
 

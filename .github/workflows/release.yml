@@ -30,7 +30,7 @@ permissions:
 # The branch the product lives on. `main` mirrors microsoft/vscode and carries none of this repository's work, so a
 # release must be cut from here — the guard refuses a tag that is not on it.
 env:
-  RELEASE_BRANCH: t3000
+  RELEASE_BRANCH: t3000-platform
 
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
