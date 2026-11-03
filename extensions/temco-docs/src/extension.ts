@@ -140,7 +140,6 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
     ...restore(context, [
       { viewType: 'temcoDocs.projects', open: (panel) => docsPages.projects(panel) },
       { viewType: 'temcoDocs.projectPage', open: (panel, arg) => docsPages.project(arg, panel) },
-      { viewType: 'temcoDocs.needsPage', open: (panel) => docsPages.needsYou(panel) },
       { viewType: 'temcoDocs.repository', open: (panel, arg) => docsPages.repository(arg, panel) },
       { viewType: 'temcoDocs.documents', open: (panel, arg) => docsPages.documents(arg, panel) },
       { viewType: 'temcoDocs.pagePanel', open: (panel, arg) => docsPages.pageOf(arg, undefined, panel) },
@@ -907,10 +906,11 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
     // tree, drafts in **Needs You**, sources in **Sources**, builds and releases in **Publish**. These entries are
     // the destinations the old webview pages offered, so every button and menu item that pointed at a page still
     // lands somewhere — on the list, instead of on a second copy of it.
-    // The projects list is a page the projects module owns; this module's entry opens it, so there is one list and
-    // not a second copy. The quick pick is kept for the one case a page cannot serve: a project row whose slug has
-    // just been removed, where the question is "which one instead?" and not "what exists?".
-    vscode.commands.registerCommand('temcoDocs.projects', () => openProjectsPage(context)),
+    // The projects list is a page this module draws: what exists, which one is current, and how each one is doing.
+    // Switching without leaving the keyboard is the quick pick's job, and it keeps its own command — the two are
+    // different questions, and a page that only switched was a menu wearing a page's clothes.
+    vscode.commands.registerCommand('temcoDocs.projects', () => docsPages.projects()),
+    vscode.commands.registerCommand('temcoDocs.switchProject', () => pickProject(context)),
     // The project as a page: what it cites, what it produces, and the acts on it. The read argument is the row it
     // was invoked from — a tree row is not a slug, so it is read with `rowSlug` like every other row command here.
     vscode.commands.registerCommand('temcoDocs.projectPage', (target?: unknown) =>
@@ -1696,21 +1696,11 @@ function focusView(id: string): void {
   });
 }
 
-/** The projects page belongs to the projects module; this module only knows how to ask for it. */
-async function openProjectsPage(context: vscode.ExtensionContext): Promise<void> {
-  try {
-    await vscode.commands.executeCommand('temcoProjects.projectsPage');
-  } catch {
-    // The projects module is not installed in this window: the picker still answers the question.
-    await pickProject(context);
-  }
-}
-
 /**
  * *Switch Project*: the projects this window knows, in a quick pick.
  *
- * The list used to be a webview page, which meant two lists of the same projects — the Dashboard's and the page's
- * — and a page whose only job was to be a menu. A menu is a quick pick.
+ * Kept beside the page rather than replaced by it: choosing a project from the keyboard, or choosing *another* one
+ * after the current project's slug has just been removed, is a question a list cannot answer as fast as a menu can.
  */
 async function pickProject(context: vscode.ExtensionContext): Promise<void> {
   let catalog: Catalog | undefined;

@@ -378,5 +378,28 @@ export interface Catalog {
 	forumSuggestion(topicId: number): ForumSuggestionRow | undefined;
 	saveForumSuggestion(input: ForumSuggestionInput): void;
 	forumSyncedAt(): string | undefined;
+	/** What an AI answer named, kept so the citations can be read back later. */
+	recordCitations(input: CitationInput): void;
+	/** The citations the AI has used, newest first. */
+	citations(limit?: number): CitationRow[];
 	close(): void;
+}
+
+/** What one answer named, as `recordCitations` writes it. */
+export interface CitationInput {
+	answerKind: string;
+	documentSlug?: string;
+	pageId?: string;
+	citations: readonly { id: string; known: boolean }[];
+}
+
+/** One citation, as `citations()` reads it. */
+export interface CitationRow {
+	id: number;
+	at: string;
+	answerKind: string;
+	documentSlug?: string;
+	pageId?: string;
+	citationId: string;
+	citationKnown: boolean;
 }

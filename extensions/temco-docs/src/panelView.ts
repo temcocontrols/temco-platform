@@ -51,7 +51,8 @@ const glyph = (paths: string, size = 20): string => `<svg width="${size}" height
 // A project is a folder of sources, not a file: the glyph says which kind of thing the name is before the name is read.
 // One step under the acts' size, because it labels the name rather than offering an action of its own.
 const PROJECT = glyph('<path d="M14.5 3H7.71l-.85-.85L6.51 2h-5l-.5.5v11l.5.5h13l.5-.5v-10L14.5 3zm-.51 8.49V13h-12V7h4.49l.35-.15.86-.86H14v1.5l-.01 4zm0-6.49h-6.5l-.35.15-.86.86H2v-3h4.29l.85.85.36.15H14l-.01.99z"/>', 16);
-const NEW_FILE = glyph('<path fill-rule="evenodd" clip-rule="evenodd" d="M9.5 1.1l3.4 3.5.1.4v2h-1V6H8V2H3v11h4v1H2.5l-.5-.5v-12l.5-.5h6.7l.3.1zM9 2v3h2.9L9 2zm4 14h-1v-3H9v-1h3V9h1v3h3v1h-3v3z"/>');
+// The Documentation overview: a house, because that page is the front of the set rather than a page inside it.
+const HOME = glyph('<path d="M7.31299 1.26164C7.69849 0.897163 8.30151 0.897163 8.68701 1.26164L13.5305 5.84098C13.8302 6.12431 14 6.51853 14 6.93094V12.5002C14 13.3286 13.3284 14.0002 12.5 14.0002H10.5C9.67157 14.0002 9 13.3286 9 12.5002V10.0002C9 9.72407 8.77614 9.50021 8.5 9.50021H7.5C7.22386 9.50021 7 9.72407 7 10.0002V12.5002C7 13.3286 6.32843 14.0002 5.5 14.0002H3.5C2.67157 14.0002 2 13.3286 2 12.5002V6.93094C2 6.51853 2.1698 6.12431 2.46948 5.84098L7.31299 1.26164ZM8 1.98828L3.15649 6.56762C3.0566 6.66207 3 6.79347 3 6.93094V12.5002C3 12.7763 3.22386 13.0002 3.5 13.0002H5.5C5.77614 13.0002 6 12.7763 6 12.5002V10.0002C6 9.17179 6.67157 8.50022 7.5 8.50022H8.5C9.32843 8.50022 10 9.17179 10 10.0002V12.5002C10 12.7763 10.2239 13.0002 10.5 13.0002H12.5C12.7761 13.0002 13 12.7763 13 12.5002V6.93094C13 6.79347 12.9434 6.66207 12.8435 6.56762L8 1.98828Z"/>');
 const CHECK = glyph('<path fill-rule="evenodd" clip-rule="evenodd" d="M14.431 3.323l-8.47 10-.79-.036-3.35-4.77.818-.574 2.978 4.24 8.051-9.506.764.646z"/>');
 const PLAY = glyph('<path d="M3.78 2L3 2.41v12l.78.42 9-6V8l-9-6zM4 13.48V3.35l7.6 5.07L4 13.48z"/>');
 const CLOUD_UPLOAD = glyph('<path fill-rule="evenodd" clip-rule="evenodd" d="M11.956 6h.05a2.99 2.99 0 0 1 2.117.879 3.003 3.003 0 0 1 0 4.242 2.99 2.99 0 0 1-2.117.879h-1.995v-1h1.995a2.002 2.002 0 0 0 0-4h-.914l-.123-.857a2.49 2.49 0 0 0-2.126-2.122A2.478 2.478 0 0 0 6.23 5.5l-.333.762-.809-.189A2.49 2.49 0 0 0 4.523 6c-.662 0-1.297.263-1.764.732A2.503 2.503 0 0 0 4.523 11h2.494v1H4.523a3.486 3.486 0 0 1-2.628-1.16 3.502 3.502 0 0 1-.4-4.137A3.497 3.497 0 0 1 3.853 5.06c.486-.09.987-.077 1.468.041a3.486 3.486 0 0 1 3.657-2.06A3.479 3.479 0 0 1 11.956 6zm-1.663 3.853L8.979 8.54v5.436h-.994v-5.4L6.707 9.854 6 9.146 8.146 7h.708L11 9.146l-.707.707z"/>');
@@ -156,8 +157,10 @@ export function panelHtml(state: DocsPanelState, nonceValue: string): string {
 		gap: 6px;
 		flex: 1 1 auto;
 		min-width: 0;
-		margin: 0 0 0 -6px;
-		padding: 1px 6px;
+		/* The padding is inside the hover box rather than around it, so the wash a pointer brings lines up with the
+		   name instead of hanging off the left edge of the strip. */
+		margin: 0;
+		padding: 2px 4px;
 		border: 1px solid transparent;
 		border-radius: 4px;
 		background: transparent;
@@ -166,13 +169,14 @@ export function panelHtml(state: DocsPanelState, nonceValue: string): string {
 		text-align: left;
 		cursor: pointer;
 	}
-	.open:hover { background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
-	.open:active { background: var(--vscode-toolbar-activeBackground, var(--vscode-list-activeSelectionBackground)); }
-	.open:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+	/* One hover and one pressed state for everything clickable in this strip, at the workbench's own colours. */
+	.open:hover, .icon:hover { background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
+	.open:active, .icon:active { background: var(--vscode-toolbar-activeBackground, var(--vscode-list-activeSelectionBackground)); }
+	.open:focus-visible, .icon:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 	/* With no project there is no page to go to, so the row stops being a button and stops looking like one. */
 	.open--empty { cursor: default; }
-	.open--empty:hover { background: transparent; }
-	.glyph { display: flex; flex: 0 0 auto; margin-top: 1px; color: var(--vscode-descriptionForeground); }
+	.open--empty:hover, .open--empty:active { background: transparent; }
+	.glyph { display: flex; flex: 0 0 auto; color: var(--vscode-icon-foreground, var(--vscode-foreground)); }
 	.name {
 		font-size: 13px;
 		line-height: 18px;
@@ -190,31 +194,34 @@ export function panelHtml(state: DocsPanelState, nonceValue: string): string {
 		border-radius: 3px;
 		padding: 0 4px;
 	}
-	.facts { margin: 0 0 4px; padding-left: 18px; color: var(--vscode-descriptionForeground); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	/* The name and the acts share one line: the name says what the project is, the icons say what to do about it. */
-	.head { display: flex; align-items: center; gap: 2px; }
+	.facts { margin: 2px 0 0; padding-left: 22px; color: var(--vscode-descriptionForeground); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	/* The name and the acts share one line: the name says what the project is, the icons say where to go about it. */
+	.head { display: flex; align-items: center; gap: 2px; margin-left: -4px; }
+	/* The acts sit together at the far end, a hair apart, the way a title bar's actions do. */
+	.acts { display: flex; align-items: center; gap: 1px; flex: 0 0 auto; margin-left: auto; }
+	/*
+	 * An act is a flat square that only shows its edge under a pointer: 22px, the size the workbench gives a title-bar
+	 * action, so the row does not grow taller than the name it sits beside.
+	 */
 	.icon {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		flex: 0 0 auto;
-		width: 28px;
-		height: 28px;
-		border: 0;
+		width: 22px;
+		height: 22px;
+		padding: 0;
+		border: 1px solid transparent;
 		border-radius: 4px;
 		background: transparent;
 		color: var(--vscode-icon-foreground, var(--vscode-foreground));
 		cursor: pointer;
 	}
-	/* The hover the workbench gives an action in a section title, which is what these are. Every act is quiet until it is
-	   hovered: none of them is the selected one, so none of them is drawn as the selected one. */
-	.icon:hover { background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
-	.icon:active { background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); opacity: 0.8; }
-	.icon:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -2px; }
+	.icon svg { width: 16px; height: 16px; }
 	/* The project in prose: who it is for, what builds it, then where it is read from and where it goes. */
-	.desc { margin: 7px 0 0; padding-left: 18px; font-size: 11.5px; line-height: 17px; color: var(--vscode-descriptionForeground); }
+	.desc { margin: 6px 0 0; padding-left: 22px; font-size: 11.5px; line-height: 17px; color: var(--vscode-descriptionForeground); }
 	/* What the project holds, as one plain paragraph: numbers in ink, what they count in grey. */
-	.info { margin: 4px 0 0; padding-left: 18px; font-size: 11.5px; line-height: 17px; color: var(--vscode-descriptionForeground); }
+	.info { margin: 4px 0 0; padding-left: 22px; font-size: 11.5px; line-height: 17px; color: var(--vscode-descriptionForeground); }
 	.info b { font-weight: 600; color: var(--vscode-foreground); font-variant-numeric: tabular-nums; }
 </style>
 </head>
@@ -223,29 +230,24 @@ ${project === undefined
 	? `<div class="open open--empty"><span class="glyph" aria-hidden="true">${PROJECT}</span><span class="name">No project</span></div>
 <p class="facts">Pick a project in <b>Home ▸ Projects</b>.</p>`
 	: `<div class="head"><button type="button" class="open" data-command="temcoDocs.projectPage" title="Open the project page"><span class="glyph" aria-hidden="true">${PROJECT}</span><span class="name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>${version}</button>
-	<button type="button" class="icon" data-command="temcoDocs.newPage" title="New page" aria-label="New page">${NEW_FILE}</button>
+	<span class="acts">
+	<button type="button" class="icon" data-command="temcoDocs.overview" title="Documentation overview" aria-label="Documentation overview">${HOME}</button>
 	<button type="button" class="icon" data-command="temcoDocs.review" title="Review the drafts" aria-label="Review the drafts">${CHECK}</button>
-	<button type="button" class="icon" data-command="temcoDocs.buildSite" title="Build the site" aria-label="Build the site">${PLAY}</button>
-	<button type="button" class="icon" data-command="temcoDocs.publishSite" title="Publish to GitHub Pages" aria-label="Publish to GitHub Pages">${CLOUD_UPLOAD}</button></div>
+	<button type="button" class="icon" data-command="temcoDocs.builds" title="Open the Build Center" aria-label="Open the Build Center">${PLAY}</button>
+	<button type="button" class="icon" data-command="temcoDocs.releases" title="Open Publish &amp; Releases" aria-label="Open Publish and Releases">${CLOUD_UPLOAD}</button>
+	</span></div>
 ${about(state)}
 <p class="info">${facts(state)}</p>`}
 <script nonce="${nonceValue}">
 	const vscode = acquireVsCodeApi();
-	const post = (message) => vscode.postMessage(message);
-	const feedback = (button) => {
-		button.disabled = true;
-		setTimeout(() => { button.disabled = false; }, 600);
-	};
 	document.addEventListener('click', (event) => {
 		const target = event.target.closest('[data-command]');
 		if (!target) {
 			return;
 		}
-		// The name row opens a page rather than starting work, so it is not held down the way the acts are.
-		if (!target.classList.contains('open')) {
-			feedback(target);
-		}
-		post({ command: target.dataset.command });
+		// Every way out of this strip opens a page, so nothing is held down while it works: a button that disabled
+		// itself for a moment only made the click look like it had failed.
+		vscode.postMessage({ command: target.dataset.command });
 	});
 </script>
 </body>

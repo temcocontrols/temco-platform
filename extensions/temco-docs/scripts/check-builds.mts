@@ -36,7 +36,25 @@ const ui = {
 		}${options.actions ?? ''}</div>`,
 	cards: () => '',
 	actionBar: () => '',
-	entryRow: () => '',
+	entryRow: (options: { title: string; meta?: string; command?: string }) =>
+		`<div class="az-entry"${options.command === undefined ? '' : ` data-command="${options.command}"`}>` +
+		`<span class="az-entry__title">${esc(options.title)}</span></div>`,
+	/** A tile: the title, its facts, and the verdict at its right-hand end. */
+	entry: (options: { title: string; meta?: readonly (string | undefined)[]; state?: string }) =>
+		`<div class="az-entry"><span class="az-entry__title">${esc(options.title)}</span>` +
+		`<span class="az-entry__meta">${esc((options.meta ?? []).filter((fact) => fact !== undefined).join(' · '))}</span>` +
+		`<span class="az-entry__go">${esc(options.state ?? '')}</span></div>`,
+	/** The list a part's rows lie in. */
+	entries: (rows: string) => rows,
+	/** One part of a page: only the heading matters to the order this check reads. */
+	part: (options: { title: string }) => `<div class="az-section"><h2 class="az-section__title">${esc(options.title)}</h2></div>`,
+	head: () => '',
+	figures: () => '',
+	notice: () => '',
+	button: (label: string, command: string, options: { args?: unknown } = {}) =>
+		`<button data-command="${command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}>${esc(label)}</button>`,
+	remember: () => undefined,
+	n: (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`,
 	code: () => '',
 	floatAction: () => '',
 	commandScript: '',
@@ -77,6 +95,8 @@ interface Pages {
 		builds: { id: number; startedAt: string; finishedAt?: string; status: string; revision?: string }[];
 		artifacts: { kind: string; path: string; builtAt: string }[];
 		releases: unknown[];
+		folder?: string;
+		scripts: { name: string; command: string }[];
 	}): string;
 }
 
@@ -101,7 +121,13 @@ const artifacts = Array.from({ length: 9 }, (_unused, index) => ({
 	builtAt: at(180)
 }));
 
-const empty = { builds: [], artifacts: [], releases: [] };
+const facts = (over: Record<string, unknown> = {}) => ({
+	builds,
+	artifacts,
+	releases: [],
+	scripts: [] as { name: string; command: string }[],
+	...over
+});
 
 const cases: { name: string; run: () => void }[] = [];
 const test = (name: string, run: () => void): void => {
@@ -110,16 +136,21 @@ const test = (name: string, run: () => void): void => {
 
 /** The rows of a list, as `title — the meta it carries — the command it runs`. */
 const rows = (html: string): { title: string; meta: string; command: string }[] =>
-	[...html.matchAll(/<div class="az-entry[^"]*"([^>]*)>[\s\S]*?az-entry__title[^>]*">([^<]*)<[\s\S]*?<\/div><\/div>/gu)].map((match) => ({
-		title: match[2],
-		meta: /az-entry__meta">([\s\S]*?)<\/span><\/div>/u.exec(match[0])?.[1] ?? '',
-		command: /data-command="([^"]+)"/u.exec(match[1])?.[1] ?? ''
-	}));
+	html
+		.split(/(?=<div class="az-entry[" ])/u)
+		.slice(1)
+		.map((chunk) => ({
+			title: /az-entry__title[^>]*">([^<]*)</u.exec(chunk)?.[1] ?? '',
+			meta: /az-entry__meta[^>]*">([\s\S]*?)<\/span>(?=<\/div>|$)/u.exec(chunk)?.[1] ?? '',
+			command: /data-command="([^"]+)"/u.exec(chunk)?.[1] ?? ''
+		}));
 
 test('the title block offers the two acts it owns, and only those', () => {
-	const html = pages.buildsBody({ builds, artifacts, releases: [] });
+	const html = pages.buildsBody(facts());
+	// Read the title block alone: a section further down offers its own act, and that is the point of a section.
+	const head = html.slice(0, html.indexOf('az-section__title'));
 	assert.deepEqual(
-		[...html.matchAll(/<button data-command="([^"]+)">([^<]*)</gu)].map((match) => [match[2], match[1]]),
+		[...head.matchAll(/<button data-command="([^"]+)">([^<]*)</gu)].map((match) => [match[2], match[1]]),
 		[
 			['Build the Site', 'temcoDocs.buildSite'],
 			['Build the Offline Help', 'temcoDocs.buildHelp']
@@ -128,46 +159,68 @@ test('the title block offers the two acts it owns, and only those', () => {
 	);
 	// Refreshing and publishing are not acts of this title block: one is what reopening the page does, the other has its
 	// own page. Both used to be buttons beside Build, which made three of four controls navigation.
-	const head = html.slice(0, html.indexOf('az-section__title'));
 	assert.doesNotMatch(head, /temcoDocs\.releases|temcoDocs\.builds/u, 'a navigation act is still in the title block');
 });
 
 test('the page answers in order: what has run, what it left, where a build writes', () => {
 	assert.deepEqual(
-		[...pages.buildsBody({ builds, artifacts, releases: [] }).matchAll(/az-section__title">([^<]*)</gu)].map((match) => match[1]),
+		[...pages.buildsBody(facts()).matchAll(/az-section__title">([^<]*)</gu)].map((match) => match[1]),
 		['Builds', 'What they left', 'Where a build writes']
 	);
 });
 
 test('a build row says when it started and how long it took, counted from the two timestamps', () => {
-	const first = rows(pages.buildsBody({ builds, artifacts, releases: [] }))[0];
+	const first = rows(pages.buildsBody(facts()))[0];
 	assert.equal(first.title, '#12');
 	assert.match(first.meta, /started .* ago/u);
 	assert.match(first.meta, /took 2 min 0 s/u, 'the duration is not counted');
-	assert.match(pages.buildsBody({ builds, artifacts, releases: [] }), /Latest/u, 'the newest build is not marked');
+	assert.match(pages.buildsBody(facts()), /Latest/u, 'the newest build is not marked');
 });
 
 test('both lists fold after a handful of rows', () => {
-	const html = pages.buildsBody({ builds, artifacts, releases: [] });
-	assert.match(html, /<details class="build-more"><summary>Show 4 older builds<\/summary>/u, 'the older builds do not fold');
-	assert.match(html, /<details class="build-more"><summary>Show 3 more files<\/summary>/u, 'the files do not fold');
+	const html = pages.buildsBody(facts());
+	assert.match(html, /<details class="az-more"><summary>Show 4 older builds<\/summary>/u, 'the older builds do not fold');
+	assert.match(html, /<details class="az-more"><summary>Show 3 more files<\/summary>/u, 'the files do not fold');
 });
 
 test('a file row opens the file, and says what it is and when it was written', () => {
-	const file = rows(pages.buildsBody({ builds, artifacts, releases: [] })).find((row) => row.command === 'temcoDocs.openArtifact');
+	const file = rows(pages.buildsBody(facts())).find((row) => row.command === 'temcoDocs.openArtifact');
 	assert.equal(file?.title, 'site');
 	assert.match(String(file?.meta), /built .* ago/u);
-	assert.match(pages.buildsBody({ builds, artifacts, releases: [] }), /Website|Offline help/u, 'the kind of the file is not shown');
+	assert.match(pages.buildsBody(facts()), /Website|Offline help/u, 'the kind of the file is not shown');
 });
 
-test('where a build writes names both scripts and both folders', () => {
-	const html = pages.buildsBody({ builds, artifacts, releases: [] });
-	assert.match(html, /docs:site → dist\/site · dist\/docs/u);
-	assert.match(html, /build:help:dry → \.chm in the project, or in HelpDocs beside it/u);
+test('where a build writes names the script that runs and the folders it is looked for in', () => {
+	const html = pages.buildsBody(facts({
+		scripts: [
+			{ name: 'docs:site', command: 'docfx build' },
+			{ name: 'build:help:dry', command: 'hhc help.hhp' }
+		]
+	}));
+	assert.match(html, /runs docs:site/u, 'the site script is not named');
+	assert.match(html, /into dist\/site, or dist\/docs/u, 'the site folders are not named');
+	assert.match(html, /runs build:help:dry/u, 'the help script is not named');
+	assert.match(html, /one \.chm in the project, or in HelpDocs beside it/u, 'the help file is not named');
+	// What is in those folders now, which is the half of the answer the old strip could not give.
+	assert.match(html, /1 file now, newest .* ago/u, 'the files already written are not counted');
+	assert.match(html, /script found/gu, 'a script that exists is not reported as found');
+});
+
+test('a script the repository no longer has is reported, and each target says what happens instead', () => {
+	const html = pages.buildsBody(facts());
+	assert.match(html, /no docs:site — this application writes the site itself/u, 'the built-in generator is not mentioned');
+	assert.match(html, /no build:help:dry — nothing would be run/u, 'a missing help build is not reported');
+	assert.match(html, /no script/gu, 'a missing script is not marked');
+	assert.doesNotMatch(html, /runs docs:site/u, 'a script nobody has is still named as one that runs');
+});
+
+test('where a build writes never offers the deploying help build', () => {
+	const html = pages.buildsBody(facts());
+	assert.match(html, /building is not shipping/u, 'the deploying build is not ruled out');
 });
 
 test('with nothing recorded, the callout says what a build is and the page still says where it writes', () => {
-	const html = pages.buildsBody(empty);
+	const html = pages.buildsBody(facts({ builds: [], artifacts: [] }));
 	assert.match(html, /No build has run here yet/u);
 	assert.match(html, /Where a build writes/u);
 	assert.doesNotMatch(html, /<details/u, 'an empty page draws a fold');
@@ -175,7 +228,7 @@ test('with nothing recorded, the callout says what a build is and the page still
 });
 
 test('builds but no files: the files section says so instead of drawing nothing', () => {
-	const html = pages.buildsBody({ builds: [builds[0]], artifacts: [], releases: [] });
+	const html = pages.buildsBody(facts({ builds: [builds[0]], artifacts: [] }));
 	assert.match(html, /No file has been written yet/u);
 	assert.match(html, /a build that wrote none is not counted as one that worked/u);
 });

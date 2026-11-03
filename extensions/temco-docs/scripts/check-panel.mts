@@ -6,8 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
-import Module from 'node:module';
-import { createRequire } from 'node:module';
+import Module, { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 // The module holds the view provider as well as the renderer, so `require`ing it needs the editor's own API. The tests
@@ -58,10 +57,10 @@ test('every button names a command the manifest declares', () => {
 	const commands = [...html.matchAll(/data-command="([^"]+)"/gu)].map(match => match[1]);
 	assert.deepStrictEqual(commands, [
 		'temcoDocs.projectPage',
-		'temcoDocs.newPage',
+		'temcoDocs.overview',
 		'temcoDocs.review',
-		'temcoDocs.buildSite',
-		'temcoDocs.publishSite'
+		'temcoDocs.builds',
+		'temcoDocs.releases'
 	]);
 	for (const command of commands) {
 		assert.ok(declared.has(command), `${command} is not declared in contributes.commands`);

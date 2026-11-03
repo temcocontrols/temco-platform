@@ -10,11 +10,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { DocsRoot, PageEntry, collectPages } from './registry';
-import { capturesOf } from './media';
 import { pagesTarget } from './pages';
 import { firstVersionReport } from './versionReport';
-import { BuildRow, Catalog, DocumentRow, DraftRow, ReleaseRow, ScanRow, selection, slugOf } from './store';
-import { callout as azCallout, cards, commandScript, entryRow, escapeHtml as esc, hero, icon, numbers, page, pageColumn, remember, runCommand, section, toneMark } from './ui';
+import { BuildRow, Catalog, DraftRow, ReleaseRow, ScanRow, selection, slugOf } from './store';
+import { button as kitButton, callout as azCallout, cards, commandScript, entries, entry, entryRow, escapeHtml as esc, figures, head, hero, icon, n, notice, numbers, page, pageColumn, part, remember, runCommand, section, toneMark } from './ui';
 
 /** The view types, one per surface. `pagePanel` is a panel this dashboard opens, not the editor's `temcoEditor.markdown`. */
 export const PROJECTS_VIEW_TYPE = 'temcoDocs.projects';
@@ -36,12 +35,14 @@ interface ActionOptions {
 	title?: string;
 }
 
-const button = (label: string, command: string, options: ActionOptions = {}): string =>
-	`<button type="button" class="btn${options.small ? ' btn--sm' : ''}${options.kind ? ` btn--${options.kind}` : ''}" data-command="${command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}${options.title ? ` title="${esc(options.title)}"` : ''}>${options.mark ? icon(options.mark) : ''}<span>${esc(label)}</span></button>`;
+/** A button, plus the one thing this page adds to it: a title, so a word can carry a sentence behind it. */
+const button = (label: string, command: string, options: ActionOptions = {}): string => {
+	const markup = azButton(label, command, options);
+	return options.title === undefined ? markup : markup.replace('<button type="button"', `<button type="button" title="${esc(options.title)}"`);
+};
 
-/** The same act in the page language: a section heading's own buttons, and a card's. */
-const azButton = (label: string, command: string, options: ActionOptions = {}): string =>
-	`<button type="button" class="az-btn${options.small === true ? ' az-btn--sm' : ''}${options.kind === 'primary' ? ' az-btn--primary' : ''}" data-command="${command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}${options.title ? ` title="${esc(options.title)}"` : ''}>${options.mark ? icon(options.mark) : ''}<span>${esc(label)}</span></button>`;
+/** The same act in the page language. Both names exist because half these pages were written with each. */
+const azButton = kitButton;
 
 /**
  * One line of the page language's own list: the mark, the thing, its facts, and the acts that settle it.
@@ -54,14 +55,14 @@ const azRow = (options: { mark?: string; tone?: 'ok' | 'warn' | 'err' | 'info' |
 	const plain = options.command === undefined;
 	const attr = plain ? '' : ` data-command="${options.command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}`;
 	const mark = options.mark === undefined ? '' : `<span class="az-entry__icon">${toneMark(options.mark, options.tone)}</span>`;
-	const tag = options.tag === undefined ? '' : `<span class="tag">${esc(options.tag)}</span>`;
+	const tag = options.tag === undefined ? '' : `<span class="az-state">${esc(options.tag)}</span>`;
 	const meta = options.meta === undefined ? '' : `<span class="az-entry__meta">${options.meta}</span>`;
 	const end = options.actions ?? (plain ? '' : `<span class="az-entry__go">${esc(options.go ?? 'Open')}${icon('chevron-right', 'icon--sm')}</span>`);
 	return `<div class="az-entry${plain ? '' : ' az-entry--action'}"${attr}>${mark}<div class="az-entry__main"><span class="az-entry__title${options.mono === true ? ' cell-mono' : ''}">${esc(options.title)}${tag}</span>${meta}</div>${end}</div>`;
 };
 
 /** The rows of one section, in the kit's spacing. */
-const azEntries = (rows: readonly string[]): string => `<div class="az-entries">${rows.join('')}</div>`;
+const azEntries = (rows: readonly string[]): string => entries(rows.join(''));
 
 /**
  * The project page's own layout: two columns of blocks, which is what a wide tab is for.
@@ -80,45 +81,77 @@ const DETAIL_CSS = `
 `;
 
 /** A string a person reads, marked for translation. Bundles arrive from the build; without one this is the text. */
-const t = (message: string): string => vscode.l10n.t(message);
+const t = (message: string, ...args: (string | number | boolean)[]): string => vscode.l10n.t(message, ...args);
 
+/** One part of a page: its heading, the count and sentence under it, and what can be done from here. */
 const rule = (options: { label: string; count?: string; note?: string; actions?: string; plain?: boolean }): string =>
-	`<div class="group-head"><span class="group-head__label${options.plain ? ' group-head__label--plain' : ''}">${esc(options.label)}</span><span class="group-head__rule"></span>${options.count ? `<span class="group-head__count">${esc(options.count)}</span>` : ''}${options.actions ? `<span class="group-head__actions">${options.actions}</span>` : ''}</div>${options.note ? `<p class="group-note">${options.note}</p>` : ''}`;
+	part({ title: options.label, count: options.count, note: options.note, actions: options.actions });
 
+/** A part and the list of rows under it. */
 const group = (options: { label: string; count?: string; note?: string; actions?: string; body: string; plain?: boolean }): string =>
-	rule(options) + `<div class="record-list">${options.body}</div>`;
+	`${rule(options)}${entries(options.body)}`;
 
+/** The top of a page. The eyebrow names the module, which is the one fact every page of it shares. */
 const pageHead = (options: { eyebrow?: string; title: string; mark?: string; desc?: string; actions?: string }): string =>
-	`<div class="page-head"><div class="page-head__main">${options.eyebrow ? `<div class="eyebrow">${esc(options.eyebrow)}</div>` : ''}<h1 class="page-head__title">${options.mark ? icon(options.mark) : ''}${esc(options.title)}</h1>${options.desc ? `<p class="page-head__desc">${options.desc}</p>` : ''}</div>${options.actions ? `<div class="page-head__actions">${options.actions}</div>` : ''}</div>`;
+	head({
+		studio: options.eyebrow ?? t('Documentation'),
+		title: options.title,
+		mark: options.mark ?? 'book',
+		desc: options.desc ?? '',
+		actionsHtml: options.actions
+	});
 
-const tiles = (items: { value: string; label: string }[]): string =>
-	`<div class="tiles">${items.map((item) => `<div class="tile"><span class="tile__value">${esc(item.value)}</span><span class="tile__label">${esc(item.label)}</span></div>`).join('')}</div>`;
+/** The figures a page opens on. */
+const tiles = (items: { value: string; label: string }[]): string => figures(items);
 
-const card = (options: { title: string; mark?: string; actions?: string; desc?: string; body?: string; foot?: string; plain?: boolean }): string =>
-	`<div class="card${options.plain ? ' card--plain' : ''}"><div class="card__head">${options.mark ? `<span class="card__icon">${icon(options.mark)}</span>` : ''}<div class="card__title">${esc(options.title)}</div>${options.actions ? `<div class="card__actions">${options.actions}</div>` : ''}</div>${options.desc ? `<p class="card__desc">${options.desc}</p>` : ''}${options.body ?? ''}${options.foot ? `<div class="card__foot">${options.foot}</div>` : ''}</div>`;
+/**
+ * A card: a bordered block that holds its own list, with its acts in its head.
+ *
+ * The kit's `cards` draws a row of ways in; this is the one-card block some pages need, on the same `az-card` shell so
+ * a card beside a row of cards still belongs to the same page.
+ */
+const card = (options: { title: string; mark?: string; actions?: string; desc?: string; body?: string; foot?: string; plain?: boolean }): string => {
+	const mark = options.mark === undefined ? '' : `<span class="az-card__icon">${icon(options.mark)}</span>`;
+	const actions = options.actions === undefined ? '' : `<span class="az-section__actions">${options.actions}</span>`;
+	const desc = options.desc === undefined ? '' : `<p class="az-card__desc">${options.desc}</p>`;
+	const foot = options.foot === undefined ? '' : `<p class="az-note">${options.foot}</p>`;
+	return `<div class="az-card"><span class="az-card__head">${mark}<span class="az-card__title">${esc(options.title)}</span>${actions}</span>${desc}${options.body ?? ''}${foot}</div>`;
+};
 
+/** A state, as a word: what a row is doing, at the right-hand end. Tinted, never a pill. */
 const badge = (text: string, tone?: string): string =>
-	`<span class="badge${tone && tone !== 'neutral' ? ` badge--${tone}` : ''}">${esc(text)}</span>`;
+	`<span class="az-state${tone !== undefined && tone !== 'neutral' ? ` az-state--${tone}` : ''}">${esc(text)}</span>`;
 
+/** A list of rows that are ways in. */
 const list = (items: { mark: string; title: string; sub: string; meta?: string; command?: string; args?: unknown }[]): string =>
-	`<div class="list">${items.map((item) => `<div class="list__item${item.command === undefined ? '' : ' list__item--action'}"${item.command === undefined ? '' : ` data-command="${item.command}" data-args="${esc(JSON.stringify(item.args ?? []))}"`}>${icon(item.mark)}<div class="list__main"><div class="list__title">${esc(item.title)}</div><div class="list__sub">${item.sub}</div></div>${item.meta ? `<div class="list__meta">${item.meta}</div>` : ''}</div>`).join('')}</div>`;
+	entries(items.map((item) => azRow({ mark: item.mark, title: item.title, meta: item.sub, actions: item.meta, command: item.command, args: item.args })).join(''));
 
-const callout = (html: string, kind?: 'warn' | 'ok'): string =>
-	`<div class="callout${kind ? ` callout--${kind}` : ''}">${icon(kind === 'warn' ? 'alert' : kind === 'ok' ? 'check' : 'info')}<div>${html}</div></div>`;
+/** The one tinted paragraph a page is allowed, with its first bold words read back as the title. */
+const callout = (html: string, kind?: 'warn' | 'ok'): string => {
+	const title = /<b>([^<]*)<\/b>/.exec(html);
+	const plain = html.replace(/<[^>]+>/g, '').trim();
+	return notice({
+		mark: kind === 'warn' ? 'alert' : kind === 'ok' ? 'check' : 'info',
+		title: title === null ? (kind === 'ok' ? 'Done' : kind === 'warn' ? 'Check this' : 'Worth knowing') : title[1],
+		desc: title === null ? plain : plain.replace(title[1], '').replace(/^[\s.·]+/, '').replace(/\s+/g, ' ').trim()
+	});
+};
 
-/** A row of facts, as the mock writes one under a group. */
+/** A row of facts, as the kit writes one: the mark, the fact, and what it is. */
 const factRow = (mark: string, title: string, note: string): string =>
-	`<div class="record-row record-row--static">${toneMark(mark)}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name">${esc(title)}</span></div><div class="record-row__meta"><span>${esc(note)}</span></div></div><div class="record-row__state"></div><div class="record-row__state"></div></div>`;
+	entry({ mark, title, meta: [note] });
 
 /** Facts on one line, each keeping its trailing dot so a count never breaks in half. */
 const facts = (items: string[]): string =>
 	items.map((item, index) => `<span>${esc(item)}${index < items.length - 1 ? ' ·' : ''}</span>`).join(' ');
 
-const settingsStrip = (entries: { label: string; value: string; mono?: boolean }[], wide = false): string =>
-	`<div class="settings-strip${wide ? ' settings-strip--wide' : ''}">${entries.map((entry) => `<div><div class="settings-strip__label">${esc(entry.label)}</div><div class="settings-strip__value${entry.mono ? ' cell-mono' : ''}">${esc(entry.value)}</div></div>`).join('')}</div>`;
+/** A block of label/value facts, as rows: the name on the left, the value in its own line. */
+const settingsStrip = (items: { label: string; value: string; mono?: boolean }[], _wide = false): string =>
+	entries(items.map((item) => entry({ title: item.label, meta: [item.value] })).join(''));
 
+/** Rows a page reads back, in the kit's own table. */
 const table = (head: string[], rows: string[][], rowCommand?: (index: number) => { command: string; args?: unknown } | undefined): string =>
-	`<div class="table-wrap table-wrap--plain"><table class="table table--compact"><thead><tr>${head.map((cell) => `<th>${esc(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map((cells, index) => {
+	`<div class="az-grid"><table><thead><tr>${head.map((cell) => `<th>${esc(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map((cells, index) => {
 		const action = rowCommand?.(index);
 		return `<tr${action ? ` data-command="${action.command}"${action.args === undefined ? '' : ` data-args="${esc(JSON.stringify(action.args))}"`} style="cursor:pointer"` : ''}>${cells.map((cell) => `<td>${cell}</td>`).join('')}</tr>`;
 	}).join('')}</tbody></table></div>`;
@@ -138,6 +171,10 @@ export interface BuildFacts {
 	releases: ReleaseRow[];
 	/** Where the site would publish, when the folder has a GitHub remote: the only thing Deploy needs to know. */
 	publish?: { owner: string; repo: string; base: string; branch: string };
+	/** The folder a build runs in — the set the window reads first, which is the one its acts have always used. */
+	folder?: string;
+	/** The documentation scripts that folder's own `package.json` declares. Empty is a fact, not a failure. */
+	scripts: readonly RepositoryScript[];
 }
 
 /** The module's pages: one panel per surface, kept open so a second visit reveals the tab. */
@@ -146,11 +183,12 @@ export class DocsPages {
 
 	constructor(private readonly context: vscode.ExtensionContext, private readonly roots: () => readonly DocsRoot[]) { }
 
-	open(key: string, viewType: string, title: string, body: string, mark = 'document', extraCss?: string, restored?: vscode.WebviewPanel): void {
+	open(key: string, viewType: string, title: string, body: string, mark = 'document', extraCss?: string, restored?: vscode.WebviewPanel, extraScript?: string): void {
+		const script = extraScript === undefined ? commandScript : commandScript + extraScript;
 		const existing = this.panels.get(key);
 		if (existing) {
 			existing.reveal(pageColumn());
-			existing.webview.html = page(body, { title, script: commandScript, extraCss });
+			existing.webview.html = page(body, { title, script, extraCss });
 			return;
 		}
 		const panel = restored ?? vscode.window.createWebviewPanel(viewType, title, pageColumn(), {
@@ -160,7 +198,7 @@ export class DocsPages {
 		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', `${mark}.svg`);
 		panel.webview.onDidReceiveMessage(runCommand);
-		panel.webview.html = page(body, { title, script: commandScript, extraCss });
+		panel.webview.html = page(body, { title, script, extraCss });
 		this.panels.set(key, panel);
 		panel.onDidDispose(() => this.panels.delete(key));
 	}
@@ -169,22 +207,27 @@ export class DocsPages {
 		void this.openProjects(restored);
 	}
 
-	/** The projects the catalog holds, the one the window is on, and the sources attached to it. */
+	/** The projects the catalog holds, the one the window is on, and how each one is doing. */
 	private async openProjects(restored?: vscode.WebviewPanel): Promise<void> {
-		let documents: DocumentRow[] = [];
-		let linked: { name: string; kind: string; branch?: string }[] = [];
+		let rows: ProjectRow[] = [];
 		let catalog: Catalog | undefined;
 		try {
 			catalog = await Catalog.open(this.context);
-			documents = catalog.documents();
-			const current = selection.project() ?? (documents.length === 1 ? documents[0].slug : undefined);
-			linked = current === undefined ? [] : catalog.documentSources(current);
+			rows = catalog.documents().map((document) => ({
+				slug: document.slug,
+				name: document.name,
+				version: document.version,
+				builtAt: document.builtAt,
+				sources: document.sources,
+				pages: catalog?.documentPages(document.slug).length ?? 0,
+				drafts: catalog?.drafts(document.slug).length ?? 0
+			}));
 		} catch {
 			// A catalog that cannot be read shows no projects, which is honest: none is known to exist.
 		} finally {
 			catalog?.close();
 		}
-		this.open('projects', PROJECTS_VIEW_TYPE, 'Projects', projectsBody(documents, selection.project(), linked), 'document', undefined, restored);
+		this.open('projects', PROJECTS_VIEW_TYPE, 'Projects', projectsBody(rows, selection.project()), 'document', undefined, restored, PROJECTS_SCRIPT);
 	}
 
 	/** The project the window is on, as a page: what it is made of, what it produces, and the acts on it. */
@@ -229,6 +272,7 @@ export class DocsPages {
 		const lastRelease = facts.releases[0];
 
 		const body = `${hero({
+			eyebrow: 'Documentation',
 			mark: 'layers',
 			title: name === '' ? 'No project yet' : name,
 			desc: projectVersion === ''
@@ -320,68 +364,6 @@ ${changed.length === 0 ? '' : `${section({ title: `Changed in ${version?.report.
 </div>`;
 
 		this.open('project', 'temcoDocs.projectPage', name === '' ? 'Project' : name, body, 'folders', DETAIL_CSS, restored);
-	}
-
-	/** The queue as a page: the three kinds of work, each with the act that settles it. */
-	needsYou(restored?: vscode.WebviewPanel): void {
-		void this.openNeedsPage(restored);
-	}
-
-	private async openNeedsPage(restored?: vscode.WebviewPanel): Promise<void> {
-		const roots = this.roots();
-		const pages = roots.flatMap((root) => collectPages(root));
-		const captures = await capturesOf(roots);
-		const stale = pages.filter((page) => page.provenance?.stale === true);
-		const never = pages.filter((page) => page.reviewed === null);
-
-		const empty = captures.length === 0 && stale.length === 0 && never.length === 0;
-		const body = `${pageHead({
-			eyebrow: 'Dashboard',
-			title: 'Needs You',
-			mark: 'check',
-			desc: 'What is waiting on a person. A row opens the page that needs the work; nothing is written from here.',
-			actions: button('Capture a Screenshot', 'temcoDocs.captureImage', { kind: 'primary', mark: 'panel' })
-		})}
-${empty ? `<div class="mt-16">${callout('Nothing is waiting: no screenshot without a page, no page the code moved away from, no page unreviewed.')}</div>` : ''}
-${captures.length === 0 ? '' : `<div class="mt-24">${group({
-			label: 'Screenshots to place',
-			count: String(captures.length),
-			note: 'Taken with no page in front. Attaching one moves it into that page’s media/ and inserts the reference.',
-			body: list(captures.map((capture) => ({
-				mark: 'panel',
-				title: path.basename(capture.uri.fsPath),
-				sub: 'not in a page yet',
-				command: 'temcoDocs.attachCapture',
-				args: [capture.uri.fsPath],
-			}))),
-		})}</div>`}
-${stale.length === 0 ? '' : `<div class="mt-24">${group({
-			label: 'Retake these',
-			count: String(stale.length),
-			note: 'The code these pages claim has changed since they were last reviewed.',
-			body: list(stale.slice(0, 20).map((page) => ({
-				mark: 'warning',
-				title: page.title,
-				sub: `${page.area}${page.chapter === '' ? '' : ` › ${page.chapter}`} · its code moved`,
-				command: 'temcoDocs.openFile',
-				args: [page.uri.fsPath],
-			}))),
-		})}</div>`}
-${never.length === 0 ? '' : `<div class="mt-24">${group({
-			label: 'Never reviewed',
-			count: String(never.length),
-			note: 'No review date is recorded. The report groups them by owner.',
-			actions: button('Open the Report', 'temcoDocs.stalenessReport', { mark: 'list' }),
-			body: list(never.slice(0, 20).map((page) => ({
-				mark: 'clock',
-				title: page.title,
-				sub: `${page.area}${page.chapter === '' ? '' : ` › ${page.chapter}`}`,
-				command: 'temcoDocs.openFile',
-				args: [page.uri.fsPath],
-			}))),
-		})}</div>`}`;
-
-		this.open('needs', 'temcoDocs.needsPage', 'Needs You', body, 'tasklist', undefined, restored);
 	}
 
 	repository(name?: string, restored?: vscode.WebviewPanel): void {
@@ -500,10 +482,8 @@ ${never.length === 0 ? '' : `<div class="mt-24">${group({
 				mark: options.mark,
 				plain: true,
 				desc: options.desc,
-				body: `<div class="record-list">
-	<div class="record-row record-row--static">${toneMark(options.mark)}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name">What you get</span></div><div class="record-row__meta">${options.inside}</div></div><div class="record-row__state"></div>${button(options.label, options.command, { kind: 'primary', mark: options.mark })}</div>
-	<div class="record-row record-row--static">${toneMark('book')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name">Reach for it when</span></div><div class="record-row__meta">${options.when}</div></div></div>
-</div>`
+				body: entries(`${azRow({ mark: options.mark, title: 'What you get', meta: options.inside, actions: button(options.label, options.command, { kind: 'primary', mark: options.mark }) })}
+	${azRow({ mark: 'book', title: 'Reach for it when', meta: options.when })}`)
 			});
 
 		const body = `${pageHead({
@@ -609,7 +589,7 @@ ${problems.length === 0 ? '' : `<div class="mt-16">${group({
 			label: 'The registry itself',
 			count: String(problems.length),
 			note: 'Problems that belong to the file rather than to a page.',
-			body: problems.map((problem) => factRow(problem.severity === 'error' ? 'error' : 'warning', esc(problem.message), '')).join('')
+			body: problems.map((problem) => factRow(problem.severity === 'error' ? 'error' : 'warning', problem.message, '')).join('')
 		})}</div>`}
 ${roots.length === 0
 			? `<div class="mt-16">${callout('<b>No registry is being read.</b> A documentation folder with a <code>registry.json</code> under it is what this page describes. Use <b>Start a Registry</b> to create one from what is already on disk.')}</div>`
@@ -682,7 +662,17 @@ ${roots.length === 0
 				publish = { owner: target.owner, repo: target.repo, base: target.base, branch: 'gh-pages' };
 			}
 		}
-		return { project, builds, artifacts, releases, publish };
+		// What the build will actually invoke: the scripts the folder's own manifest declares, read here rather than
+		// assumed, so a rename upstream shows as a missing script instead of a build that silently does nothing.
+		return {
+			project,
+			builds,
+			artifacts,
+			releases,
+			publish,
+			folder: folder?.fsPath,
+			scripts: folder === undefined ? [] : docScripts(folder.fsPath)
+		};
 	}
 
 	private async openBuilds(restored?: vscode.WebviewPanel): Promise<void> {
@@ -707,89 +697,170 @@ ${roots.length === 0
  * A project is a row in `documents`: the sources attached to it, how many pages they declare, and what it has
  * built. Nothing on this page is a sample, so an empty catalog draws an empty list and says why.
  */
-function projectsBody(
-	documents: readonly DocumentRow[],
-	current: string | undefined,
-	linked: readonly { name: string; kind: string; branch?: string }[]
-): string {
-	const on = documents.find((document) => document.slug === current) ?? documents[0];
+/** One project as the list reads it: the catalog's own fields, and the two counts a person triages by. */
+interface ProjectRow {
+	slug: string;
+	name: string;
+	version?: string;
+	builtAt?: string;
+	sources: number;
+	pages: number;
+	drafts: number;
+}
 
-	const row = (document: DocumentRow): string => {
-		const isCurrent = on !== undefined && document.slug === on.slug;
-		const items = [`${document.sources} ${document.sources === 1 ? 'source' : 'sources'}`];
-		if (document.version !== undefined) {
-			items.unshift(`v${document.version}`);
-		}
-		items.push(document.builtAt === undefined ? 'never built' : `built ${waitingSince(document.builtAt)}`);
-		return `<div class="record-row${isCurrent ? ' record-row--current' : ''}" data-command="temcoDocs.selectProject" data-args="${esc(JSON.stringify([document.slug]))}">${toneMark(isCurrent ? 'layers' : 'folder', isCurrent ? 'accent' : undefined)}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name">${esc(document.name)}</span>${isCurrent ? badge('Current', 'accent') : ''}</div><div class="record-row__meta">${facts(items)}</div></div><div class="record-row__state">${button('Edit', 'temcoProjects.editProject', { small: true, kind: 'ghost', args: [document.slug] })}${isCurrent ? badge('Working on it', 'ok') : badge('Switch to', 'neutral')}</div><span class="record-row__go">${icon('chevron-right', 'icon--sm')}</span></div>`;
-	};
-
-	const sources = documents.reduce((total, document) => total + document.sources, 0);
-	const built = documents
-		.map((document) => document.builtAt)
+/**
+ * *Projects* — the list every other page is about.
+ *
+ * One subject: which documentation set this window is working on, and how each one is doing. What a project is *made
+ * of* — its sources, its outputs, the drafts it holds — is the project page's job, so this page stays a list you can
+ * scan, filter and sort, and each row carries the two ways in: make it current, or open it.
+ */
+function projectsBody(rows: readonly ProjectRow[], current: string | undefined): string {
+	const sources = rows.reduce((total, row) => total + row.sources, 0);
+	const waiting = rows.filter((row) => row.drafts > 0).length;
+	const built = rows
+		.map((row) => row.builtAt)
 		.filter((at): at is string => at !== undefined)
 		.sort()
 		.at(-1);
+	const on = rows.find((row) => row.slug === current) ?? rows[0];
+
+	if (rows.length === 0) {
+		return `${hero({
+			eyebrow: t('Documentation'),
+			title: t('Projects'),
+			mark: 'layers',
+			desc: t('A project is a version of a product’s documentation: the sources it cites, the pages they declare, and what it builds. Choosing one decides what every other page is about.'),
+			descWide: true,
+			actions: [{ label: t('New Project'), command: 'temcoProjects.newProject', mark: 'plus', kind: 'primary' }]
+		})}
+${cards([
+			{ mark: 'plus', title: t('Create a project'), desc: t('A name and a version. The sources it reads come next, and every other page follows from it.'), command: 'temcoProjects.newProject', go: t('New project') },
+			{ mark: 'repo', title: t('Read a repository'), desc: t('Point at the Temco code this documentation is written from, and cite the pages it already holds.'), command: 'temcoProjects.addSource', go: t('Add a source') },
+			{ mark: 'book', title: t('Open the overview'), desc: t('What this workspace already holds, before you add anything to it.'), command: 'temcoDocs.overview', go: t('Open the overview') }
+		])}`;
+	}
 
 	return `${hero({
-		eyebrow: t('Temco Platform · Documentation'),
+		eyebrow: t('Documentation'),
 		title: t('Projects'),
-		desc: t("A project is a version of a product's documentation: its sources, its pages and the artifacts it builds. Choosing one decides what every other page is about."),
+		mark: 'layers',
+		desc: t('A project is a version of a product’s documentation: the sources it cites, the pages they declare, and what it builds. Choosing one decides what every other page is about.'),
+		descWide: true,
 		actions: [
 			{ label: t('New Project'), command: 'temcoProjects.newProject', mark: 'plus', kind: 'primary' },
-			{ label: t('Import'), command: 'temcoProjects.addSource', mark: 'download' }
+			{ label: t('Add a Source'), command: 'temcoProjects.addSource', mark: 'repo' }
 		]
 	})}
 ${numbers([
-			{ value: String(documents.length), label: documents.length === 1 ? t('Project') : t('Projects') },
-			{ value: String(sources), label: sources === 1 ? t('Source') : t('Sources') },
-			{ value: on?.version ?? t('not set'), label: t('Version') },
-			{ value: built === undefined ? t('never') : waitingSince(built), label: t('Last build') }
-		])}
-${section({ title: t('All Projects'), desc: t('Pick one and every other page starts talking about it.') })}
-${documents.length === 0
-			? cards([
-				{ mark: 'plus', title: 'Create a project', desc: 'A name and a version. The sources it reads come next, and every other page follows from it.', command: 'temcoProjects.newProject', go: 'New project' },
-				{ mark: 'repo', title: 'Read a repository', desc: 'Point at the Temco code this documentation is written from, and cite the pages it already holds.', command: 'temcoProjects.addSource', go: 'Add a source' },
-				{ mark: 'book', title: 'Open the overview', desc: 'What this workspace already holds, before you add anything to it.', command: 'temcoDocs.overview', go: 'Open the overview' }
-			])
-			: `<div class="record-list">${documents.map(row).join('')}</div>`}
-${on === undefined ? '' : `<div class="mt-24">
-${card({
-				title: 'Sources of This Project',
-				mark: 'repo',
-				plain: true,
-				actions: button('Add Source', 'temcoProjects.addSource', { small: true, kind: 'ghost', mark: 'plus' }),
-				desc: `What <b>${esc(on.name)}</b> reads. Reading a source is what puts pages in the knowledge base; it never writes to the source.`,
-				body: linked.length === 0
-					? callout('No source is attached to this project yet. Add one, then read it: the pages it declares are what the rest of these pages list.')
-					: list(linked.map((source) => ({
-						mark: source.kind === 'git' ? 'repo' : source.kind === 'folder' ? 'folder' : 'package',
-						title: source.name,
-						sub: `<span class="cell-muted">${esc(source.kind)}${source.branch === undefined ? '' : ` · ${esc(source.branch)}`}</span>`,
-						command: source.kind === 'git' ? 'temcoDocs.repository' : 'temcoRepositories.revealSource',
-						args: [source.name]
-					})))
-			})}
-</div>`}
-${on === undefined ? '' : `<div class="mt-24">
-${card({
-				title: 'What This Project Stores',
-				mark: 'gear',
-				plain: true,
-				actions: button('Edit Settings', 'temcoWorkbench.settings', { small: true, kind: 'ghost' }),
-				desc: 'All of it in the platform database, beside the pages it is about — not in the repository.',
-				body: settingsStrip([
-					{ label: 'Name', value: on.name },
-					{ label: 'Key', value: on.slug, mono: true },
-					{ label: 'Version', value: on.version ?? 'not set', mono: true },
-					{ label: 'Sources', value: String(on.sources) },
-					{ label: 'Last build', value: on.builtAt === undefined ? 'never' : waitingSince(on.builtAt) },
-					{ label: 'Projects', value: String(documents.length) }
-				])
-			})}
-</div>`}`;
+		{ value: String(rows.length), label: rows.length === 1 ? t('Project') : t('Projects') },
+		{ value: String(sources), label: sources === 1 ? t('Source') : t('Sources') },
+		{ value: waiting === 0 ? t('none') : String(waiting), label: t('with drafts waiting') },
+		{ value: built === undefined ? t('never') : waitingSince(built), label: t('Last build') }
+	])}
+<div class="mt-24">
+	${section({
+		title: t('All Projects'),
+		desc: on === undefined
+			? undefined
+			: t('Working on {0}. A row makes a project current; Open shows what it is made of.', on.name)
+	})}
+	<div class="az-toolbar">
+		<input type="search" class="az-input" id="prj-filter" placeholder="${t('Filter projects')}" aria-label="${t('Filter projects')}" style="max-width:260px">
+		<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-muted)"><input type="checkbox" id="prj-only-current">${t('Current only')}</label>
+		<select class="az-input" id="prj-sort" aria-label="${t('Sort projects')}" style="max-width:180px">
+			<option value="current">${t('Current first')}</option>
+			<option value="name">${t('Name')}</option>
+			<option value="built">${t('Recently built')}</option>
+			<option value="pages">${t('Most pages')}</option>
+			<option value="drafts">${t('Most drafts')}</option>
+		</select>
+		<span class="az-toolbar__facts" id="prj-count">${n(rows.length, 'project', 'projects')}</span>
+	</div>
+	<div class="az-entries" id="prj-list">${rows.map((row) => projectRow(row, row.slug === current)).join('')}</div>
+</div>
+<p class="az-note">${t('Every figure is read from the platform database as it stands now: pages as the last read recorded them, drafts as they are waiting, and the build time of the last file written.')}</p>`;
 }
+
+/**
+ * One project, as a row.
+ *
+ * The facts are the ones a person triages by — how big it is, when it last built, whether anything is waiting — and the
+ * state is words at the right-hand end rather than a pill. `data-` attributes carry what the filter and the sort read,
+ * so the page's script never has to parse the text back out of the row.
+ */
+function projectRow(row: ProjectRow, current: boolean): string {
+	const facts = [
+		row.version === undefined ? '' : `v${row.version}`,
+		n(row.sources, 'source', 'sources'),
+		row.pages === 0 ? 'no pages read' : n(row.pages, 'page', 'pages'),
+		row.builtAt === undefined ? 'never built' : `built ${waitingSince(row.builtAt)}`,
+		row.drafts === 0 ? '' : n(row.drafts, 'draft waiting', 'drafts waiting')
+	].filter((fact) => fact.length > 0).join(' · ');
+
+	return `<div class="az-entry az-entry--action" data-command="temcoDocs.selectProject" data-args="${esc(JSON.stringify([row.slug]))}"
+		data-name="${esc(row.name.toLowerCase())}" data-current="${current}" data-pages="${row.pages}" data-drafts="${row.drafts}" data-built="${esc(row.builtAt ?? '')}">
+	<span class="az-entry__icon">${toneMark(current ? 'layers' : 'folder', current ? 'accent' : undefined)}</span>
+	<div class="az-entry__main">
+		<span class="az-entry__title">${esc(row.name)}${current ? `<span class="az-state az-state--accent">${t('Current')}</span>` : ''}</span>
+		<span class="az-entry__meta">${esc(facts)}</span>
+	</div>
+	<span class="az-entry__state">${azButton(t('Open'), 'temcoDocs.projectPage', { small: true, kind: 'ghost', args: [row.slug] })}${azButton(t('Edit'), 'temcoProjects.editProject', { small: true, kind: 'ghost', args: [row.slug] })}</span>
+</div>`;
+}
+
+/**
+ * The list's own behaviour: filter, sort, a count of what is left, and Enter to make a project current.
+ *
+ * A page that lists every project is a page someone scans rather than reads, so the scan is the browser's job and the
+ * work is the row's: nothing here changes a project, it only decides what is on screen.
+ */
+const PROJECTS_SCRIPT = `
+(function () {
+	const list = document.getElementById('prj-list');
+	if (!list) { return; }
+	const filter = document.getElementById('prj-filter');
+	const onlyCurrent = document.getElementById('prj-only-current');
+	const sort = document.getElementById('prj-sort');
+	const count = document.getElementById('prj-count');
+	const items = Array.prototype.slice.call(list.children);
+
+	function value(item, name) {
+		return item.getAttribute('data-' + name) || '';
+	}
+
+	function apply() {
+		const term = filter.value.trim().toLowerCase();
+		const justCurrent = onlyCurrent.checked;
+		let shown = 0;
+		for (const item of items) {
+			const matches = term.length === 0 || item.textContent.toLowerCase().indexOf(term) >= 0;
+			const allowed = !justCurrent || value(item, 'current') === 'true';
+			item.hidden = !(matches && allowed);
+			if (matches && allowed) { shown = shown + 1; }
+		}
+		count.textContent = (shown === items.length ? shown : shown + ' of ' + items.length)
+			+ (items.length === 1 ? ' project' : ' projects');
+	}
+
+	function order(key) {
+		const sorted = items.slice().sort(function (one, other) {
+			if (key === 'name') { return value(one, 'name').localeCompare(value(other, 'name')); }
+			if (key === 'pages' || key === 'drafts') { return Number(value(other, key)) - Number(value(one, key)); }
+			if (key === 'built') { return value(other, 'built').localeCompare(value(one, 'built')); }
+			return Number(value(other, 'current') === 'true') - Number(value(one, 'current') === 'true')
+				|| value(one, 'name').localeCompare(value(other, 'name'));
+		});
+		for (const item of sorted) { list.append(item); }
+	}
+
+	filter.addEventListener('input', apply);
+	onlyCurrent.addEventListener('change', apply);
+	sort.addEventListener('change', function () { order(sort.value); apply(); });
+	order(sort.value);
+	apply();
+})();
+`;
 
 /**
  * The Markdown files under a clone's pages folder, relative to it.
@@ -896,13 +967,25 @@ function repositoryBody(fact: RepositoryFact | undefined): string {
 
 	const newest = fact.reads[0];
 	const readRow = (read: ScanRow): string =>
-		`<div class="record-row record-row--static">${toneMark('check', 'ok')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(read.revision ?? 'no revision')}</span><span class="tag">${esc(read.mode)}</span></div><div class="record-row__meta">${facts([waitingSince(read.at), readSummary(read.counts)])}</div></div><div class="record-row__state"></div><div></div></div>`;
+		azRow({ mark: 'check', tone: 'ok', title: read.revision ?? 'no revision', tag: read.mode, meta: facts([waitingSince(read.at), readSummary(read.counts)]) });
 
 	const scriptRow = (script: RepositoryScript): string =>
-		`<div class="record-row">${toneMark('code')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(script.name)}</span></div><div class="record-row__meta"><span class="cell-mono">${esc(script.command)}</span></div></div><div class="record-row__state"></div>${button('Run', 'temcoDocs.runScript', { small: true, kind: 'ghost', args: [script.name] })}</div>`;
+		azRow({
+			mark: 'code',
+			title: script.name,
+			mono: true,
+			meta: `<span class="cell-mono">${esc(script.command)}</span>`,
+			actions: button('Run', 'temcoDocs.runScript', { small: true, kind: 'ghost', args: [script.name] })
+		});
 
 	const pageRow = (page: { id: string; title?: string; path?: string }): string =>
-		`<div class="record-row" data-command="temcoDocs.page" data-args="${esc(JSON.stringify([page.id]))}">${toneMark('document')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name">${esc(page.title ?? page.id)}</span></div><div class="record-row__meta"><span class="cell-mono">${esc(page.path ?? page.id)}</span></div></div><div class="record-row__state"></div><span class="record-row__go">${icon('chevron-right', 'icon--sm')}</span></div>`;
+		azRow({
+			mark: 'document',
+			title: page.title ?? page.id,
+			meta: `<span class="cell-mono">${esc(page.path ?? page.id)}</span>`,
+			command: 'temcoDocs.page',
+			args: [page.id]
+		});
 
 	return `${pageHead({
 		eyebrow: 'Repositories',
@@ -933,7 +1016,7 @@ ${fact.scripts.length === 0
 			: `<div class="mt-24">${group({
 				label: 'Scripts',
 				count: `${fact.scripts.length} ${fact.scripts.length === 1 ? 'script' : 'scripts'}`,
-				note: 'The repository&#39;s own vocabulary, read from its <code>package.json</code>. The platform calls these and nothing else.',
+				note: 'The repository\u2019s own vocabulary, read from its package.json. The platform calls these and nothing else.',
 				body: fact.scripts.map(scriptRow).join('')
 			})}</div>`}
 ${fact.pageRows.length === 0
@@ -1240,7 +1323,14 @@ function sourceBody(fact: RepositoryFact | undefined): string {
 
 	const files = fact.files;
 	const fileRow = (file: string): string =>
-		`<div class="record-row" data-command="temcoDocs.openFile" data-args="${esc(JSON.stringify([path.join(fact.path ?? '', fact.docsRoot ?? 'docs', file)]))}">${toneMark('document')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(file)}</span></div><div class="record-row__meta"><span class="cell-mono">${esc(fact.docsRoot ?? 'docs')}/</span></div></div><div class="record-row__state"></div><span class="record-row__go">${icon('chevron-right', 'icon--sm')}</span></div>`;
+		azRow({
+			mark: 'document',
+			title: file,
+			mono: true,
+			meta: `<span class="cell-mono">${esc(fact.docsRoot ?? 'docs')}/</span>`,
+			command: 'temcoDocs.openFile',
+			args: [path.join(fact.path ?? '', fact.docsRoot ?? 'docs', file)]
+		});
 
 	const newest = fact.reads[0];
 
@@ -1266,7 +1356,7 @@ ${files.length === 0
 				label: 'Files',
 				count: `${files.length} ${files.length === 1 ? 'file' : 'files'}`,
 				actions: fact.path === undefined ? '' : button('Open the Folder', 'temcoRepositories.openClone', { small: true, kind: 'ghost', args: [fact.slug] }),
-				note: `Markdown under <code>${esc(fact.docsRoot ?? 'docs')}/</code>, in the clone's own order. A page is one of these files.`,
+				note: `Markdown under ${fact.docsRoot ?? 'docs'}/, in the clone's own order. A page is one of these files.`,
 				body: files.slice(0, 60).map(fileRow).join('')
 			})}</div>`}
 <div class="mt-24">${group({
@@ -1296,10 +1386,10 @@ const PIPE_CSS = `
 .az-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 /* A long list folds after a handful of rows: a site build leaves hundreds of pages, and a page that prints them all is a
    page nobody reads to the end of. Native summary, so it opens in place and closes again. */
-.build-more { margin-top: var(--sp-1); }
-.build-more > summary { padding: 4px 0; color: var(--az-blue, #0078d4); font-size: 12.5px; line-height: 18px; cursor: pointer; }
-.build-more > summary:hover { text-decoration: underline; }
-.build-more > summary:focus-visible { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
+/* A tile here says a state in a phrase, not an identifier: let it wrap, and set it in the page's own face. */
+.az-entries--row > .az-entry > .az-entry__main > .az-entry__meta {
+  white-space: normal; overflow: visible; font-family: inherit;
+}
 `;
 
 function reviewBody(drafts: readonly DraftRow[], project: string | undefined): string {
@@ -1337,6 +1427,7 @@ function reviewBody(drafts: readonly DraftRow[], project: string | undefined): s
 		]);
 
 	return `${hero({
+		eyebrow: 'Documentation',
 		title: 'Review Center',
 		mark: 'check',
 		descWide: true,
@@ -1468,11 +1559,12 @@ export function buildsBody(facts1: BuildFacts): string {
 	const folded = (rows: readonly string[], open: number, more: string): string =>
 		rows.length <= open
 			? azEntries(rows)
-			: `${azEntries(rows.slice(0, open))}<details class="build-more"><summary>Show ${esc(
+			: `${azEntries(rows.slice(0, open))}<details class="az-more"><summary>Show ${esc(
 					`${rows.length - open} ${more}`
 				)}</summary>${azEntries(rows.slice(open))}</details>`;
 
 	const heroBlock = hero({
+		eyebrow: 'Documentation',
 		title: 'Build Center',
 		mark: 'play',
 		descWide: true,
@@ -1491,13 +1583,66 @@ export function buildsBody(facts1: BuildFacts): string {
 		running > 0 ? `${running} running now` : 'nothing running now'
 	])}</p>`;
 
+	/** The newest moment among a set of files, or `undefined` when there are none. */
+	const newestOf = (files: readonly ArtifactFact[]): string | undefined =>
+		files.map((file) => file.builtAt).sort((one, other) => other.localeCompare(one))[0];
+
+	const siteFiles = artifacts.filter((artifact) => artifact.kind === 'site');
+	const helpFiles = artifacts.filter((artifact) => artifact.kind === 'chm');
+	const siteScript = facts1.scripts.find((script) => script.name === 'docs:site' || script.name === 'docs:build');
+	const helpScript = facts1.scripts.find((script) => script.name === 'build:help:dry');
+
+	/**
+	 * One target of a build: the script that would be run, the folders the file is looked for in, and what is in them.
+	 *
+	 * The script is read from the folder being built, never assumed — and the two targets differ when it is absent,
+	 * which is why each says what actually happens instead of sharing a sentence.
+	 */
+	const targetTile = (options: {
+		mark: string;
+		title: string;
+		script?: RepositoryScript;
+		absent: string;
+		writes: string;
+		files: readonly ArtifactFact[];
+	}): string => {
+		const newest = newestOf(options.files);
+		return entry({
+			mark: options.mark,
+			tone: options.script === undefined ? 'warn' : 'ok',
+			title: options.title,
+			meta: [
+				options.script === undefined ? options.absent : `runs ${options.script.name}`,
+				options.writes,
+				options.files.length === 0 || newest === undefined
+					? 'nothing written yet'
+					: `${n(options.files.length, 'file', 'files')} now, newest ${waitingSince(newest)}`
+			],
+			state: options.script === undefined ? 'no script' : 'script found'
+		});
+	};
+
 	const whereItWrites = `${section({
 		title: 'Where a build writes',
-		desc: 'The scripts come from the repository itself, so a rename upstream is reported rather than guessed around.'
-	})}${settingsStrip([
-		{ label: 'The site build', value: 'docs:site → dist/site · dist/docs', mono: true },
-		{ label: 'The offline help', value: 'build:help:dry → .chm in the project, or in HelpDocs beside it', mono: true }
-	])}`;
+		desc: 'A build runs one of these scripts as a task, then looks for the file it should have written in the folders named under it. Nothing is written by this page.'
+	})}<div class="az-entries az-entries--row az-entries--plain">
+${targetTile({
+		mark: 'globe',
+		title: 'The Site',
+		script: siteScript,
+		absent: 'no docs:site — this application writes the site itself',
+		writes: 'into dist/site, or dist/docs',
+		files: siteFiles
+	})}
+${targetTile({
+		mark: 'package',
+		title: 'The Offline Help',
+		script: helpScript,
+		absent: 'no build:help:dry — nothing would be run',
+		writes: 'one .chm in the project, or in HelpDocs beside it',
+		files: helpFiles
+	})}
+</div><p class="az-note">${facts1.folder === undefined ? 'No folder is being read, so nothing can be built.' : `Both run in <span class="cell-mono">${esc(facts1.folder)}</span>.`} The deploying help build (<span class="cell-mono">build:help</span>) is never run from here: it copies the CHM into a product installation, and building is not shipping.</p>`;
 
 	// Nothing has run: the callout says what a build is, and the page still answers where it would write.
 	if (builds.length === 0) {
@@ -1572,6 +1717,7 @@ ${azEntries(files.map(fileRow))}`;
 	const fact = (mark: string, title: string, note: string): string => azRow({ mark, title, meta: note });
 
 	return `${hero({
+		eyebrow: 'Documentation',
 		title: 'Publish & Releases',
 		mark: 'upload',
 		descWide: true,

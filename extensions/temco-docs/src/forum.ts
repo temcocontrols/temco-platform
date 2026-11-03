@@ -630,25 +630,27 @@ function ageDays(value: string | undefined): number {
 	return Number.isNaN(parsed) ? 0 : Math.max(0, Math.round((Date.now() - parsed) / 86_400_000));
 }
 
-/** The page's own rules, in the page kit's tokens — the columns the forum's table has, and the shape of a post. */
+/**
+ * The page's own rules, in the page kit's tokens — what the forum has that the kit does not: the faces of the people
+ * in a thread, and the shape of one post.
+ *
+ * The table, the rows and the cards are the kit's now; naming them here again is what used to make a forum topic look
+ * unlike the page beside it.
+ */
 const FORUM_CSS = `
-tbody tr[data-command] { cursor: pointer; }
-tbody tr[data-command]:hover td { background: var(--bg-hover); }
 .az-lead .az-row { gap: var(--sp-4); }
-.forum-summary__facts { color: var(--fg-subtle); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.forum-summary__facts { font-variant-numeric: tabular-nums; }
 .forum-summary__ask { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-.forum-summary__note { color: var(--fg-subtle); font-size: var(--fs-xs); margin-top: 10px; }
+.forum-summary__note { margin-top: 10px; }
 .forum-say { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-.forum-say__when { color: var(--fg-subtle); font-size: var(--fs-xs); }
 .forum-say__text { white-space: pre-wrap; line-height: 1.55; }
-.topic__title { line-height: 1.4; }
-.topic__title .badge { margin-right: 6px; }
-.topic__meta { color: var(--fg-subtle); font-size: var(--fs-xs); margin-top: 2px; }
+.forum-topic__title { line-height: 1.4; }
+.forum-topic__title .az-state { margin-right: 6px; }
+.forum-topic__meta { color: var(--fg-subtle); font-size: var(--fs-xs); margin-top: 2px; }
+.forum-when { color: var(--fg-muted); }
 .people { display: inline-flex; gap: 3px; flex-wrap: wrap; }
 .person { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
   background: var(--bg-inset); color: var(--fg-muted); font-size: 10px; font-weight: 600; }
-.num { text-align: right; font-variant-numeric: tabular-nums; }
-.when { white-space: nowrap; color: var(--fg-muted); }
 .post { border-top: 1px solid var(--border); padding: 12px 0; }
 .post:first-of-type { border-top: 0; padding-top: 0; }
 .post__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -657,7 +659,8 @@ tbody tr[data-command]:hover td { background: var(--bg-hover); }
 .post__text { margin-top: 6px; line-height: 1.55; white-space: pre-wrap; }
 `;
 
-/** One row of the topics table, as the forum's own table draws it. */function topicRow(topic: ForumTopicRow, categories: readonly ForumCategoryRow[]): string {
+/** One row of the topics table, as the forum's own table draws it. */
+function topicRow(topic: ForumTopicRow, categories: readonly ForumCategoryRow[]): string {
 	const category = categories.find((candidate) => candidate.id === topic.categoryId);
 	const waiting = topic.replies === 0 && !topic.closed && ageDays(topic.lastPostedAt ?? topic.createdAt) >= AGING_DAYS;
 	const people = topic.posters.length === 0
@@ -667,13 +670,13 @@ tbody tr[data-command]:hover td { background: var(--bg-hover); }
 			.map((poster) => `<span class="person" title="${esc(poster.name ?? poster.username)}">${esc(initials(poster.name ?? poster.username))}</span>`)
 			.join('')}</span>`;
 	const args = esc(JSON.stringify({ id: topic.id, slug: topic.slug, title: topic.title }));
-	return `<tr class="topic" data-command="temcoDocs.forumTopic" data-args="${args}">
-<td><div class="topic__title">${topic.pinned ? '<span class="badge">pinned</span>' : ''}${esc(topic.title)}</div>
-<div class="topic__meta">${esc(category?.name ?? '')}${waiting ? ' · <strong>no reply yet</strong>' : ''}${topic.closed ? ' · closed' : ''}</div></td>
+	return `<tr class="forum-topic" data-command="temcoDocs.forumTopic" data-args="${args}">
+<td><div class="forum-topic__title">${topic.pinned ? '<span class="az-state">pinned</span>' : ''}${esc(topic.title)}</div>
+<div class="forum-topic__meta">${esc(category?.name ?? '')}${waiting ? ' · <strong>no reply yet</strong>' : ''}${topic.closed ? ' · closed' : ''}</div></td>
 <td>${people}</td>
-<td class="num">${topic.replies}</td>
-<td class="num">${reads(topic.views)}</td>
-<td class="when">${when(topic.lastPostedAt ?? topic.createdAt)}</td>
+<td class="az-grid__num">${topic.replies}</td>
+<td class="az-grid__num">${reads(topic.views)}</td>
+<td class="forum-when">${when(topic.lastPostedAt ?? topic.createdAt)}</td>
 </tr>`;
 }
 
@@ -694,8 +697,8 @@ export function topicListBody(state: {
 	const address = state.category === undefined ? latestUrl() : categoryUrl(state.category);
 
 	const table = state.topics.length === 0
-		? `<div class="mt-24"><div class="card card--plain"><p class="card__desc">${state.syncedAt === undefined ? 'Nothing has been read from the forum yet.' : 'This category has no topics in the last read.'} <button type="button" class="az-btn az-btn--sm az-btn--primary" data-command="temcoDocs.forumSync"${readArgs === undefined ? '' : ` data-args="${esc(JSON.stringify(readArgs))}"`}>Read the forum</button></p></div></div>`
-		: `<div class="mt-24"><div class="table-wrap table-wrap--plain"><table class="table table--compact"><thead><tr><th>Topic</th><th>Participants</th><th class="num">Replies</th><th class="num">Views</th><th class="when">Activity</th></tr></thead><tbody>${state.topics.map((topic) => topicRow(topic, state.categories)).join('')}</tbody></table></div></div>`;
+		? `<div class="mt-24"><div class="az-card"><p class="az-card__desc">${state.syncedAt === undefined ? 'Nothing has been read from the forum yet.' : 'This category has no topics in the last read.'} <button type="button" class="az-btn az-btn--sm az-btn--primary" data-command="temcoDocs.forumSync"${readArgs === undefined ? '' : ` data-args="${esc(JSON.stringify(readArgs))}"`}>Read the forum</button></p></div></div>`
+		: `<div class="mt-24"><div class="az-grid"><table><thead><tr><th>Topic</th><th>Participants</th><th class="az-grid__num">Replies</th><th class="az-grid__num">Views</th><th class="forum-when">Activity</th></tr></thead><tbody>${state.topics.map((topic) => topicRow(topic, state.categories)).join('')}</tbody></table></div></div>`;
 
 	return `${hero({
 		title,
@@ -744,7 +747,7 @@ export function topicBody(state: {
 	const suggestArgs = esc(JSON.stringify({ id: topic.id }));
 
 	const history = state.posts.length === 0
-		? '<div class="card card--plain"><p class="card__desc">The conversation has not been read yet.</p></div>'
+		? '<div class="az-card"><p class="az-card__desc">The conversation has not been read yet.</p></div>'
 		: state.posts
 			.map(
 				(post) => `<div class="post"><div class="post__head"><span class="post__who">${esc(post.name ?? post.username ?? 'someone')}</span>
@@ -756,8 +759,8 @@ export function topicBody(state: {
 	// The card is where a triager learns whether anything is owed: the thread's state, the thread in numbers, and the
 	// one thing to do about it. The suggestion sits inside it, so "nobody answered" and "ask the AI" are one look.
 	const badge = waiting
-		? `<span class="badge${days >= AGING_DAYS ? ' badge--warn' : ''}">needs an answer</span>`
-		: topic.closed ? '<span class="badge">closed</span>' : '<span class="badge badge--ok">answered</span>';
+		? `<span class="az-state${days >= AGING_DAYS ? ' az-state--warn' : ''}">needs an answer</span>`
+		: topic.closed ? '<span class="az-state">closed</span>' : '<span class="az-state az-state--ok">answered</span>';
 	const answeredBy = topic.posters.slice(1, 4).map((poster) => esc(poster.name ?? poster.username)).join(', ');
 	const stateLine = waiting
 		? days >= AGING_DAYS
@@ -773,21 +776,21 @@ export function topicBody(state: {
 		`last activity ${when(topic.lastPostedAt ?? topic.createdAt)}`
 	].join(' · ');
 	const advise = suggestion === undefined
-		? '<p class="card__desc">The AI can say what a page should add about it. Without one, the platform matches the thread to a page on its own.</p>'
-		: `<div class="forum-say"><span class="badge${suggestion.source === 'ai' ? ' badge--purple' : ''}">${suggestion.source === 'ai' ? 'AI' : 'from the registry'}</span><span class="forum-say__when">${esc(when(suggestion.at))}</span></div>
-<p class="card__desc forum-say__text">${esc(suggestion.text)}</p>`;
+		? '<p class="az-card__desc">The AI can say what a page should add about it. Without one, the platform matches the thread to a page on its own.</p>'
+		: `<div class="forum-say"><span class="az-state${suggestion.source === 'ai' ? ' az-state--accent' : ''}">${suggestion.source === 'ai' ? 'AI' : 'from the registry'}</span><span class="forum-say__when">${esc(when(suggestion.at))}</span></div>
+<p class="az-card__desc forum-say__text">${esc(suggestion.text)}</p>`;
 
-	const summary = `<div class="card card--plain"><div class="card__head"><span class="card__icon">${icon(waiting ? 'alert' : 'check')}</span><div class="card__title">Summary</div><div class="card__actions">${badge}</div></div>
-<p class="card__desc">${stateLine}</p>
-<p class="card__desc forum-summary__facts">${esc(facts)}</p>
+	const summary = `<div class="az-card"><div class="az-card__head"><span class="az-card__icon">${icon(waiting ? 'alert' : 'check')}</span><div class="az-card__title">Summary</div><div class="az-section__actions">${badge}</div></div>
+<p class="az-card__desc">${stateLine}</p>
+<p class="az-card__desc forum-summary__facts">${esc(facts)}</p>
 <div class="forum-summary__ask">${advise}
 <div class="az-row" style="margin-top:10px"><button type="button" class="az-btn az-btn--sm${suggestion === undefined || suggestion.source !== 'ai' ? ' az-btn--primary' : ''}" data-command="temcoDocs.forumSuggest" data-args="${suggestArgs}">${icon('sparkle')}<span>${suggestion === undefined || suggestion.source !== 'ai' ? 'Suggest with the AI' : 'Ask the AI again'}</span></button></div>
-<p class="card__desc forum-summary__note">A suggestion is advice, not a decision: nothing is written to a page or posted to the forum from here.</p></div></div>`;
+<p class="az-card__desc forum-summary__note">A suggestion is advice, not a decision: nothing is written to a page or posted to the forum from here.</p></div></div>`;
 
 	const pageCard = named === undefined
-		? '<div class="card card--plain"><p class="card__desc">No page in this documentation set is named by the topic: either the page is missing, or its title does not use the thread\'s words. A page\'s id or title in the topic is what attaches a suggestion to it.</p></div>'
-		: `<div class="card card--plain"><div class="card__head"><span class="card__icon">${icon('document')}</span><div class="card__title">${esc(named.title)}</div><div class="card__actions"><span class="badge${named.provenance?.stale === true ? ' badge--warn' : ''}">${named.provenance?.stale === true ? 'code moved' : 'current'}</span></div></div>
-<p class="card__desc">${esc(named.id)} · ${esc(named.area)}${named.chapter === '' ? '' : ` › ${esc(named.chapter)}`} · ${named.reviewed === null ? 'never reviewed' : `last reviewed ${esc(named.reviewed)}`}</p>
+		? '<div class="az-card"><p class="az-card__desc">No page in this documentation set is named by the topic: either the page is missing, or its title does not use the thread\'s words. A page\'s id or title in the topic is what attaches a suggestion to it.</p></div>'
+		: `<div class="az-card"><div class="az-card__head"><span class="az-card__icon">${icon('document')}</span><div class="az-card__title">${esc(named.title)}</div><div class="az-section__actions"><span class="az-state${named.provenance?.stale === true ? ' az-state--warn' : ''}">${named.provenance?.stale === true ? 'code moved' : 'current'}</span></div></div>
+<p class="az-card__desc">${esc(named.id)} · ${esc(named.area)}${named.chapter === '' ? '' : ` › ${esc(named.chapter)}`} · ${named.reviewed === null ? 'never reviewed' : `last reviewed ${esc(named.reviewed)}`}</p>
 <div class="az-row" style="margin-top:10px"><button type="button" class="az-btn az-btn--sm" data-command="temcoDocs.openFile" data-args="${esc(JSON.stringify(named.uri.fsPath))}"><span>Open the page</span></button><button type="button" class="az-btn az-btn--sm az-btn--primary" data-command="temcoAi.openPanel" data-args="${esc(JSON.stringify(named.uri.fsPath))}"><span>Draft the fix</span></button></div></div>`;
 
 	return `${hero({

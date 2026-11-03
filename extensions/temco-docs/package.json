@@ -42,7 +42,6 @@
     "onView:temcoDocs.section.pipeline",
     "onWebviewPanel:temcoDocs.projects",
     "onWebviewPanel:temcoDocs.projectPage",
-    "onWebviewPanel:temcoDocs.needsPage",
     "onWebviewPanel:temcoDocs.repository",
     "onWebviewPanel:temcoDocs.documents",
     "onWebviewPanel:temcoDocs.pagePanel",
@@ -99,7 +98,12 @@
     "commands": [
       {
         "command": "temcoDocs.projects",
-        "title": "Switch Project",
+        "title": "Show the Projects",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "temcoDocs.switchProject",
+        "title": "Switch Project…",
         "icon": "$(folder)"
       },
       {
@@ -111,7 +115,7 @@
       },
       {
         "command": "temcoDocs.needsPage",
-        "title": "Open Needs You",
+        "title": "Show the Queue",
         "icon": "$(tasklist)"
       },
       {
@@ -891,6 +895,11 @@
       ],
       "view/title": [
         {
+          "command": "temcoDocs.projects",
+          "when": "view == temcoProjects.projects",
+          "group": "navigation@1"
+        },
+        {
           "command": "temcoDocs.forumPage",
           "when": "view == temcoDocs.forum",
           "group": "navigation@0"
@@ -899,6 +908,11 @@
           "command": "temcoDocs.forumSync",
           "when": "view == temcoDocs.forum",
           "group": "navigation@1"
+        },
+        {
+          "command": "temcoDocs.projects",
+          "when": "view == temcoDocs.pages",
+          "group": "5_view@0"
         },
         {
           "command": "temcoDocs.newPage",
@@ -1168,7 +1182,7 @@
     "activationEvents": null
   },
   "scripts": {
-    "vscode:prepublish": "npm run check-commands && npm run check-record && npm run check-icons && npm run check-types && npm run compile && npm run check-site && npm run check-export && npm run check-docx && npm run check-panel && npm run check-status && npm run check-grid && npm run check-translate && npm run build-webview",
+    "vscode:prepublish": "npm run check-commands && npm run check-record && npm run check-icons && npm run check-types && npm run compile && npm run check-builds && npm run check-site && npm run check-export && npm run check-docx && npm run check-panel && npm run check-status && npm run check-grid && npm run check-translate && npm run build-webview",
     "check-commands": "node --experimental-strip-types scripts/check-commands.mts",
     "check-record": "node --experimental-strip-types scripts/check-record.mts",
     "check-types": "node node_modules/typescript/bin/tsc -p tsconfig.webview.json && node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
