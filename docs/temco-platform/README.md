@@ -142,6 +142,29 @@ A container with no views is not shown, so a container may be declared before it
 9. A build engine sits behind the content-package contract ([content-package.md](../temco-learn/content-package.md)); nothing outside the engine's own folder names it.
 10. Runtimes and models are downloaded on request into the user's own folder; the engine runs on loopback only.
 
+## Releasing
+
+A release is a **tag**. GitHub builds the installers from it and attaches them to a draft Release named after the tag.
+
+```text
+1. bump "version" in package.json, commit it
+2. git tag -a v<that version> -m "Temco Platform <that version>"
+3. git push origin v<that version>
+```
+
+`.github/workflows/release.yml` then runs on three runners — Windows x64, Linux x64, macOS arm64 — and produces the
+Windows installer plus a portable zip, a `.deb` and a Linux tarball, and a macOS zip. The workflow refuses to build when
+the tag and `package.json` disagree: the installer takes its version from `package.json`, not from the tag, so a release
+called `v1.2.3` that installs itself as `1.144.0` is one nobody can support. To rebuild an existing tag, run the workflow
+by hand and give it the tag's name.
+
+Two things the packaging chain does **not** do on its own, and the workflow therefore does first: `compile-extensions`
+and `build-webviews`. A module's webview bundles are esbuild output under its own `out/`, outside VS Code's own media
+pipeline — a package built without them ships empty surfaces.
+
+Nothing is signed: there is no code-signing certificate, so Windows shows "unknown publisher" on first run and macOS needs
+right-click → Open. Nothing updates itself either — a new version is a new download.
+
 ## Phases
 
 | Phase | Work |

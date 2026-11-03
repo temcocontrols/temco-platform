@@ -1,0 +1,218 @@
+name: Release
+
+# A tag is the release: pushing `v1.2.3` builds the installers for the three platforms and attaches them to a draft
+# GitHub Release named after the tag. Nothing is published until a person opens the draft and presses Publish.
+#
+# Why a tag and not a branch: a tag does not move, so a release can be rebuilt from exactly the source that shipped.
+# The tag must agree with `version` in package.json — the installer takes its version from there, not from the tag, and
+# a release called v1.2.3 that installs itself as 1.144.0 is one nobody can support. `guard` below fails the run when
+# the two disagree, before anything expensive starts.
+#
+# How to cut a release:
+#   1. bump `version` in package.json, commit it
+#   2. git tag -a v<that version> -m "Temco Platform <that version>"
+#   3. git push origin v<that version>
+# To rebuild a tag that already exists, run this workflow by hand with its name.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build, e.g. v1.144.0'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  # The tag and package.json must agree, or the installer lies about which release it is.
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 1
+      - name: Check the tag against package.json
+        id: check
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          version="$(node -p "require('./package.json').version")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::Tag $tag does not match package.json version $version."
+            echo "Bump \`version\` in package.json to ${tag#v}, commit it, and tag that commit — or tag v$version."
+            exit 1
+          fi
+          echo "Building $tag ($version)."
+
+  build:
+    needs: guard
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows x64
+            platform: win32
+            arch: x64
+          - os: ubuntu-latest
+            label: Linux x64
+            platform: linux
+            arch: x64
+          - os: macos-14
+            label: macOS arm64
+            platform: darwin
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.guard.outputs.tag }}
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # The packaging steps run the repository's own scripts; a missing toolchain fails later and less clearly.
+      - name: Install Linux build tools
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libx11-dev libx11-xcb-dev libxkbfile-dev \
+            libnotify-bin libkrb5-dev fakeroot dpkg-dev rpm
+
+      - name: Install dependencies
+        # Twice at most: the registry occasionally drops a tarball, and a release should not fail on that.
+        run: npm ci || npm ci
+        env:
+          # Packaging downloads the Electron binary itself; Playwright is not needed to build.
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Electron types
+        run: node build/npm/electronTypes.ts
+
+      # The extensions this fork adds ship inside the app: `out/**` is what the package copies, and the webview bundles
+      # are esbuild output under each module's own `out/` — which the gulp packaging chain does not produce.
+      # Built-in marketplace extensions need no step here; the packaging task downloads and bundles them itself.
+      - name: Compile extensions and webviews
+        run: |
+          npm run gulp compile-extensions
+          npm run build-webviews
+
+      - name: Package (Windows)
+        if: matrix.platform == 'win32'
+        run: |
+          npm run gulp vscode-win32-x64-min
+          npm run gulp vscode-win32-x64-user-setup
+
+      - name: Package (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          npm run gulp vscode-linux-x64-min
+          npm run gulp vscode-linux-x64-prepare-deb
+          npm run gulp vscode-linux-x64-build-deb
+
+      - name: Package (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          npm run gulp vscode-darwin-arm64-min
+
+      # One staging folder per platform, so the release job has one shape to collect.
+      - name: Stage (Windows)
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        run: |
+          $version = "${{ needs.guard.outputs.version }}"
+          New-Item -ItemType Directory -Force staging | Out-Null
+          Compress-Archive -Path ../VSCode-win32-x64 -DestinationPath "staging/TemcoPlatform-win32-x64-$version.zip"
+          Get-ChildItem .build/win32-x64/user-setup -Filter *.exe | Copy-Item -Destination staging
+          Get-ChildItem staging | Select-Object Name, Length
+
+      - name: Stage (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          set -euo pipefail
+          version="${{ needs.guard.outputs.version }}"
+          mkdir -p staging
+          tar -czf "staging/temco-platform-linux-x64-$version.tar.gz" -C .. VSCode-linux-x64
+          deb="$(find .build/linux/deb -name '*.deb' -type f | head -n 1)"
+          if [ -z "$deb" ]; then echo "::error::The .deb build produced no package."; exit 1; fi
+          cp "$deb" "staging/temco-platform_${version}_amd64.deb"
+          ls -l staging
+
+      - name: Stage (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          set -euo pipefail
+          version="${{ needs.guard.outputs.version }}"
+          mkdir -p staging
+          app="$(find ../VSCode-darwin-arm64 -maxdepth 1 -name '*.app' | head -n 1)"
+          if [ -z "$app" ]; then echo "::error::The macOS build produced no .app bundle."; exit 1; fi
+          ditto -c -k --keepParent "$app" "staging/TemcoPlatform-darwin-arm64-$version.zip"
+          ls -l staging
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ matrix.arch }}
+          path: staging/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Write the release notes
+        run: |
+          cat > release/NOTES.md <<'EOF'
+          Built from the tag by GitHub Actions. Every asset is unsigned: there is no code-signing certificate for this
+          application yet, so Windows shows "unknown publisher" on first run and macOS asks for a right-click → Open
+          (or `xattr -d com.apple.quarantine`). These are the files this build produced:
+
+          - `TemcoPlatform-win32-x64-<version>.zip` — run `Temco Platform.exe` from the unpacked folder
+          - a Windows installer `.exe` — per-user install, no admin rights
+          - `temco-platform_<version>_amd64.deb` and `temco-platform-linux-x64-<version>.tar.gz`
+          - `TemcoPlatform-darwin-arm64-<version>.zip` — Apple silicon only
+
+          Nothing here updates itself: a new version is a new download.
+          EOF
+
+      # A draft, so the files can be checked before anyone is pointed at them.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.guard.outputs.tag }}
+          name: Temco Platform ${{ needs.guard.outputs.version }}
+          body_path: release/NOTES.md
+          files: |
+            release/*.exe
+            release/*.zip
+            release/*.deb
+            release/*.tar.gz
+          draft: true
+          fail_on_unmatched_files: true
