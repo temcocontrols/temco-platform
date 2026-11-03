@@ -414,16 +414,13 @@ export class DownloadTree implements vscode.TreeDataProvider<Row> {
 			rows.push(entry);
 		}
 		// Nothing built anywhere: the one useful row is where builds come from. No verdict row otherwise — a view of what
-		// exists does not need to say "nothing to do".
+		// exists does not need to say "nothing to do". The row that opened Temco Docs' Build Center is gone: that page
+		// is one panel away, and a second door to it read as a second way to build.
 		if (rows.length === 0) {
 			rows.push(
 				row('Nothing built on this machine yet', 'info', {
 					tooltip: 'Open the Artifacts page: what a build writes, and where it lands',
 					command: { command: 'temcoLearn.downloads', title: 'Artifacts' }
-				}),
-				row('Build a Project…', 'tools', {
-					tooltip: 'Opens Temco Docs, where a build is made — this module takes the folder it writes',
-					command: { command: 'temcoDocs.builds', title: 'Build a Project in Temco Docs' }
 				})
 			);
 		}

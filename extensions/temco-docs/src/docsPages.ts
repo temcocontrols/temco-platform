@@ -213,14 +213,25 @@ export class DocsPages {
 		let catalog: Catalog | undefined;
 		try {
 			catalog = await Catalog.open(this.context);
-			rows = catalog.documents().map((document) => ({
+			const open: Catalog = catalog;
+			// Which cited sources have no copy on this machine, read once for every source rather than once per project:
+			// a source read over the API yields pages nobody here can check against a working tree, and that is a fact
+			// about the project's own counts.
+			const local = new Map<string, boolean>();
+			for (const source of open.sources()) {
+				const path = open.source(source.slug)?.path;
+				local.set(source.name, path !== undefined && fs.existsSync(path));
+			}
+			rows = open.documents().map((document) => ({
 				slug: document.slug,
 				name: document.name,
 				version: document.version,
 				builtAt: document.builtAt,
 				sources: document.sources,
-				pages: catalog?.documentPages(document.slug).length ?? 0,
-				drafts: catalog?.drafts(document.slug).length ?? 0
+				pages: open.documentPages(document.slug).length,
+				drafts: open.drafts(document.slug).length,
+				notLocal: open.documentSources(document.slug)
+					.filter((source) => local.get(source.name) === false).length
 			}));
 		} catch {
 			// A catalog that cannot be read shows no projects, which is honest: none is known to exist.
@@ -706,6 +717,8 @@ interface ProjectRow {
 	sources: number;
 	pages: number;
 	drafts: number;
+	/** Cited sources with no copy on this machine: their pages were read over an API and cannot be checked here. */
+	notLocal: number;
 }
 
 /**
@@ -793,6 +806,7 @@ function projectRow(row: ProjectRow, current: boolean): string {
 	const facts = [
 		row.version === undefined ? '' : `v${row.version}`,
 		n(row.sources, 'source', 'sources'),
+		row.notLocal === 0 ? '' : `${String(row.notLocal)} not local`,
 		row.pages === 0 ? 'no pages read' : n(row.pages, 'page', 'pages'),
 		row.builtAt === undefined ? 'never built' : `built ${waitingSince(row.builtAt)}`,
 		row.drafts === 0 ? '' : n(row.drafts, 'draft waiting', 'drafts waiting')

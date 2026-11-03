@@ -1178,9 +1178,77 @@ export class Catalog {
     }
   }
 
+  /**
+   * What an AI answer named, kept where it can be read again.
+   *
+   * One row per page cited, and never the question or the answer: a citation is a pointer, and the platform does not
+   * keep conversations. Like an event, this is a courtesy — losing a citation must not fail the answer it belongs to.
+   */
+  recordCitations(input: CitationInput): void {
+    if (input.citations.length === 0) {
+      return;
+    }
+    try {
+      const insert = this.db.prepare(
+        `INSERT INTO ai_citations (at, answer_kind, document_slug, page_id, citation_id, citation_known)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      );
+      const at = new Date().toISOString();
+      for (const citation of input.citations) {
+        insert.run(at, input.answerKind, input.documentSlug ?? null, input.pageId ?? null, citation.id, citation.known ? 1 : 0);
+      }
+    } catch {
+      // Nothing to do: the answer has already been given, and a missing footnote is not worth failing it over.
+    }
+  }
+
+  /** The citations the AI has used, newest first — what a trust view reads. */
+  citations(limit = 200): CitationRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, at, answer_kind AS answerKind, document_slug AS documentSlug, page_id AS pageId,
+                citation_id AS citationId, citation_known AS citationKnown
+           FROM ai_citations ORDER BY at DESC, id DESC LIMIT ?`
+      )
+      .all(limit) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      id: Number(row.id ?? 0),
+      at: String(row.at ?? ''),
+      answerKind: String(row.answerKind ?? ''),
+      documentSlug: row.documentSlug === null || row.documentSlug === undefined ? undefined : String(row.documentSlug),
+      pageId: row.pageId === null || row.pageId === undefined ? undefined : String(row.pageId),
+      citationId: String(row.citationId ?? ''),
+      citationKnown: Number(row.citationKnown ?? 0) === 1,
+    }));
+  }
+
   close(): void {
     this.db.close();
   }
+}
+
+/** What one answer named, as `recordCitations` writes it. */
+export interface CitationInput {
+  /** What produced the citation: `answer` in the panel, `topic` for a forum thread, `draft` for a page draft. */
+  answerKind: string;
+  /** The project the answer was about, when one is selected. */
+  documentSlug?: string;
+  /** The page the question was about, when there was one. */
+  pageId?: string;
+  /** The ids the answer named, and whether a registry knows each of them. */
+  citations: readonly { id: string; known: boolean }[];
+}
+
+/** One citation, as `citations()` reads it. */
+export interface CitationRow {
+  id: number;
+  at: string;
+  answerKind: string;
+  documentSlug?: string;
+  pageId?: string;
+  citationId: string;
+  /** Whether a registry knew the page when the answer was given. */
+  citationKnown: boolean;
 }
 
 /** What `createDocument` needs. An empty slug is refused by the caller, not here. */

@@ -14,8 +14,6 @@ export const PUBLISH_VIEW_TYPE = 'temcoLearn.publishing';
 
 /** The page's own rules: the brand bar a section title carries on every page of ours, one card per subject, and the fold. */
 export const PAGE_STYLE = `
-.az-section__title { position: relative; padding-left: 10px; }
-.az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
 .pub-card { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); }
 .pub-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--sp-3); }
 .pub-head__where { font-family: var(--font-mono); font-size: 12.5px; }

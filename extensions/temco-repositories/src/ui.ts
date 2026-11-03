@@ -20,13 +20,81 @@ interface UiApi {
 	rowSlug(target: unknown): string | undefined;
 	page(body: string, options?: { title?: string; script?: string; extraCss?: string }): string;
 	icon(name: string, cls?: string): string;
-	hero(options: { title: string; mark?: string; desc?: string; descWide?: boolean; actions?: readonly unknown[] }): string;
+	hero(options: HeroOptions): string;
 	section(options: { title: string; desc?: string; actions?: string }): string;
 	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
+	/** One part of a page: its title, the count and sentence under it, and what can be done from here. */
+	part(options: { title: string; note?: string; count?: string; actions?: string }): string;
+	/** The list a part's rows lie in. */
+	entries(rows: string): string;
+	/** One row: the glyph, the thing, the facts about it, its state, and what can be done to it. */
+	entry(options: EntryOptions): string;
+	/** One row that is a way in: the whole row is the control. */
+	entryRow(options: { mark?: string; title: string; meta?: string; command?: string; args?: unknown; go?: string }): string;
+	/** A button, rendered the one way this application renders them. */
+	button(label: string, command: string, options?: ButtonOptions): string;
+	/** The one tinted paragraph a page is allowed, and the thing to do about it. */
+	notice(options: { title: string; desc: string; mark?: string; actions?: string }): string;
+	/** The count with its noun, as the pages write it: "1 clone", "4 clones". */
+	n(count: number, one: string, many: string): string;
+	/** Text that came from a folder or a person, escaped for a page. */
+	escapeHtml(text: string): string;
+	/** One glyph in a tinted circle: a state you can see before you read it. */
+	toneMark(name: string, tone?: Tone): string;
+	/** The script a page runs so its `data-command` buttons reach this module. */
+	commandScript: string;
+	/** Runs the message those buttons send. */
+	runCommand(message: PageMessage): void;
 	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
 	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
 	/** One serializer per page: the module draws into the panel the window restored, so the tab keeps its place. */
 	restore(context: vscode.ExtensionContext, pages: readonly RestorablePage[]): vscode.Disposable[];
+}
+
+/** The five states a row's glyph can carry. */
+type Tone = 'ok' | 'warn' | 'err' | 'info' | 'accent';
+
+/** One message a page sends back to its module. */
+interface PageMessage {
+	type?: string;
+	command?: string;
+	args?: unknown;
+}
+
+/** The title block's arguments: what it says, and the ways in it offers. */
+interface HeroOptions {
+	/** A line above the title: the area the page belongs to. */
+	eyebrow?: string;
+	title: string;
+	/** A glyph before the title, drawn in a brand-tinted chip. */
+	mark?: string;
+	desc?: string;
+	/** The description takes the full width instead of a reading measure. */
+	descWide?: boolean;
+	actions?: readonly { label: string; command: string; args?: unknown; mark?: string; kind?: 'primary' | 'link' }[];
+	/** The figures the page opens on, drawn in the band's own row beside the ways in. */
+	stats?: readonly { value: string; label: string }[];
+	/** One line of context that belongs to the header. */
+	note?: { text: string; mark?: string; mono?: boolean; link?: { command: string; args?: unknown } };
+}
+
+/** One row of a page. */
+interface EntryOptions {
+	mark?: string;
+	tone?: Tone;
+	title: string;
+	meta?: readonly (string | undefined)[];
+	state?: string;
+	actions?: string;
+	aside?: string;
+}
+
+/** The kinds a button comes in: `link` is a word rather than a box. */
+interface ButtonOptions {
+	kind?: 'primary' | 'ghost' | 'link';
+	mark?: string;
+	args?: unknown;
+	small?: boolean;
 }
 
 /** One page of a module, as the window needs it back. */
@@ -67,6 +135,39 @@ export const section = ui.section;
 
 /** The one tinted callout a page is allowed. */
 export const callout = ui.callout;
+
+/** One part of a page: its title, the count and sentence under it, and what can be done from here. */
+export const part = ui.part;
+
+/** The list a part's rows lie in. */
+export const entries = ui.entries;
+
+/** One row: the glyph, the thing, the facts about it, its state, and what can be done to it. */
+export const entry = ui.entry;
+
+/** One row that is a way in: the whole row is the control. */
+export const entryRow = ui.entryRow;
+
+/** A button, rendered the one way this application renders them. */
+export const button = ui.button;
+
+/** The one tinted paragraph a page is allowed, and the thing to do about it. */
+export const notice = ui.notice;
+
+/** The count with its noun, as the pages write it. */
+export const n = ui.n;
+
+/** Text that came from a folder or a person, escaped for a page. */
+export const escapeHtml = ui.escapeHtml;
+
+/** One glyph in a tinted circle: a state you can see before you read it. */
+export const toneMark = ui.toneMark;
+
+/** The script a page runs so its `data-command` buttons reach this module. */
+export const commandScript = ui.commandScript;
+
+/** Runs the message those buttons send. */
+export const runCommand = ui.runCommand;
 
 /** One serializer per page: the module draws into the panel the window restored, so the tab keeps its place. */
 export const restore = ui.restore;

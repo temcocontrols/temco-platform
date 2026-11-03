@@ -20,7 +20,7 @@ import { execFile } from 'child_process';
 import { existsSync } from 'fs';
 import * as vscode from 'vscode';
 import { Catalog, Selection, SourceRow } from './store';
-import { page, pageColumn, remember } from './ui';
+import { button, commandScript, entries, entry, escapeHtml, hero, n, notice, page, pageColumn, part, remember, runCommand } from './ui';
 
 export const DASHBOARD_VIEW_TYPE = 'temcoRepositories.dashboard';
 
@@ -212,14 +212,7 @@ export class DashboardPage {
 				this.timer = undefined;
 			}
 		});
-		this.panel.webview.onDidReceiveMessage((message: { type?: string; command?: string; args?: unknown }) => {
-			if (message.type === 'command' && typeof message.command === 'string') {
-				void vscode.commands.executeCommand(message.command, ...(Array.isArray(message.args) ? message.args : []));
-			}
-			if (message.type === 'refresh') {
-				void this.render();
-			}
-		});
+		this.panel.webview.onDidReceiveMessage(runCommand);
 		// A read that finishes, a clone that lands, a source that is forgotten: the page is about exactly those facts.
 		// Only while it is the panel on screen — a page nobody is looking at costs a `git log` per clone for nothing.
 		this.changes = this.onDidChange(() => {
@@ -247,9 +240,9 @@ export class DashboardPage {
 		if (this.panel !== panel) {
 			return;
 		}
-		panel.webview.html = page(body(groups, total, this.selection.project()), {
-			title: 'Repositories — dashboard',
-			script,
+		panel.webview.html = page(body(groups, total, this.selection.project(), canDraft()), {
+			title: 'Repositories — Dashboard',
+			script: commandScript,
 			extraCss: COMMITS_CSS
 		});
 	}
@@ -266,106 +259,131 @@ export class DashboardPage {
 }
 
 /**
- * The page's own styles: a commit list folded under the last commit, and the ones before the last read dimmed.
+ * The page's own styles: the commit list folded under the row it belongs to.
  *
- * The list is a `<details>` so the table stays one row per clone; opening it costs no script, and what is inside
- * carries the only distinction the page makes — new since the read, or already seen.
+ * The kit has no commit list, and inventing a component for one page would be a second vocabulary. What is here is the
+ * fold and the two distinctions the page makes — a hash in mono, and the commits before the last read dimmed rather
+ * than dropped, because a column that only shows what is new cannot be checked against the history it came from.
  */
 const COMMITS_CSS = `
-.commits > summary { cursor: pointer; list-style: none; }
-.commits > summary::-webkit-details-marker { display: none; }
-.commits > summary::before { content: '▸'; display: inline-block; width: 10px; color: var(--vscode-descriptionForeground); }
-.commits[open] > summary::before { content: '▾'; }
-.commits__list { margin: 6px 0 0 10px; padding: 0; list-style: none; font-size: 11.5px; }
-.commits__item { padding: 2px 0; display: flex; gap: 6px; align-items: baseline; }
+.commits { margin: 0 0 var(--sp-2) 34px; }
+.commits > summary { cursor: pointer; color: var(--az-blue); font-size: 12px; line-height: 18px; }
+.commits__list { margin: var(--sp-2) 0 0; padding: 0; list-style: none; }
+.commits__item { display: flex; gap: var(--sp-3); align-items: baseline; padding: 1px 0; font-size: 12px; line-height: 17px; }
 .commits__item--seen { opacity: .55; }
-.commits__subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commits__hash { font-family: var(--font-mono); color: var(--fg-subtle); }
+.commits__subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
+.commits__date { color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+.commits__mark { color: var(--fg-subtle); width: 3ch; }
 `;
 
-/** One clone, as a row: what moved, whether it is new to the reader, and the pages that name it. */
-function cloneRow(clone: Clone): string {
-	const last = clone.last;
+/** Whether the AI module is installed, which is what decides if a Draft control would do anything. */
+function canDraft(): boolean {
+	return vscode.extensions.getExtension('temcocontrols.temco-ai') !== undefined;
+}
+
+/** The pages that name the files this clone changed, as one phrase. */
+function pagesPhrase(clone: Clone): string {
+	if (clone.docs.length === 0) {
+		return 'no page names these files';
+	}
+	const named = clone.docs.slice(0, 3).map((doc) => doc.title).join(', ');
+	return clone.docs.length > 3 ? `${named} and ${clone.docs.length - 3} more` : named;
+}
+
+/**
+ * One clone, as a row: what moved, whether it is new to the reader, and the pages that name it.
+ *
+ * The state word is the answer, and the meta carries the evidence — the branch, the folder, the last commit and the
+ * pages. The acts are the two the reader would take next, and they are words, not boxes: a row already says what it is.
+ */
+function cloneRow(clone: Clone, canDraft: boolean): string {
 	const fresh = clone.fresh.length;
-	const docs = clone.docs.length === 0
-		? '<span class="cell-muted">no page names these files</span>'
-		: clone.docs.slice(0, 3).map((doc) => `<span class="cell-strong">${escapeHtml(doc.title)}</span>`).join(' · ')
-			+ (clone.docs.length > 3 ? ` <span class="cell-muted">+${clone.docs.length - 3}</span>` : '');
+	const last = clone.last;
 	const state = !clone.cloned
-		? '<span class="badge badge--warn">no local copy</span>'
-		: fresh === 0
-			? '<span class="badge badge--ok">nothing new</span>'
-			: `<span class="badge badge--info">${fresh} ${fresh === 1 ? 'file' : 'files'} since the last read</span>`;
-	// Every commit the page read is listed, and the ones before the watermark are dimmed rather than dropped: a column
-	// that only ever shows what is new cannot be checked against the history it came from.
-	const history = last === undefined
-		? '<span class="cell-muted">nothing read yet</span>'
-		: `<details class="commits"><summary><span class="cell-strong">${escapeHtml(last.subject)}</span><div class="cell-muted">${escapeHtml(last.short)} · ${escapeHtml(last.author)} · ${escapeHtml(last.date)}${clone.read === undefined ? '' : ` · last read ${escapeHtml(clone.read)}`}</div></summary>
-<ul class="commits__list">${clone.commits.map(commitItem).join('')}</ul></details>`;
-	return `<tr>
-<td><div class="cell-strong">${escapeHtml(clone.name)}</div><div class="cell-muted" style="font-size:11.5px">${clone.branch === undefined ? '' : escapeHtml(clone.branch)}${clone.path === undefined ? '' : ` · ${escapeHtml(clone.path)}`}</div></td>
-<td>${history}</td>
-<td>${state}</td>
-<td>${docs}</td>
-<td class="cell-nowrap">${action('Read', 'temcoRepositories.readSource', clone.slug)}${action('Suggest docs', 'temcoAi.stale')}</td>
-</tr>`;
+		? 'no local copy'
+		: clone.read === undefined
+			? 'never read'
+			: fresh === 0
+				? 'nothing new'
+				: `${n(fresh, 'file', 'files')} since the last read`;
+	const row = entry({
+		mark: clone.cloned ? 'repo' : 'alert',
+		tone: !clone.cloned ? 'warn' : fresh === 0 ? 'ok' : 'info',
+		title: clone.name,
+		meta: [
+			clone.branch,
+			clone.path,
+			last === undefined ? 'no commit to read' : `${last.short} · ${last.subject} · ${last.date}`,
+			pagesPhrase(clone)
+		],
+		state,
+		// Drafting belongs to the AI module: where that module is not installed the word would be a control that does
+		// nothing, which is worse than not offering it.
+		actions: button('Read', 'temcoRepositories.readSource', { kind: 'link', args: [clone.slug] })
+			+ (canDraft && clone.docs.length > 0 ? button('Draft', 'temcoAi.stale', { kind: 'link' }) : '')
+	});
+	return `${row}${commitFold(clone)}`;
 }
 
-/** One commit in the list: the ones the reader has already been told about say so, in the same words as the badge. */
-function commitItem(commit: Commit): string {
-	const tone = commit.seen ? ' commits__item--seen' : '';
-	const mark = commit.seen ? 'seen' : 'new';
-	return `<li class="commits__item${tone}"><span class="cell-mono">${escapeHtml(commit.short)}</span><span class="commits__subject">${escapeHtml(commit.subject)}</span><span class="cell-muted">${escapeHtml(commit.date)}</span><span class="cell-muted">${mark}</span></li>`;
+/** The commits the page read, folded under the row: native `details`, so it opens in place and closes again. */
+function commitFold(clone: Clone): string {
+	if (clone.commits.length === 0) {
+		return '';
+	}
+	const items = clone.commits.map((commit) => `<li class="commits__item${commit.seen ? ' commits__item--seen' : ''}">`
+		+ `<span class="commits__hash">${escapeHtml(commit.short)}</span>`
+		+ `<span class="commits__subject">${escapeHtml(commit.subject)}</span>`
+		+ `<span class="commits__date">${escapeHtml(commit.date)}</span>`
+		+ `<span class="commits__mark">${commit.seen ? 'seen' : 'new'}</span></li>`).join('');
+	return `<details class="commits"><summary>Show the ${n(clone.commits.length, 'commit', 'commits')} it read`
+		+ `${clone.read === undefined ? '' : `, last read ${escapeHtml(clone.read)}`}</summary>`
+		+ `<ul class="commits__list">${items}</ul></details>`;
 }
 
-function action(label: string, command: string, args?: unknown): string {
-	return `<button type="button" class="az-btn az-btn--sm" data-command="${command}"${args === undefined ? '' : ` data-args="${escapeHtml(JSON.stringify(args))}"`}>${escapeHtml(label)}</button>`;
-}
+function body(groups: readonly Group[], total: number, project: string | undefined, canDraft: boolean): string {
+	const all = groups.flatMap((group) => group.clones);
+	const fresh = all.reduce((sum, clone) => sum + clone.fresh.length, 0);
+	const affected = all.reduce((sum, clone) => sum + clone.docs.length, 0);
+	const local = all.filter((clone) => !clone.cloned).length;
+	const unread = all.filter((clone) => clone.cloned && clone.read === undefined).length;
 
-function escapeHtml(text: string): string {
-	return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function body(groups: readonly Group[], total: number, project: string | undefined): string {
-	const newFiles = groups.flatMap((group) => group.clones).reduce((sum, clone) => sum + clone.fresh.length, 0);
-	const affected = groups.flatMap((group) => group.clones).reduce((sum, clone) => sum + clone.docs.length, 0);
-	const heading = `<div class="az-wash"><header class="az-lead">
-<h1 class="az-title">Repositories — dashboard</h1>
-<p class="az-intro az-intro--wide">Every clone on this machine, grouped by the project that cites it. A commit is only
-interesting when a page is about the thing it touched, so each row ends with the pages that name the files it changed.
-The watermark is the last read: what came after it is what nobody has been told yet.</p>
-<div class="az-row"><button type="button" class="az-btn az-btn--primary" data-type="refresh">Read it again</button>
-${action('Read the repositories', 'temcoRepositories.page')}
-${action('Draft the affected pages', 'temcoAi.stale')}</div>
-</header></div>
-<p class="az-note">${total} ${total === 1 ? 'clone' : 'clones'} · ${newFiles} ${newFiles === 1 ? 'file' : 'files'} changed since the last read · ${affected} ${affected === 1 ? 'page' : 'pages'} affected${project === undefined ? '' : ` · project ${escapeHtml(project)}`}</p>`;
+	const head = hero({
+		eyebrow: 'Repositories',
+		mark: 'clock',
+		title: 'Dashboard',
+		desc: 'Every clone on this machine, grouped by the project that cites it. A commit only matters when a page is about the thing it touched, so each row ends with the pages that name the files it changed — and the watermark is the last read, so what came after it is what nobody has been told yet.',
+		descWide: true,
+		actions: [
+			{ label: 'Read every source', command: 'temcoRepositories.readAllSources', kind: 'primary', mark: 'refresh' },
+			...(canDraft ? [{ label: 'Draft the affected pages', command: 'temcoAi.stale', mark: 'sparkle' }] : []),
+			{ label: 'Repositories', command: 'temcoRepositories.page', mark: 'repo' }
+		],
+		stats: [
+			{ value: String(total), label: total === 1 ? 'clone' : 'clones' },
+			{ value: String(fresh), label: 'files since the last read' },
+			{ value: String(affected), label: affected === 1 ? 'page affected' : 'pages affected' },
+			{ value: String(local + unread), label: 'not yet read here' }
+		]
+	});
 
 	if (groups.length === 0) {
-		return `${heading}
-<div class="mt-24"><aside class="az-callout"><div class="az-callout__main"><span class="az-callout__icon"></span><div><p class="az-callout__title">No repository is recorded yet</p><p class="az-callout__desc">Add an enterprise on the repositories page, then download a copy — this page reads the clones on this machine, so it has nothing to say until there is one.</p></div></div></aside></div>`;
+		return `${head}
+${notice({
+			mark: 'repo',
+			title: 'No repository is recorded yet',
+			desc: 'Add an enterprise on the repositories page, then download a copy. This page reads the clones on this machine, so it has nothing to say until there is one.',
+			actions: button('Open the repositories', 'temcoRepositories.page', { kind: 'primary', mark: 'repo' })
+		})}`;
 	}
 
-	const sections = groups.map((group) => `<div class="az-section"><div class="az-section__text"><h2 class="az-section__title">${escapeHtml(group.title)}</h2><p class="az-section__desc">${escapeHtml(group.note)}</p></div></div>
-<div class="table-wrap table-wrap--plain"><table class="table table--compact"><thead><tr><th>Clone</th><th>Last commit</th><th>Since the last read</th><th>Pages that name them</th><th></th></tr></thead><tbody>${group.clones.map(cloneRow).join('')}</tbody></table></div>`).join('');
+	const sections = groups.map((group) => `<div class="mt-24">${part({
+		title: group.title,
+		count: n(group.clones.length, 'clone', 'clones'),
+		note: group.note
+	})}
+${entries(group.clones.map((clone) => cloneRow(clone, canDraft)).join(''))}</div>`).join('');
 
-	return `${heading}
-<div class="mt-24">${sections}</div>`;
+	return `${head}${sections}
+<p class="az-note">Read from the clones on this machine · a commit before the last read is dimmed, not dropped${project === undefined ? '' : ` · project ${escapeHtml(project)}`}.</p>`;
 }
-
-/** The page's one behaviour: a button posts the command it names, and "Read it again" asks for a fresh read. */
-const script = `
-(function () {
-	const api = acquireVsCodeApi();
-	document.addEventListener('click', (event) => {
-		const target = event.target.closest('[data-command], [data-type]');
-		if (target === null) {
-			return;
-		}
-		if (target.dataset.command !== undefined) {
-			const args = target.dataset.args;
-			api.postMessage({ type: 'command', command: target.dataset.command, args: args === undefined ? [] : JSON.parse(args) });
-			return;
-		}
-		api.postMessage({ type: 'refresh' });
-	});
-})();
-`;

@@ -29,8 +29,6 @@ export const SITE_PAGE_TITLE = 'Documentation Site';
  * box drawn round them; and a tabbed activity area, whose panes are `Output` and `Publish`.
  */
 export const PAGE_STYLE = `
-.az-section__title { position: relative; padding-left: 10px; }
-.az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
 .site-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-4); margin: 0 0 var(--sp-4); padding: 0 0 var(--sp-3); border-bottom: 1px solid var(--hairline); }
 .site-meta__repo { color: var(--ink-3); font-family: var(--font-mono); font-size: 11.5px; line-height: 16px; overflow-wrap: anywhere; }
 .site-meta__figure { color: var(--ink-3); font-size: 11.5px; line-height: 16px; }

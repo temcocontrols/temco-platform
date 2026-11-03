@@ -6,7 +6,7 @@
 // One table per idea — see `docs/temco-platform/catalog.md`. Nothing here is derived at read time from the network:
 // a row is written by a scan and read by a view.
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /**
  * Every statement is `IF NOT EXISTS`, so applying the schema is idempotent — it is how an older database is
@@ -275,6 +275,21 @@ CREATE INDEX IF NOT EXISTS events_unseen ON events (seen_at, at DESC);
 CREATE INDEX IF NOT EXISTS commits_by_source ON commits (source_id, at DESC);
 CREATE INDEX IF NOT EXISTS artifacts_by_document ON artifacts (document_id, built_at DESC);
 CREATE INDEX IF NOT EXISTS builds_by_document ON builds (document_id, started_at DESC);
+
+-- What an AI answer named, one row per page it cited. The rows are the answer's own footnotes kept where they can
+-- be read again: a page a draft or an answer relied on, when, and whether the registry still knows it. The
+-- question and the answer text are deliberately *not* here — a citation is a pointer, and the platform does not
+-- keep conversations.
+CREATE TABLE IF NOT EXISTS ai_citations (
+  id             INTEGER PRIMARY KEY,
+  at             TEXT NOT NULL,
+  answer_kind    TEXT NOT NULL,
+  document_slug  TEXT,
+  page_id        TEXT,
+  citation_id    TEXT NOT NULL,
+  citation_known INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ai_citations_by_at ON ai_citations (at DESC);
 `;
 
 /**
@@ -292,4 +307,7 @@ export const MIGRATIONS: Readonly<Record<number, readonly string[]>> = {
   // The list was one JSON blob per organisation for one turn of this build; a table per idea replaces it, so the
   // blob goes rather than being migrated — it held nothing that a read cannot fetch again.
   6: ['DROP TABLE IF EXISTS repo_lists'],
+  // A new table only: `CREATE TABLE IF NOT EXISTS` above already wrote it into an older file, so the step has
+  // nothing left to do and is recorded so the version says what the file carries.
+  7: [],
 };

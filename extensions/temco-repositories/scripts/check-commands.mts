@@ -1,10 +1,15 @@
-// No command id is registered twice.
+// No command id is registered twice, and no page names one that nothing registers.
 //
 // A duplicate throws where the *later* one is registered — which is somewhere in the middle of `activate()`, so
 // everything below it silently never happens. This cost a whole afternoon once: `temcoDocs.runOwed` was
 // registered in both `builds.ts` and `extension.ts`, activation died at that line, and the visible symptom was a
 // Workspace view that stayed empty, because the `refresh()` at the end of activation never ran. Nothing about
 // that symptom points at the mistake, so the mistake has to be caught here instead.
+//
+// The second half is the same kind of silence from the other end: a button whose `data-command` names a command this
+// module no longer registers draws perfectly and does nothing when it is pressed. It happened — the dashboard page was
+// deleted while a button on the repositories page still posted `temcoRepositories.dashboard` — so the ids a page names
+// are read here and checked against what is registered.
 //
 // Run by the platform build (`npm run compile` → `check-temco-commands`) and by `npm run compile` in this module.
 // No dependencies: it reads the sources as text.
@@ -52,4 +57,30 @@ if (duplicated.length > 0) {
 	process.exit(1);
 }
 
-console.log(`${registrations.size} commands, each registered once.`);
+/**
+ * The ids a page or a tree row names, which must be commands that exist.
+ *
+ * Only the two shapes a control uses are read — `data-command="…"` in markup, and `command: '…'` on an item — because
+ * a bare `temcoRepositories.x` string is just as often a view or webview id, which is declared in the manifest and not
+ * registered here. A command of another module cannot be checked from this module and is left to that module.
+ */
+const named = new Set<string>();
+for (const file of sourcesIn(join(root, 'src'))) {
+	const text = readFileSync(file, 'utf8');
+	for (const match of text.matchAll(/data-command="(temcoRepositories\.[\w.]+)"/g)) {
+		named.add(match[1]);
+	}
+	for (const match of text.matchAll(/command:\s*'(temcoRepositories\.[\w.]+)'/g)) {
+		named.add(match[1]);
+	}
+}
+
+const missing = [...named].filter((id) => !registrations.has(id)).sort();
+if (missing.length > 0) {
+	console.error(
+		`A control names a command nothing registers, so pressing it does nothing:\n  ${missing.join('\n  ')}`
+	);
+	process.exit(1);
+}
+
+console.log(`${registrations.size} commands, each registered once; the ${named.size} a control names all exist.`);

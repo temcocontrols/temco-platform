@@ -112,9 +112,6 @@ export class RepositorySettingsPage {
  */
 function html(): string {
   const style = `
-    .az-section__title { position: relative; padding-left: 10px; }
-    .az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-      width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
     .az-entry__desc { display: block; margin-top: 1px; color: var(--ink-3); font-size: 12px; line-height: 16px; }
     .setting-control { display: flex; grid-column: 3; align-items: center; justify-content: flex-end;
       gap: var(--sp-2); min-width: 232px; font-size: 12px; line-height: 16px; }

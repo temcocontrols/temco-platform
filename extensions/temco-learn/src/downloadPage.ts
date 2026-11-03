@@ -13,8 +13,6 @@ export const DOWNLOAD_VIEW_TYPE = 'temcoLearn.downloads';
 /** The page's own rules: the brand bar a section title carries on every page of ours, one card for where files land, and
  *  a grid of cards for the files themselves. */
 export const PAGE_STYLE = `
-.az-section__title { position: relative; padding-left: 10px; }
-.az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
 .dl-place { display: grid; gap: var(--sp-2); padding: var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); }
 .dl-place__label { color: var(--ink-3); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
 .dl-place__path { justify-self: start; padding: 2px 0; font-family: var(--font-mono); font-size: 13px; }

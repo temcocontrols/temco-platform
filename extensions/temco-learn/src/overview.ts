@@ -16,7 +16,6 @@ export const OVERVIEW_VIEW_TYPE = 'temcoLearn.overview';
 
 /** The page's own rules, on top of the vocabulary: a short brand bar before a section title, and four cards in a row. */
 export const PAGE_STYLE = `
-.az-section__title { position: relative; padding-left: 10px; }
 .az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
 .az-options { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
 `;
