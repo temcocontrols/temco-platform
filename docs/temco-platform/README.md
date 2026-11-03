@@ -177,14 +177,9 @@ A release is a **tag on `t3000-platform`**. GitHub builds the installers from it
 
 ### The first release, in order
 
-1. **Commit the workflow, this page and the root `README.md` on `t3000-platform`**, and push.
-   ```bash
-   git add .github/workflows/release.yml README.md docs/temco-platform/README.md
-   git commit -m "Add a tag-triggered release workflow, and the branch model it releases from"
-   git push origin t3000-platform
-   ```
+1. **Commit what is pending on `t3000-platform`** — the workflow, the root `README.md` and this page — and push it.
 2. **Make `t3000-platform` the default branch** — *Settings → General → Default branch*. Until this is done the workflow has no *Run workflow* button. Add a ruleset blocking direct pushes to `main` while you are there.
-3. **Keep `package.json`'s version inside the base range.** The application reports this number to every extension that is not built in, and `engines.vscode` is enforced for those: `2026.1.0`, `1.0.0` or `0.1.0` makes any extension requiring `^1.143.0` incompatible - through a gallery if one is configured, and through *Install from VSIX* regardless. The Temco modules ship built in and are exempt, so the range protects the ecosystem rather than them. Leave the version at the VS Code base (`1.144.0`) and tag `v1.144.0`; express a preview with the release's *Set as a pre-release* flag, and a Temco build number as `1.144.1`-style increments with `extensions/copilot/package.json`'s `engines.vscode` moved to match.
+3. **Leave `package.json`'s `version` alone.** It carries the VS Code base (`1.144.0` today) and is what the application reports to extensions that are not built in, where `engines.vscode` is enforced: a lower number, or a prerelease suffix, is refused. A Temco build number is the patch digit (`1.144.1`). What an upstream sync does to the number is in [the root README](../../README.md#later-releases).
 4. **Tag that commit and push the tag.**
    ```bash
    git tag -a v<version> -m "Temco Platform <version>"

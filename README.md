@@ -124,7 +124,7 @@ scripts\code.bat       # Windows
 
 2. **Make `t3000-platform` the default branch** - *Settings > General > Default branch*. GitHub only reads `workflow_dispatch` from the default branch, so until this is done the workflow has no *Run workflow* button, and a clone lands on upstream's source instead of the product. A ruleset blocking direct pushes to `main` belongs here too: the guards stop a *release* from `main`, not a *commit* to it.
 
-3. **Leave `version` in `package.json` alone.** It carries the VS Code base the product builds on (`1.144.0` today), and the application reports it to every extension that is not built in, where `engines.vscode` is enforced: at `1.0.0`, `0.1.0` or `2026.1.0` any extension requiring `^1.143.0` is refused - by a gallery if one is enabled, and by *Install from VSIX* in any case. Temco's own modules ship built in, so they are exempt from that check - the range is about the ecosystem, not about them. A Temco build number belongs in the patch digit (`1.144.1`), and `extensions/copilot/package.json`'s `engines.vscode` moves with the base whenever an upstream sync changes it.
+3. **Leave `version` in `package.json` alone.** It carries the VS Code base the product builds on (`1.144.0` today), and it is what the application reports to every extension that is not built in, where `engines.vscode` is enforced: a lower number, or a prerelease suffix such as `1.144.0-temco.1`, is refused - by *Install from VSIX* today (this fork configures no gallery), and by any gallery that is enabled later. Temco's own modules ship built in and are exempt. A Temco build number is the patch digit (`1.144.1`).
 
 4. **Tag that commit and push the tag.**
 
@@ -142,22 +142,19 @@ Two rules the workflow enforces before it builds anything:
 | the tag is `v` followed by `version` in `package.json` | the installer reports the manifest's version, so a release named after something else installs a version nobody can support |
 | the tagged commit is on `t3000-platform` | `main` is the upstream mirror, and a build from it would contain none of this product |
 
-### Versioning over time
+### Later releases
 
-The number is a floor, not an appointment: nothing forces a Temco release to appear when VS Code ships one. What has to hold is that the number the application reports is at least what an extension asks for.
+The number is a floor, not an appointment - nothing forces a Temco release when VS Code ships one.
 
-| When | `package.json` version | Tag | What happened |
-|---|---|---|---|
-| base `1.144.0` | `1.144.0` | `v1.144.0` | the first release |
-| still `1.144.0` | `1.144.1` | `v1.144.1` | a Temco build, no upstream sync |
-| merged `main` at `1.145.0` | `1.145.0` | `v1.145.0` | the base moved with the sync |
-| still `1.145.0` | `1.145.1` | `v1.145.1` | another Temco build |
+| Situation | `package.json` | Tag |
+|---|---|---|
+| the first build on a base | `1.144.0` | `v1.144.0` |
+| another build on the same base | `1.144.1` | `v1.144.1` |
+| after merging `main` at `1.145.0` | `1.145.0` | `v1.145.0` |
+| another build on that base | `1.145.1` | `v1.145.1` |
 
-- **The base updates itself.** `main` already carries upstream's `version`; merging it into `t3000-platform` conflicts on `package.json`, and the resolution is upstream's number. From there the patch digit belongs to Temco.
-- **Never use a prerelease suffix.** `1.144.0-temco.1` sorts *below* `1.144.0`, so every extension requiring `^1.143.0` would reject it. A patch increment is the safe way to make a second build.
-- **This fork configures no extension gallery.** `product.json` has no `extensionsGallery`, so nothing installs from a marketplace today; the reported number still decides what *Install from VSIX* accepts, and it is what any gallery enabled later will be judged by.
-- **Preview versus production belongs on the release, not in `package.json`.** A draft published with *Set as a pre-release* ticked is a preview: GitHub then keeps it out of *Latest* and out of `/releases/latest`, while the manifest number stays a compatibility floor. A build number the installer should show is a patch digit (`1.144.1`), not a jump to `1.0.0`.
-- **Sync on a schedule you choose.** Skipping several upstream versions is one merge: going from `1.144.0` straight to `1.150.0` is the same operation as one step, and no intermediate number has to be reproduced. Lagging far behind is the only real cost - newer extensions ask for newer bases and are refused.
+- **The base moves itself.** `main` carries upstream's `version`, so the merge conflicts on `package.json` and resolves to upstream's number; the patch digit after it is Temco's to spend. When it moves, `extensions/copilot/package.json`'s `engines.vscode` moves with it - `npm run precommit` enforces the match.
+- **Sync on a schedule you choose.** One merge takes you from `1.144.0` to `1.150.0` if that is where upstream is; no intermediate number has to be reproduced. The only cost of lagging is that newer extensions ask for newer bases and are refused.
 
 ## Documentation
 
