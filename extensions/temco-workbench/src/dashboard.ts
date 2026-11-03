@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 import { collectPages, countStale, roots as readRoots, totals } from './docs';
 import { Catalog, DraftRow, EventRow, selection } from './store';
-import { callout, commandScript, escapeHtml, hero, icon, page, pageColumn, runCommand, section, toneMark } from './ui';
+import { button, commandScript, entries, entry, escapeHtml, head, n, page, pageColumn, notice, part, runCommand } from './ui';
 
 /** The view types the dashboard opens under. */
 export const OVERVIEW_VIEW_TYPE = 'temcoWorkbench.overview';
@@ -100,58 +100,35 @@ function age(iso: string): string {
 /** The mark that says what kind of thing was recorded. */
 const EVENT_MARK: { [kind: string]: string } = { draft: 'sparkle', release: 'upload', build: 'play', read: 'repo' };
 
-const action = (label: string, command: string, kind?: 'primary' | 'ghost'): string =>
-	`<button type="button" class="btn${kind ? ` btn--${kind}` : ''}" data-command="${command}"><span>${escapeHtml(label)}</span></button>`;
-
 /** A string a person reads, marked for translation. Bundles arrive from the build; without one this is the text. */
 const t = (message: string, ...args: string[]): string => vscode.l10n.t(message, ...args);
 
+/** A page's quiet line for a list that has nothing in it yet: no tint, because nothing is wrong. */
+const empty = (text: string): string => `<p class="az-note">${escapeHtml(text)}</p>`;
+
 /** One event: a tone mark, what happened, and when. */
 const eventRow = (event: EventRow): string =>
-	`<li class="feed__item">
-	${toneMark(EVENT_MARK[event.kind] ?? 'info', event.seenAt === undefined ? 'info' : 'ok')}
-	<div class="feed__main">
-		<div class="feed__title">${escapeHtml(event.detail ?? event.kind)}</div>
-		<div class="feed__meta">${escapeHtml(event.kind)} · ${escapeHtml(age(event.at))}</div>
-	</div>
-	<div class="feed__side"><span class="feed__module">Platform</span></div>
-</li>`;
+	entry({
+		mark: EVENT_MARK[event.kind] ?? 'activity',
+		tone: event.seenAt === undefined ? 'info' : 'ok',
+		title: event.detail ?? event.kind,
+		meta: [event.kind, age(event.at), t('Platform')]
+	});
 
 /**
- * What the Overview is made of beyond the kit.
+ * The five stages of the pipeline, each with the mark it is drawn by.
  *
- * The pipeline is the one thing here the kit has no component for: five stages, in the order a page goes through
- * them, each with the figure it is answerable for. They are drawn as rows of one strip rather than as five cards,
- * because they are one path — a stage is not an option beside the others, it is the step after the one above it.
+ * The kit has no component for a path, and it does not need one: a stage is a row — the step, the figure it is
+ * answerable for, and the way in — so the stages are entries, in the order a page goes through them.
  */
-const OVERVIEW_CSS = `
-.az-section__title { position: relative; padding-left: 10px; }
-.az-section__title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 2px; height: 12px; border-radius: 1px; background: var(--az-blue, #0078d4); }
-.ov-pipe { display: grid; gap: 1px; border-radius: var(--r-2); overflow: hidden; background: var(--hairline); }
-.ov-stage { display: grid; grid-template-columns: 20px 7.5em minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
-            width: 100%; padding: 9px 12px; border: 0; background: var(--surface-card); color: inherit;
-            font: inherit; text-align: left; cursor: pointer; }
-.ov-stage:hover { background: color-mix(in srgb, var(--az-blue, #0078d4) 7%, var(--surface-card)); }
-.ov-stage--wait { background: color-mix(in srgb, var(--vscode-charts-yellow, #d29922) 9%, var(--surface-card)); }
-.ov-stage__n { color: var(--ink-3); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
-.ov-stage__name { color: var(--ink-1); font-size: 13px; }
-.ov-stage__meta { min-width: 0; color: var(--ink-2); font-size: 12px; line-height: 17px; }
-.ov-stage__go { color: var(--az-blue, #0078d4); font-size: 12px; white-space: nowrap; }
-.ov-list { display: grid; gap: 1px; }
-.ov-row { display: flex; align-items: center; gap: var(--sp-3); width: 100%; padding: 8px 10px;
-          border: 0; border-radius: var(--r-2); background: var(--surface-card); color: inherit;
-          font: inherit; text-align: left; cursor: pointer; }
-.ov-row:hover { background: color-mix(in srgb, var(--az-blue, #0078d4) 7%, var(--surface-card)); }
-.ov-row__main { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
-.ov-row__title { color: var(--ink-1); font-size: 13px; line-height: 18px; }
-.ov-row__meta { color: var(--ink-3); font-size: 11.5px; line-height: 16px; }
-.ov-row__go { flex: 0 0 auto; color: var(--az-blue, #0078d4); font-size: 12px; }
-.ov-more { margin-top: var(--sp-2); }
-.ov-more > summary { padding: 2px 0; color: var(--ink-3); font-size: 12px; cursor: pointer; }
-.ov-more > summary:hover { color: var(--az-blue, #0078d4); }
-.ov-calm { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2);
-           background: var(--surface-card); color: var(--ink-2); font-size: 13px; line-height: 19px; }
-`;
+const STAGE_MARK: { [stage: string]: string } = {
+	'01': 'repo',
+	'02': 'document',
+	'03': 'check',
+	'04': 'play',
+	'05': 'upload'
+};
+
 
 /** One stage of the pipeline, in the words of the figure it is answerable for. */
 interface Stage {
@@ -165,7 +142,7 @@ interface Stage {
 }
 
 function pipeline(facts: DashboardFacts): string {
-	const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+	const count = (value: number, one: string, many: string): string => n(value, one, many);
 	const stages: Stage[] = [
 		{
 			n: '01',
@@ -221,79 +198,76 @@ function pipeline(facts: DashboardFacts): string {
 		}
 	];
 
-	return `<div class="ov-pipe">${stages
-		.map(
-			(stage) =>
-				`<button type="button" class="ov-stage${stage.wait ? ' ov-stage--wait' : ''}" data-command="${stage.command}">
-	<span class="ov-stage__n">${stage.n}</span>
-	<span class="ov-stage__name">${escapeHtml(t(stage.name))}</span>
-	<span class="ov-stage__meta">${escapeHtml(stage.meta)}</span>
-	<span class="ov-stage__go">${escapeHtml(t(stage.go))}</span>
-</button>`
-		)
-		.join('')}</div>`;
+	return entries(stages
+		.map((stage) =>
+			entry({
+				mark: STAGE_MARK[stage.n] ?? 'activity',
+				tone: stage.wait === true ? 'warn' : 'info',
+				title: `${stage.n} ${t(stage.name)}`,
+				meta: [stage.meta],
+				actions: button(t(stage.go), stage.command, { small: true })
+			}))
+		.join(''));
 }
 
 function overviewBody(facts: DashboardFacts): string {
 	const waiting = facts.drafts;
 	const draftRow = (draft: DraftRow): string =>
-		`<button type="button" class="ov-row" data-command="temcoDocs.review">
-	${toneMark('sparkle', 'accent')}
-	<span class="ov-row__main">
-		<span class="ov-row__title">${escapeHtml(draft.title)}</span>
-		<span class="ov-row__meta"><span class="cell-mono">${escapeHtml(draft.pageId)}</span> · waiting ${escapeHtml(age(draft.createdAt))}</span>
-	</span>
-	<span class="ov-row__go">${escapeHtml(t('Review'))}</span>
-</button>`;
+		entry({
+			mark: 'sparkle',
+			tone: 'accent',
+			title: draft.title,
+			meta: [draft.pageId, t('waiting {0}', age(draft.createdAt))],
+			actions: button(t('Review'), 'temcoDocs.review', { small: true })
+		});
 
 	// Four rows are enough to see whether any of them is yours; the rest are counted rather than listed, because a
 	// page that lists a queue in full is a page nobody scrolls to the end of.
 	const shown = waiting.slice(0, 4);
 	const folded = waiting.slice(4);
 	const needs = waiting.length === 0
-		? `<div class="ov-calm">
-	<p>A draft appears here the moment the AI writes one, or when a page is started from a source. Accepting it is the only thing that writes a page.</p>
-</div>`
-		: `<div class="ov-list">${shown.map(draftRow).join('')}</div>
-${folded.length === 0 ? '' : `<details class="ov-more"><summary>${escapeHtml(t('{0} more in the Review Center', String(folded.length)))}</summary><div class="ov-list">${folded.map(draftRow).join('')}</div></details>`}`;
+		? empty(t('A draft appears here the moment the AI writes one, or when a page is started from a source. Accepting it is the only thing that writes a page.'))
+		: `${entries(shown.map(draftRow).join(''))}
+${folded.length === 0 ? '' : `<details class="az-more"><summary>${escapeHtml(t('{0} more in the Review Center', String(folded.length)))}</summary>${entries(folded.map(draftRow).join(''))}</details>`}`;
 
 	const events = facts.events;
 	const shownEvents = events.slice(0, 5);
 	const foldedEvents = events.slice(5);
 	const activity = events.length === 0
-		? `<div class="ov-calm"><p>Nothing has been recorded yet. Saving a draft, building or publishing writes the first row here.</p></div>`
-		: `<ol class="feed">${shownEvents.map(eventRow).join('')}</ol>
-${foldedEvents.length === 0 ? '' : `<details class="ov-more"><summary>${escapeHtml(t('{0} older', String(foldedEvents.length)))}</summary><ol class="feed">${foldedEvents.map(eventRow).join('')}</ol></details>`}`;
+		? empty(t('Nothing has been recorded yet. Saving a draft, building or publishing writes the first row here.'))
+		: `${entries(shownEvents.map(eventRow).join(''))}
+${foldedEvents.length === 0 ? '' : `<details class="az-more"><summary>${escapeHtml(t('{0} older', String(foldedEvents.length)))}</summary>${entries(foldedEvents.map(eventRow).join(''))}</details>`}`;
 
 	// The one tinted block a page is allowed: the thing a person would do next, chosen by what is actually waiting.
 	const next = waiting.length > 0
-		? callout({
+		? notice({
 			title: waiting.length === 1
 				? t('One draft is waiting for a person')
 				: t('{0} drafts are waiting for a person', String(waiting.length)),
 			desc: t('Each is a proposal in the platform database. Accepting one writes the page exactly as it reads; discarding it throws the text away. The newest is “{0}”.', waiting[0].title),
 			mark: 'sparkle',
-			actions: `${action('Open the Review Center', 'temcoDocs.review', 'primary')}${action('See What Needs Doing', 'temcoWorkbench.openNeeds')}`
+			actions: `${button(t('Open the Review Center'), 'temcoDocs.review', { kind: 'primary' })}${button(t('Show the Queue'), 'temcoDocs.needsPage')}`
 		})
 		: facts.faults > 0
-			? callout({
+			? notice({
 				title: facts.faults === 1
 					? t('One structural problem in the pages')
 					: t('{0} structural problems in the pages', String(facts.faults)),
-				desc: t('A build would fail on these before it wrote anything. What needs doing lists them one by one, with the file each lives in.'),
-				mark: 'warn',
-				actions: `${action('See What Needs Doing', 'temcoWorkbench.openNeeds', 'primary')}${action('Open the Builds', 'temcoDocs.builds')}`
+				desc: t('A build would fail on these before it wrote anything. The queue lists them one by one, with the file each lives in.'),
+				mark: 'alert',
+				actions: `${button(t('Show the Queue'), 'temcoDocs.needsPage', { kind: 'primary' })}${button(t('Open the Builds'), 'temcoDocs.builds')}`
 			})
-			: callout({
+			: notice({
 				title: t('Nothing needs a person right now'),
 				desc: t('No draft is waiting, and no page has a structural problem — nothing is half-finished.'),
 				mark: 'check',
-				actions: `${action('New Page', 'temcoDocs.newPage', 'primary')}${action('Open the Documents', 'temcoDocs.documents')}`
+				actions: `${button(t('New Page'), 'temcoDocs.newPage', { kind: 'primary' })}${button(t('Open the Documents'), 'temcoDocs.documents')}`
 			});
 
-	return `${hero({
-		eyebrow: t('Temco Platform'),
+	return `${head({
+		studio: t('Temco Platform'),
 		title: t('Overview'),
+		mark: 'dashboard',
 		desc: t('What the platform holds, where the work stands, and the one thing that needs you next.'),
 		// Every figure below is about one project, so which one is said here rather than left to be guessed.
 		note: facts.project === undefined
@@ -308,53 +282,52 @@ ${foldedEvents.length === 0 ? '' : `<details class="ov-more"><summary>${escapeHt
 <div class="mt-16">${next}</div>
 
 <div class="mt-24">
-	${section({
+	${part({
 		title: t('Where the work stands'),
-		desc: t('A page goes through these five in this order, and each stage is answerable for one figure. A stage in amber is the one with somebody waiting on it.')
+		note: t('A page goes through these five in this order, and each stage is answerable for one figure. A stage marked in amber is the one with somebody waiting on it.')
 	})}
 	<div class="mt-8">${pipeline(facts)}</div>
 </div>
 
 <div class="mt-24 grid grid--2">
 	<div>
-		${section({
+		${part({
 			title: t('What needs a person'),
-			desc: t('Drafts only. A draft is a proposal: nothing is written until somebody accepts it.'),
-			actions: action('See What Needs Doing', 'temcoWorkbench.openNeeds', 'ghost')
+			note: t('Drafts only. A draft is a proposal: nothing is written until somebody accepts it.'),
+			actions: button(t('Show the Queue'), 'temcoDocs.needsPage', { kind: 'ghost', small: true })
 		})}
 		<div class="mt-8">${needs}</div>
 	</div>
 	<div>
-		${section({
+		${part({
 			title: t('What happened lately'),
-			desc: t('Written by the module that did the thing, so nothing here is a second, derived history.'),
-			actions: action('All Activity', 'temcoWorkbench.activity', 'ghost')
+			note: t('Written by the module that did the thing, so nothing here is a second, derived history.'),
+			actions: button(t('All Activity'), 'temcoWorkbench.activity', { kind: 'ghost', small: true })
 		})}
 		<div class="mt-8">${activity}</div>
 	</div>
 </div>
 
-<p class="cell-muted" style="font-size:12px;margin-top:24px">${escapeHtml(
+<p class="az-note">${escapeHtml(
 		t('The figures come from the registries this window is reading and from the platform’s own record of what it did. Nothing on this page is calculated a second time.')
 	)}</p>`;
 }
 
-function rules(label: string, count: string, buttons = ''): string {
-	return `<div class="group-head"><span class="group-head__label">${escapeHtml(label)}</span><span class="group-head__rule"></span><span class="group-head__count">${escapeHtml(count)}</span>${buttons ? `<span class="group-head__actions">${buttons}</span>` : ''}</div>`;
-}
-
 /** *Recent Activity* — every row the platform wrote about itself, newest first. */
 function activityBody(facts: DashboardFacts): string {
-	return `<div class="page-head">
-	<div class="page-head__main">
-		<h1 class="page-head__title">${icon('clock')}Recent Activity</h1>
-		<p class="page-head__desc">Everything the platform recorded, newest first. A row is written by the module that did the thing, so nothing here is a second, derived history.</p>
-	</div>
-	<div class="page-head__actions">${action('Review Center', 'temcoDocs.review', 'primary')}${action('Open the Builds', 'temcoDocs.builds')}</div>
-</div>
+	return `${head({
+		studio: t('Temco Platform'),
+		title: t('Recent Activity'),
+		mark: 'clock',
+		desc: t('Everything the platform recorded, newest first. A row is written by the module that did the thing, so nothing here is a second, derived history.'),
+		actions: [
+			{ label: t('Review Center'), command: 'temcoDocs.review', mark: 'sparkle', kind: 'primary' },
+			{ label: t('Open the Builds'), command: 'temcoDocs.builds', mark: 'play' }
+		]
+	})}
 ${facts.events.length === 0
-			? `<div class="mt-16"><div class="callout">${icon('info')}<div><b>Nothing has been recorded yet.</b> The first row appears when a draft is saved, a build runs or a release is published — each of those writes one, and this page lists them in the order they happened.</div></div></div>`
-			: `<div class="feed-wrap"><div class="mt-8">${rules('Newest First', facts.events.length === 1 ? '1 event' : `${facts.events.length} events`)}<ol class="feed">${facts.events.map(eventRow).join('')}</ol></div></div>`}`;
+			? `<div class="mt-16">${empty(t('Nothing has been recorded yet. The first row appears when a draft is saved, a build runs or a release is published — each of those writes one, and this page lists them in the order they happened.'))}</div>`
+			: `<div class="mt-16">${part({ title: t('Newest First'), count: n(facts.events.length, 'event', 'events') })}${entries(facts.events.map(eventRow).join(''))}</div>`}`;
 }
 
 /** One panel per page, kept open so a second visit reveals the tab. */
@@ -392,7 +365,7 @@ export class DashboardPages {
 	private async body(pageId: 'overview' | 'activity'): Promise<{ type: string; title: string; body: string; css?: string }> {
 		const facts = await readFacts(this.context);
 		return pageId === 'overview'
-			? { type: OVERVIEW_VIEW_TYPE, title: 'Overview', body: overviewBody(facts), css: OVERVIEW_CSS }
+			? { type: OVERVIEW_VIEW_TYPE, title: 'Overview', body: overviewBody(facts) }
 			: { type: ACTIVITY_VIEW_TYPE, title: 'Recent Activity', body: activityBody(facts) };
 	}
 

@@ -13,7 +13,7 @@
 import * as vscode from 'vscode';
 import { ISSUE_INCLUDES, LOG_FILES, SHORTCUTS } from './helpSample';
 import type { Selection } from './store';
-import { callout as calloutCard, cards, commandScript, entryRow, escapeHtml as esc, floatAction, hero, icon, optionCards, page, pageColumn, questions, section, toneMark } from './ui';
+import { actionBar, button, cards, code, commandScript, entries, entry, entryRow, figures, floatAction, formFields, head, hero, icon, n, notice, optionCards, page, pageColumn, part, questions, section } from './ui';
 
 export const HELP_WELCOME_VIEW_TYPE = 'temcoWorkbench.help.welcome';
 export const HELP_HOME_VIEW_TYPE = 'temcoWorkbench.help.home';
@@ -27,59 +27,80 @@ const START_OPEN = 'start.open';
 
 /* ------------------------------------------------------------------ page vocabulary */
 
-interface ActionOptions {
-	kind?: 'primary' | 'ghost';
-	mark?: string;
-	small?: boolean;
-	args?: unknown[];
-}
-
-const button = (label: string, command: string, options: ActionOptions = {}): string =>
-	`<button type="button" class="btn${options.small ? ' btn--sm' : ''}${options.kind ? ` btn--${options.kind}` : ''}" data-command="${command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}>${options.mark ? icon(options.mark) : ''}<span>${esc(label)}</span></button>`;
-
 /** A string a person reads, marked for translation. Bundles arrive from the build; without one this is the text. */
 const t = (message: string, ...args: (string | number | boolean)[]): string => vscode.l10n.t(message, ...args);
 
-const badge = (text: string, tone?: string): string =>
-	`<span class="badge${tone && tone !== 'neutral' ? ` badge--${tone}` : ''}">${esc(text)}</span>`;
+/** A key, as a page draws it: the shortcuts page is a list of them, so the shape has to read as something you press. */
+const kbd = (keys: string[]): string => keys.map((key) => `<kbd>${key}</kbd>`).join(' ');
 
-const pageHead = (options: { title: string; mark: string; desc: string; actions?: string }): string =>
-	`<div class="page-head"><div class="page-head__main"><h1 class="page-head__title">${icon(options.mark)}${esc(options.title)}</h1><p class="page-head__desc">${options.desc}</p></div>${options.actions ? `<div class="page-head__actions">${options.actions}</div>` : ''}</div>`;
+/**
+ * The welcome page's own styles: the startup preference, drawn as a switch rather than as a card.
+ *
+ * `.az-check` is the kit's check *card* — a bordered box with a leading glyph, built for a list of checks inside a
+ * form. In the sticky foot of this page it stood twice as tall as the buttons beside it and read as one more panel
+ * rather than as a preference, so here the same control is flattened to one line: a 14px box that fills brand-blue
+ * when it is on, the words beside it, and the height of a small button.
+ */
+const WELCOME_CSS = `
+.az-actions__buttons {
+	align-items: center;
+}
 
-const rule = (options: { label: string; count?: string; note?: string; actions?: string }): string =>
-	`<div class="group-head"><span class="group-head__label">${esc(options.label)}</span><span class="group-head__rule"></span>${options.count ? `<span class="group-head__count">${esc(options.count)}</span>` : ''}${options.actions ? `<span class="group-head__actions">${options.actions}</span>` : ''}</div>${options.note ? `<p class="group-note">${options.note}</p>` : ''}`;
+.az-actions__buttons .az-check {
+	grid-template-columns: 15px auto;
+	gap: var(--sp-2);
+	align-items: center;
+	height: 24px;
+	padding: 0 var(--sp-2);
+	border: 0;
+	background: transparent;
+}
 
-const callout = (html: string, kind?: 'warn' | 'ok'): string =>
-	`<div class="callout${kind ? ` callout--${kind}` : ''}">${icon(kind === 'warn' ? 'alert' : kind === 'ok' ? 'check' : 'info')}<div>${html}</div></div>`;
+.az-actions__buttons .az-check:has(input:checked) {
+	border: 0;
+	background: transparent;
+}
 
-const tiles = (entries: { value: string; label: string }[]): string =>
-	`<div class="tiles">${entries.map((entry) => `<div class="tile"><div class="tile__value">${esc(entry.value)}</div><div class="tile__label">${esc(entry.label)}</div></div>`).join('')}</div>`;
+.az-actions__buttons .az-check__icon {
+	display: none;
+}
 
-/** A row that is one action: the glyph, the sentence, and the chevron. */
-const actionRow = (mark: string, title: string, note: string, command: string): string =>
-	`<div class="record-row" data-command="${command}">
-	${toneMark(mark, 'accent')}
-	<div class="record-row__main">
-		<div class="record-row__title"><span class="record-row__name">${esc(title)}</span></div>
-		<div class="record-row__meta"><span>${esc(note)}</span></div>
-	</div>
-	<div class="record-row__state"></div>
-	<span class="record-row__go">›</span>
-</div>`;
+.az-actions__buttons .az-check__main {
+	grid-column: 2;
+	grid-row: 1;
+}
 
-/** A row that states a fact: no action, so no chevron. */
-const factRow = (mark: string, title: string, meta: string, state = '', actions = ''): string =>
-	`<div class="record-row record-row--static">
-	${toneMark(mark)}
-	<div class="record-row__main">
-		<div class="record-row__title"><span class="record-row__name">${title}</span></div>
-		<div class="record-row__meta">${meta}</div>
-	</div>
-	<div class="record-row__state">${state}</div>
-	${actions || '<div class="record-row__state"></div>'}
-</div>`;
+.az-actions__buttons .az-check__tick {
+	grid-column: 1;
+	grid-row: 1;
+	width: 15px;
+	height: 15px;
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	color: transparent;
+}
 
-const kbd = (keys: string[]): string => keys.map((key) => `<kbd>${esc(key)}</kbd>`).join(' ');
+.az-actions__buttons .az-check:has(input:checked) .az-check__tick {
+	border-color: var(--az-blue);
+	background: var(--az-blue);
+	color: #fff;
+}
+
+.az-actions__buttons .az-check__tick .icon {
+	width: 10px;
+	height: 10px;
+}
+
+.az-actions__buttons .az-check__label {
+	color: var(--fg-muted);
+	font-size: 12px;
+	line-height: 16px;
+}
+
+.az-actions__buttons .az-check:hover .az-check__label {
+	color: var(--ink-1);
+}
+`;
 
 /* ------------------------------------------------------------------ the six pages */
 
@@ -129,7 +150,7 @@ export class HelpPages {
 	refresh(): void {
 		const panel = this.panels.get('welcome');
 		if (panel) {
-			panel.webview.html = page(this.welcomeBody(), { title: 'Welcome', script: commandScript });
+			panel.webview.html = page(this.welcomeBody(), { title: 'Welcome', script: commandScript, extraCss: WELCOME_CSS });
 		}
 	}
 
@@ -184,7 +205,8 @@ export class HelpPages {
 	private async open(key: string, viewType: string, title: string, body: string, restored?: vscode.WebviewPanel): Promise<void> {
 		const html = page(body, {
 			title,
-			script: key === 'issue' ? commandScript + ISSUE_SCRIPT : commandScript
+			script: key === 'issue' ? commandScript + ISSUE_SCRIPT : commandScript,
+			extraCss: key === 'welcome' ? WELCOME_CSS : undefined
 		});
 		const existing = this.panels.get(key);
 		if (existing) {
@@ -269,7 +291,7 @@ ${entryRow({
 			actions: [
 				{ label: t('Create a project'), command: 'temcoProjects.newProject', kind: 'primary' },
 				{ label: t('Open the documentation'), command: 'temcoDocs.pages.focus' },
-				{ label: t('Projects overview'), command: 'temcoProjects.projectsPage' }
+				{ label: t('Projects overview'), command: 'temcoDocs.projects' }
 			]
 		})}
 ${optionCards([
@@ -305,18 +327,18 @@ ${optionCards([
 				desc: t('A local model answers from the pages you have written, and says which ones.'),
 				ticks: [t('Answers cite the page they came from'), t('Runs on this machine'), t('Nothing leaves the window')],
 				label: t('Open the AI'),
-				command: 'temcoAi.chat'
+				command: 'temcoAi.openPanel'
 			}
 		])}
 ${section({ title: t('What the platform contains'), desc: t('Nine modules. Only the first four take up a place in the activity bar.'), actions: button(t('All Commands'), 'workbench.action.showCommands', { small: true, kind: 'ghost' }) })}
 ${cards([
 			{ mark: 'book', title: t('Documentation'), desc: t('Pages, areas, the registry, validation, the site build and every export.'), command: 'temcoDocs.pages.focus', go: t('Open') },
 			{ mark: 'repo', title: t('Repositories'), desc: t('The Temco code a page is written from: organisations, local copies, reading.'), command: 'temcoProjects.addSource', go: t('Open') },
-			{ mark: 'sparkle', title: t('AI'), desc: t('A local model and the drafts it proposes, with the pages it cited.'), command: 'temcoAi.chat', go: t('Open') },
-			{ mark: 'database', title: t('Tools'), desc: t('SQL, BACnet objects, IO points and the network, on the machine in front of you.'), command: 'workbench.view.extension.temcoSql', go: t('Open') },
+			{ mark: 'sparkle', title: t('AI'), desc: t('A local model and the drafts it proposes, with the pages it cited.'), command: 'temcoAi.openPanel', go: t('Open') },
+			{ mark: 'database', title: t('Tools'), desc: t('SQL: this window’s own database — its tables, its statements, and its upkeep.'), command: 'workbench.view.extension.temcoSql', go: t('Open') },
 			{ mark: 'gear', title: t('Settings'), desc: t('Appearance, modules, models, publishing — and Help, which answers the rest.'), command: 'temcoWorkbench.settings', go: t('Open') }
 		], { dense: true })}
-${calloutCard({
+${notice({
 			mark: 'info',
 			title: t('Local first'),
 			desc: t('The catalog, the pages, the models and every artifact stay on this machine. Publishing to GitHub Pages is the one act that leaves it, and it is never forced.'),
@@ -336,13 +358,11 @@ ${questions([
 			{ ask: t('Where do my pages live?'), answer: t('In the folder a source is read from, as Markdown files the registry declares. This window writes them there and nowhere else.') },
 			{ ask: t('Which languages can a page be translated into?'), answer: t('Eleven, through an Azure AI Translator resource you configure once. The code, the links and the images in a page are never sent.') }
 		])}
-<div class="mt-24 row" style="gap:16px;align-items:center;font-size:12px;color:var(--ink-2)">
-	<label class="check"><input type="checkbox" data-command="temcoWorkbench.toggleWelcomeStartup"${checked}><span>${t('Show this page at startup')}</span></label>
-	<span class="toolbar__spacer"></span>
-	${button(t('Keyboard Shortcuts'), 'temcoWorkbench.help.keys', { small: true, kind: 'ghost' })}
-	${button(t('Release Notes'), 'temcoDocs.releases', { small: true, kind: 'ghost' })}
-</div>
-${floatAction({ label: t('Ask AI'), command: 'temcoAi.chat', mark: 'sparkle' })}`;
+${actionBar({
+			summary: t('A checkbox, a key and two pages: this is the whole of the window’s own preferences.'),
+			actions: `<label class="az-check"><input type="checkbox" data-command="temcoWorkbench.toggleWelcomeStartup"${checked}><span class="az-check__icon">${icon('check')}</span><span class="az-check__main"><span class="az-check__label">${t('Show this page at startup')}</span></span><span class="az-check__tick">${icon('check', 'icon--sm')}</span></label>${button(t('Keyboard Shortcuts'), 'temcoWorkbench.help.keys', { small: true, kind: 'ghost' })}${button(t('Release Notes'), 'temcoDocs.releases', { small: true, kind: 'ghost' })}`
+		})}
+${floatAction({ label: t('Ask AI'), command: 'temcoAi.openPanel', mark: 'sparkle' })}`;
 	}
 }
 
@@ -378,27 +398,42 @@ function homeBody(): string {
 	const workspaceName = folder ? folder.name : 'no folder open';
 	const workspacePath = folder ? folder.uri.fsPath : '—';
 
-	return `${pageHead({
-		title: 'Help',
+	return `${head({
+		studio: t('Temco Platform'),
+		title: t('Help'),
 		mark: 'info',
-		desc: 'What this window is, how to drive it, and what to send when it goes wrong. Everything here works with no network: the same pages are in the offline help file.',
-		actions: button('Report an Issue', 'temcoWorkbench.help.issue', { kind: 'primary', mark: 'alert' })
+		desc: t('What this window is, how to drive it, and what to send when it goes wrong. Everything here works with no network: the same pages are in the offline help file.'),
+		actions: [{ label: t('Report an Issue'), command: 'temcoWorkbench.help.issue', mark: 'alert', kind: 'primary' }]
 	})}
-<div class="learn-hero__search mt-24" style="max-width:none" data-command="workbench.action.quickOpen">${icon('search')}<span>Search the help, the documentation and the shortcuts…</span><span class="cell-mono" style="margin-left:auto">Ctrl+K</span></div>
+<div class="mt-16">${entryRow({
+		mark: 'search',
+		title: t('Search the help, the documentation and the shortcuts'),
+		meta: 'Ctrl+K',
+		command: 'workbench.action.quickOpen',
+		go: t('Search')
+	})}</div>
 <div class="mt-24">
-	${rule({ label: 'Start Here', count: '4 pages', note: 'The documentation is a project like any other: its pages are in the Documents tree, and the site they build is Temco Learn.' })}
-	${actionRow('graduation', 'Getting started with T3000', 'install, connect, and a first point that answers', 'temcoDocs.documents')}
-	${actionRow('key', 'Keyboard shortcuts', 'the keys this window binds, by group', 'temcoWorkbench.help.keys')}
-	${actionRow('output', 'Where the logs are', 'this profile’s log folder, and how to read one', 'temcoWorkbench.help.logs')}
-	${actionRow('upload', 'What changed in 13.0', 'the release notes for the version in this workspace', 'temcoDocs.releases')}
+	${part({ title: t('Start Here'), count: t('4 pages'), note: t('The documentation is a project like any other: its pages are in the Documents tree, and the site they build is Temco Learn.') })}
+	${entries([
+		entryRow({ mark: 'graduation', title: t('Getting started with T3000'), meta: t('install, connect, and a first point that answers'), command: 'temcoDocs.documents', go: t('Open') }),
+		entryRow({ mark: 'key', title: t('Keyboard shortcuts'), meta: t('the keys this window binds, by group'), command: 'temcoWorkbench.help.keys', go: t('Open') }),
+		entryRow({ mark: 'output', title: t('Where the logs are'), meta: t('this profile’s log folder, and how to read one'), command: 'temcoWorkbench.help.logs', go: t('Open') }),
+		entryRow({ mark: 'upload', title: t('What changed in 13.0'), meta: t('the release notes for the version in this workspace'), command: 'temcoDocs.releases', go: t('Open') })
+	].join(''))}
 </div>
 <div class="mt-24">
-	${rule({ label: 'This Window', count: '3 facts', note: 'Worth quoting in a bug report — the Report page collects them for you.' })}
-	${factRow('package', 'Version', `<span class="cell-mono">${esc(vscode.version)}</span> · <span>${esc(vscode.env.appName)}</span>`)}
-	${factRow('layers', 'Profile', '<span>Default</span> · <span class="cell-mono">settings.json</span>')}
-	${factRow('building', 'Workspace', `<span>${esc(workspaceName)}</span> · <span class="cell-mono">${esc(workspacePath)}</span>`)}
+	${part({ title: t('This Window'), count: t('3 facts'), note: t('Worth quoting in a bug report — the Report page collects them for you.') })}
+	${entries([
+		entry({ mark: 'package', title: t('Version'), meta: [vscode.version, vscode.env.appName] }),
+		entry({ mark: 'layers', title: t('Profile'), meta: [t('Default'), 'settings.json'] }),
+		entry({ mark: 'building', title: t('Workspace'), meta: [workspaceName, workspacePath] })
+	].join(''))}
 </div>
-<div class="mt-16">${callout('Everything on this page is read from the build you are running — the version, the profile and the workspace are the window’s own facts, not a sample.')}</div>`;
+<div class="mt-16">${notice({
+		mark: 'info',
+		title: t('Read, not typed in'),
+		desc: t('Everything on this page is read from the build you are running — the version, the profile and the workspace are the window’s own facts, not a sample.')
+	})}</div>`;
 }
 
 /* ------------------------------------------------------------------ Keyboard Shortcuts */
@@ -409,25 +444,35 @@ function keysBody(registered: string[]): string {
 	const total = SHORTCUTS.reduce((sum, group) => sum + group.items.length, 0);
 	const reachable = SHORTCUTS.reduce((sum, group) => sum + group.items.filter((item) => item.command !== undefined && known.has(item.command)).length, 0);
 
-	return `${pageHead({
-		title: 'Keyboard Shortcuts',
+	return `${head({
+		studio: t('Temco Platform'),
+		title: t('Keyboard Shortcuts'),
 		mark: 'key',
-		desc: 'Every key this window binds. A command without a key can still be run from the command palette, which also lists the ones below.',
-		actions: button('Command Palette', 'workbench.action.quickOpen', { mark: 'terminal' })
+		desc: t('Every key this window binds. A command without a key can still be run from the command palette, which also lists the ones below.'),
+		actions: [{ label: t('Command Palette'), command: 'workbench.action.quickOpen', mark: 'terminal' }]
 	})}
 ${SHORTCUTS.map((group) => `<div class="mt-24">
-	${rule({ label: group.group, count: `${group.items.length} shortcuts` })}
-	${group.items.map((item) => {
-		const state = item.command === undefined
-			? ''
-			: known.has(item.command)
-				? badge('Registered', 'ok')
-				: badge('Not in this build', 'warn');
-		return factRow('key', esc(item.label), `<span>${esc(item.note ?? '')}</span>`, `<span style="display:flex;gap:4px">${kbd(item.keys)}</span>`, state);
-	}).join('')}
+	${part({ title: group.group, count: n(group.items.length, 'shortcut', 'shortcuts') })}
+	${entries(group.items.map((item) => entry({
+		mark: 'key',
+		title: item.label,
+		meta: [item.note],
+		aside: `<span class="cell-mono">${kbd(item.keys)}</span>`,
+		state: item.command === undefined
+			? undefined
+			: known.has(item.command) ? t('Registered') : t('Not in this build')
+	})).join(''))}
 </div>`).join('')}
-<div class="mt-16">${callout('A shortcut fires the same command the palette lists, so a key that does not work is a command that is not registered — not a key that is missing.')}</div>
-<div class="mt-16">${callout(`Of the ${total} shortcuts listed, ${reachable} name a command this build registers. The rest are the mock’s, and a row is only marked <b>Registered</b> when the command list the host reports contains it.`)}</div>`;
+<div class="mt-16">${notice({
+		mark: 'info',
+		title: t('A key fires a command'),
+		desc: t('A shortcut runs the same command the palette lists, so a key that does not work is a command that is not registered — not a key that is missing.')
+	})}</div>
+<div class="mt-16">${notice({
+		mark: 'check',
+		title: t('{0} of {1} reach a command here', String(reachable), String(total)),
+		desc: t('The rest are the mock’s, and a row is only marked Registered when the command list the host reports contains it.')
+	})}</div>`;
 }
 
 /* ------------------------------------------------------------------ Logs */
@@ -504,42 +549,57 @@ async function logsBodyFor(context: vscode.ExtensionContext): Promise<string> {
 	const tail = await tailOf(largest);
 
 	const rows = files.length === 0
-		? LOG_FILES.map((file) => factRow(
-			'output',
-			`<span class="cell-mono">${esc(file.name)}</span>`,
-			`<span>${esc(file.note)}</span> · <span class="cell-mono">${esc(file.size)}</span> · <span>written ${esc(file.updated)}</span>`,
-			badge(file.tone === 'warn' ? '1 warning' : file.tone === 'neutral' ? 'empty' : 'quiet', file.tone),
-			''
-		)).join('')
-		: files.map((file) => factRow(
-			'output',
-			`<span class="cell-mono">${esc(file.name)}</span>`,
-			`<span class="cell-mono">${esc(bytes(file.size))}</span> · <span>written ${esc(ago(file.modified))}</span>`,
-			file.size === 0 ? badge('empty', 'neutral') : '',
-			button('Open', 'temcoWorkbench.help.openLog', { small: true, kind: 'ghost', args: [file.name] })
-		)).join('');
+		? LOG_FILES.map((file) => entry({
+			mark: 'output',
+			title: file.name,
+			meta: [file.note, file.size, t('written {0}', file.updated)],
+			state: file.tone === 'warn' ? t('1 warning') : file.tone === 'neutral' ? t('empty') : t('quiet')
+		})).join('')
+		: files.map((file) => entry({
+			mark: 'output',
+			title: file.name,
+			meta: [bytes(file.size), t('written {0}', ago(file.modified))],
+			state: file.size === 0 ? t('empty') : undefined,
+			actions: button(t('Open'), 'temcoWorkbench.help.openLog', { small: true, kind: 'ghost', args: [file.name] })
+		})).join('');
 
 	const tailBlock = tail.length === 0
-		? `<div class="mt-16">${callout(files.length === 0
-			? 'This profile has not written a log yet. The folder exists — the first line appears when a process writes one.'
-			: 'The largest log is too big to show a tail of here; open it instead.')}</div>`
-		: `<div class="mt-16"><pre class="code">${esc(tail)}</pre></div>`;
+		? `<div class="mt-16">${notice({
+			mark: 'info',
+			title: files.length === 0 ? t('No log yet') : t('Too large to show'),
+			desc: files.length === 0
+				? t('This profile has not written a log yet. The folder exists — the first line appears when a process writes one.')
+				: t('The largest log is too big to show a tail of here; open it instead.')
+		})}</div>`
+		: `<div class="mt-16">${code({ language: t('Log'), lines: tail.split('\n').map((text) => ({ text })) })}</div>`;
 
-	return `${pageHead({
-		title: 'Logs',
+	return `${head({
+		studio: t('Temco Platform'),
+		title: t('Logs'),
 		mark: 'output',
-		desc: 'One file per process, in this profile’s log folder. A log line names the process that wrote it, so a report can be read back without the window in front of you.',
-		actions: button('Open Log Folder', 'workbench.action.openLogsFolder', { kind: 'primary', mark: 'folder' }) + button('Copy Path', 'temcoWorkbench.copyLogPath', { mark: 'code' })
+		desc: t('One file per process, in this profile’s log folder. A log line names the process that wrote it, so a report can be read back without the window in front of you.'),
+		actions: [
+			{ label: t('Open Log Folder'), command: 'workbench.action.openLogsFolder', mark: 'folder', kind: 'primary' },
+			{ label: t('Copy Path'), command: 'temcoWorkbench.copyLogPath', mark: 'code' }
+		]
 	})}
 <div class="mt-24">
-	${rule({ label: 'Files', count: `${files.length > 0 ? files.length : LOG_FILES.length} files`, note: files.length > 0 ? esc(context.logUri.fsPath) : undefined })}
-	${rows}
+	${part({ title: t('Files'), count: n(files.length > 0 ? files.length : LOG_FILES.length, 'file', 'files'), note: files.length > 0 ? context.logUri.fsPath : undefined })}
+	${entries(rows)}
 </div>
 ${files.length > 0 ? `<div class="mt-24">
-	${rule({ label: largest ? largest.name : 'no file', count: tail.length === 0 ? undefined : 'last 9 lines', actions: button('Reveal', 'workbench.action.openLogsFolder', { small: true, kind: 'ghost' }) })}
+	${part({
+		title: largest ? largest.name : t('No file'),
+		count: tail.length === 0 ? undefined : t('last 9 lines'),
+		actions: button(t('Reveal'), 'workbench.action.openLogsFolder', { small: true, kind: 'ghost' })
+	})}
 	${tailBlock}
 </div>` : tailBlock}
-<div class="mt-16">${callout('Logs are written to the profile folder, never to the workspace, so a log survives switching workspaces and never lands in a commit.')}</div>`;
+<div class="mt-16">${notice({
+		mark: 'info',
+		title: t('Logs live in the profile'),
+		desc: t('Logs are written to the profile folder, never to the workspace, so a log survives switching workspaces and never lands in a commit.')
+	})}</div>`;
 }
 
 /* ------------------------------------------------------------------ Report an Issue */
@@ -568,29 +628,41 @@ const ISSUE_SCRIPT = `
 function issueBody(version: string): string {
 	const counted = ISSUE_INCLUDES.filter((item) => item.on).length;
 
-	return `${pageHead({
-		title: 'Report an Issue',
+	return `${head({
+		studio: t('Temco Platform'),
+		title: t('Report an Issue'),
 		mark: 'alert',
-		desc: 'A report that can be reproduced is a report that gets fixed. This page collects the facts you would otherwise be asked for, and leaves out anything private.',
-		actions: `<button type="button" class="btn btn--primary" id="issue-send">${icon('external')}<span>Open on GitHub</span></button>`
+		desc: t('A report that can be reproduced is a report that gets fixed. This page collects the facts you would otherwise be asked for, and leaves out anything private.')
 	})}
-<div class="settings-rows">
-	<div class="form-row"><div class="form-row__main"><div class="form-row__label">Title</div><div class="form-row__desc">What went wrong, in one line.</div></div><div class="form-row__control"><input class="input" id="issue-title" placeholder="Publishing 13.0 stops at 62 %" aria-label="Issue title"></div></div>
-	<div class="form-row"><div class="form-row__main"><div class="form-row__label">What happened</div><div class="form-row__desc">The steps that led there, and what you expected instead.</div></div><div class="form-row__control"><input class="input" id="issue-steps" placeholder="Steps to reproduce" aria-label="Steps"></div></div>
-	<div class="form-row"><div class="form-row__main"><div class="form-row__label">Where</div><div class="form-row__desc">The surface you were on when it happened.</div></div><div class="form-row__control"><input class="input" id="issue-where" value="Documentation › Build Center" aria-label="Where"></div></div>
-</div>
+${formFields([
+		{ label: t('Title'), hint: t('What went wrong, in one line.'), control: `<input class="az-input" id="issue-title" placeholder="${t('Publishing 13.0 stops at 62 %')}" aria-label="${t('Issue title')}">` },
+		{ label: t('What happened'), hint: t('The steps that led there, and what you expected instead.'), control: `<input class="az-input" id="issue-steps" placeholder="${t('Steps to reproduce')}" aria-label="${t('Steps')}">` },
+		{ label: t('Where'), hint: t('The surface you were on when it happened.'), control: `<input class="az-input" id="issue-where" value="${t('Documentation › Build Center')}" aria-label="${t('Where')}">` }
+	])}
+${actionBar({
+		summary: t('Nothing is sent until you submit the report.'),
+		actions: `<button type="button" class="az-btn az-btn--primary" id="issue-send">${icon('external')}<span>${t('Open on GitHub')}</span></button>`
+	})}
 <div class="mt-24">
-	${rule({ label: 'What Goes With It', count: `${counted} of ${ISSUE_INCLUDES.length}`, note: 'Nothing here contains page text, a prompt or a password. A log line names the process and the surface, not the content.' })}
-	${ISSUE_INCLUDES.map((item) => factRow(
-		item.on ? 'check' : 'close',
-		esc(item.name),
-		`<span>${esc(item.detail.replace('1.143.0', version))}</span>`,
-		'',
-		button('Copy', 'temcoWorkbench.copyDiagnostics', { small: true, kind: 'ghost' })
-	)).join('')}
+	${part({ title: t('What Goes With It'), count: `${counted} of ${ISSUE_INCLUDES.length}`, note: t('Nothing here contains page text, a prompt or a password. A log line names the process and the surface, not the content.') })}
+	${entries(ISSUE_INCLUDES.map((item) => entry({
+		mark: item.on ? 'check' : 'close',
+		tone: item.on ? 'ok' : 'info',
+		title: item.name,
+		meta: [item.detail.replace('1.143.0', version)],
+		actions: button(t('Copy'), 'temcoWorkbench.copyDiagnostics', { small: true, kind: 'ghost' })
+	})).join(''))}
 </div>
-<div class="mt-16">${callout('The platform sends no telemetry. A report reaches us when you send it, and not before.')}</div>
-<div class="mt-16">${callout('Open on GitHub puts the report on your clipboard and opens the issue reporter with it — the title, the steps and where you were are yours, and nothing is sent until you submit it.')}</div>`;
+<div class="mt-16">${notice({
+		mark: 'info',
+		title: t('No telemetry'),
+		desc: t('The platform sends no telemetry. A report reaches us when you send it, and not before.')
+	})}</div>
+<div class="mt-16">${notice({
+		mark: 'check',
+		title: t('Yours to send'),
+		desc: t('Open on GitHub puts the report on your clipboard and opens the issue reporter with it — the title, the steps and where you were are yours, and nothing is sent until you submit it.')
+	})}</div>`;
 }
 
 /* ------------------------------------------------------------------ About */
@@ -605,33 +677,50 @@ function aboutBody(): string {
 	const active = own.filter((extension) => extension.isActive).length;
 	const reserved = own.length - active;
 
-	return `${pageHead({
-		title: 'About',
+	return `${head({
+		studio: t('Temco Platform'),
+		title: t('About'),
 		mark: 'info',
-		desc: `${esc(vscode.env.appName)} ${esc(vscode.version)} — the window, the modules that ship with it, and the versions of what it depends on.`,
-		actions: button('Check for Updates', 'temcoWorkbench.settings.checkUpdates', { mark: 'refresh' })
+		desc: t('{0} {1} — the window, the modules that ship with it, and the versions of what it depends on.', vscode.env.appName, vscode.version),
+		actions: [{ label: t('Check for Updates'), command: 'temcoWorkbench.settings.checkUpdates', mark: 'refresh' }]
 	})}
-<div class="mt-16">${tiles([
-		{ value: vscode.version, label: 'Version' },
-		{ value: `${own.length}`, label: 'Modules' },
-		{ value: `${active}`, label: 'Active modules' },
-		{ value: `${reserved}`, label: 'Not activated' }
+<div class="mt-16">${figures([
+		{ value: vscode.version, label: t('Version') },
+		{ value: `${own.length}`, label: t('Modules') },
+		{ value: `${active}`, label: t('Active modules') },
+		{ value: `${reserved}`, label: t('Not activated') }
 	])}</div>
 <div class="mt-24">
-	${rule({ label: 'Build', count: '4 facts' })}
-	${factRow('branch', 'Platform', `<span class="cell-mono">${esc(process.platform)} ${esc(process.arch)}</span>`)}
-	${factRow('package', 'Remote', `<span>${esc(vscode.env.remoteName ?? 'local — nothing is remote')}</span>`)}
-	${factRow('globe', 'Language', `<span class="cell-mono">${esc(vscode.env.language)}</span>`)}
-	${factRow('document', 'Third-party notices', '<span>every dependency and its licence, shipped with the build</span>', '', button('Open', 'workbench.action.openLicenseUrl', { small: true, kind: 'ghost' }))}
+	${part({ title: t('Build'), count: t('4 facts') })}
+	${entries([
+		entry({ mark: 'branch', title: t('Platform'), meta: [`${process.platform} ${process.arch}`] }),
+		entry({ mark: 'package', title: t('Remote'), meta: [vscode.env.remoteName ?? t('local — nothing is remote')] }),
+		entry({ mark: 'globe', title: t('Language'), meta: [vscode.env.language] }),
+		entry({
+			mark: 'document',
+			title: t('Third-party notices'),
+			meta: [t('every dependency and its licence, shipped with the build')],
+			actions: button(t('Open'), 'workbench.action.openLicenseUrl', { small: true, kind: 'ghost' })
+		})
+	].join(''))}
 </div>
 <div class="mt-24">
-	${rule({ label: 'Modules', count: `${own.length} installed`, note: 'A module ships with the platform and is never installed or updated on its own.' })}
-	${own.map((extension) => {
+	${part({ title: t('Modules'), count: t('{0} installed', String(own.length)), note: t('A module ships with the platform and is never installed or updated on its own.') })}
+	${entries(own.map((extension) => {
 		const name = String(extension.packageJSON.displayName ?? extension.packageJSON.name ?? extension.id);
-		return factRow('package', esc(name), `<span class="cell-mono">${esc(extension.id)}</span> · <span>v${esc(String(extension.packageJSON.version ?? '—'))}</span>`, badge(extension.isActive ? 'Active' : 'Idle', extension.isActive ? 'ok' : 'neutral'));
-	}).join('')}
+		return entry({
+			mark: 'package',
+			title: name,
+			meta: [extension.id, `v${String(extension.packageJSON.version ?? '—')}`],
+			state: extension.isActive ? t('Active') : t('Idle')
+		});
+	}).join(''))}
 </div>
-<div class="mt-16">${callout('The shell’s own Electron and Node versions are not readable from inside an extension, so this page reports the platform, the remote and the language instead of guessing them.')}</div>`;
+<div class="mt-16">${notice({
+		mark: 'info',
+		title: t('What this page cannot read'),
+		desc: t('The shell’s own Electron and Node versions are not readable from inside an extension, so this page reports the platform, the remote and the language instead of guessing them.')
+	})}</div>`;
 }
 
 /* ------------------------------------------------------------------ wiring */

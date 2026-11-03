@@ -9,14 +9,18 @@ import * as vscode from 'vscode';
 import { roots as readRoots, totals } from './docs';
 import { Catalog, ReleaseRow, selection } from './store';
 import {
-	callout as azCallout,
+	button,
 	commandScript,
+	entries,
+	entry,
 	entryRow,
-	escapeHtml as esc,
-	hero as azHero,
-	icon,
+	head,
+	hero,
+	n,
+	notice,
 	page,
 	pageColumn,
+	part,
 	runCommand,
 	section
 } from './ui';
@@ -88,28 +92,6 @@ export const LEARN_HOME_VIEW_TYPE = 'temcoWorkbench.learn.home';
 export const LEARN_ARTICLE_VIEW_TYPE = 'temcoWorkbench.learn.article';
 export const LEARN_DOWNLOADS_VIEW_TYPE = 'temcoWorkbench.learn.downloads';
 
-interface ActionOptions {
-	kind?: 'primary' | 'ghost';
-	mark?: string;
-	small?: boolean;
-	args?: unknown;
-}
-
-const button = (label: string, command: string, options: ActionOptions = {}): string =>
-	`<button type="button" class="btn${options.small ? ' btn--sm' : ''}${options.kind ? ` btn--${options.kind}` : ''}" data-command="${command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}>${options.mark ? icon(options.mark) : ''}<span>${esc(label)}</span></button>`;
-
-const badge = (text: string, tone?: string): string =>
-	`<span class="badge${tone && tone !== 'neutral' ? ` badge--${tone}` : ''}">${esc(text)}</span>`;
-
-const hero = (options: { tone?: string; eyebrow?: string; title: string; desc?: string; actions?: string }): string =>
-	`<div class="hero-panel${options.tone && options.tone !== 'accent' ? ` hero-panel--${options.tone}` : ''}">${options.eyebrow ? `<div class="eyebrow">${esc(options.eyebrow)}</div>` : ''}<div class="hero-panel__title">${esc(options.title)}</div>${options.desc ? `<p class="hero-panel__desc">${options.desc}</p>` : ''}${options.actions ? `<div class="hero-panel__actions">${options.actions}</div>` : ''}</div>`;
-
-const pageHead = (options: { title: string; mark: string; desc: string; actions?: string }): string =>
-	`<div class="page-head"><div class="page-head__main"><h1 class="page-head__title">${icon(options.mark)}${esc(options.title)}</h1><p class="page-head__desc">${options.desc}</p></div>${options.actions ? `<div class="page-head__actions">${options.actions}</div>` : ''}</div>`;
-
-const rule = (label: string, count: string, note?: string, actions?: string): string =>
-	`<div class="group-head"><span class="group-head__label">${esc(label)}</span><span class="group-head__rule"></span><span class="group-head__count">${esc(count)}</span>${actions ? `<span class="group-head__actions">${actions}</span>` : ''}</div>${note ? `<p class="group-note">${note}</p>` : ''}`;
-
 /** The site's five surfaces, one panel each. */
 export class LearnPages {
 	private readonly panels = new Map<string, vscode.WebviewPanel>();
@@ -130,12 +112,21 @@ export class LearnPages {
 		const facts = await readLearnFacts(this.context);
 		const newest = facts.releases[0];
 		if (newest === undefined) {
-			this.open('article', LEARN_ARTICLE_VIEW_TYPE, 'Article', `${pageHead({
+			this.open('article', LEARN_ARTICLE_VIEW_TYPE, 'Article', `${head({
+				studio: 'Temco Learn',
 				title: 'Nothing is published yet',
 				mark: 'document',
 				desc: 'A reader\u2019s page is a file a release put on disk. Build the site and publish it, and this opens the site itself.',
-				actions: button('Build the Site', 'temcoDocs.buildSite', { kind: 'primary', mark: 'play' }) + button('Publish', 'temcoDocs.publishRelease', { mark: 'upload' })
-			})}${hero({ tone: 'warn', title: 'No published version', desc: 'The build writes the site; publishing copies it to a folder a reader can open. Until both have happened there is no page to read.', actions: button('Open Build Center', 'temcoDocs.builds', { kind: 'primary', mark: 'play' }) })}`, restored);
+				actions: [
+					{ label: 'Build the Site', command: 'temcoDocs.buildSite', mark: 'play', kind: 'primary' },
+					{ label: 'Publish', command: 'temcoDocs.publishRelease', mark: 'upload' }
+				]
+			})}<div class="mt-16">${notice({
+				mark: 'alert',
+				title: 'No published version',
+				desc: 'The build writes the site; publishing copies it to a folder a reader can open. Until both have happened there is no page to read.',
+				actions: button('Open Build Center', 'temcoDocs.builds', { kind: 'primary', mark: 'play' })
+			})}</div>`, restored);
 			return;
 		}
 		await vscode.commands.executeCommand('temcoDocs.openPublished', newest.destination);
@@ -242,7 +233,7 @@ function homeBody(facts: LearnFacts): string {
 		newest === undefined ? 'nothing published yet' : `${newest.version} published ${since(newest.publishedAt)}`
 	].filter((part) => part !== '').join(' · ');
 
-	return `${azHero({
+	return `${hero({
 		eyebrow: 'Temco Learn',
 		title: facts.project === undefined ? 'Documentation for Temco Controls products' : facts.project,
 		desc: 'This window reads one documentation set: the pages in the project it has open, the files its builds wrote, and the versions it published. Everything below is measured from those, never typed in.',
@@ -258,7 +249,7 @@ function homeBody(facts: LearnFacts): string {
 			{ label: 'All pages', command: 'temcoDocs.openRegistry', kind: 'link' }
 		]
 	})}
-${azCallout(next)}
+${notice(next)}
 ${section({
 		title: 'Pages',
 		desc: facts.areas.length === 0
@@ -345,25 +336,36 @@ function downloadsBody(facts: LearnFacts): string {
 	const kinds = [...new Set(facts.artifacts.map((artifact) => artifact.kind))];
 
 	const fileRow = (artifact: { kind: string; path: string; builtAt: string }): string =>
-		`<div class="record-row">${toneMarkOf(ARTIFACT_MARK[artifact.kind] ?? 'download', 'accent')}<div class="record-row__main"><div class="record-row__title"><span class="record-row__name cell-mono">${esc(artifact.path.split(/[\\/]/).pop() ?? artifact.path)}</span><span class="tag">${esc(artifactName(artifact.kind))}</span></div><div class="record-row__meta"><span class="cell-mono">${esc(artifact.path)}</span> · <span>built ${esc(since(artifact.builtAt))}</span></div></div><div class="record-row__state">${badge('Ready', 'ok')}</div>${button('Open', 'temcoDocs.openArtifact', { small: true, kind: 'primary', mark: 'download', args: [artifact.path] })}</div>`;
+		entry({
+			mark: ARTIFACT_MARK[artifact.kind] ?? 'download',
+			tone: 'accent',
+			title: artifact.path.split(/[\\/]/).pop() ?? artifact.path,
+			meta: [artifactName(artifact.kind), artifact.path, `built ${since(artifact.builtAt)}`],
+			state: 'Ready',
+			actions: button('Open', 'temcoDocs.openArtifact', { small: true, kind: 'primary', mark: 'download', args: [artifact.path] })
+		});
 
 	const sections = kinds.map((kind) => {
 		const files = facts.artifacts.filter((artifact) => artifact.kind === kind);
-		return `<div class="mt-24">${rule(artifactName(kind), `${files.length} ${files.length === 1 ? 'file' : 'files'}`, 'The file stays where the build wrote it. A downloadable CHM or PDF needs nothing else.')}<div class="record-list">${files.map(fileRow).join('')}</div></div>`;
+		return `<div class="mt-24">${part({ title: artifactName(kind), count: n(files.length, 'file', 'files'), note: 'The file stays where the build wrote it. A downloadable CHM or PDF needs nothing else.' })}${entries(files.map(fileRow).join(''))}</div>`;
 	}).join('');
 
-	return `${pageHead({
+	return `${head({
+		studio: 'Temco Learn',
 		title: 'Downloads',
 		mark: 'download',
 		desc: 'The offline files the builds left. A version stays openable after a newer one ships — and which versions were published is on Releases, so the list here is files only.',
-		actions: button('Build the Site', 'temcoDocs.buildSite', { kind: 'primary', mark: 'play' }) + button('Build the Offline Help', 'temcoDocs.buildHelp', { mark: 'package' }) + button('Releases', 'temcoDocs.releases', { mark: 'cloud-upload' })
+		actions: [
+			{ label: 'Build the Site', command: 'temcoDocs.buildSite', mark: 'play', kind: 'primary' },
+			{ label: 'Build the Offline Help', command: 'temcoDocs.buildHelp', mark: 'package' },
+			{ label: 'Releases', command: 'temcoDocs.releases', mark: 'cloud-upload' }
+		]
 	})}
 ${facts.artifacts.length === 0
-			? `<div class="mt-16"><div class="callout">${icon('info')}<div><b>Nothing has been built yet.</b> The CHM and the PDF are files a build writes — the build runs the repository\u2019s own script and then looks for the file it should have left. Build one, and it is listed here.</div></div></div>`
+			? `<div class="mt-16">${notice({
+				mark: 'info',
+				title: 'Nothing has been built yet',
+				desc: 'The CHM and the PDF are files a build writes — the build runs the repository\u2019s own script and then looks for the file it should have left. Build one, and it is listed here.'
+			})}</div>`
 			: sections}`;
-}
-
-/** A tone mark, since this module's UI copy does not export one. */
-function toneMarkOf(mark: string, tone?: 'accent' | 'ok' | 'warn' | 'err' | 'info'): string {
-	return `<span class="tone-mark${tone ? ` tone-mark--${tone}` : ''}">${icon(mark, 'icon--sm')}</span>`;
 }

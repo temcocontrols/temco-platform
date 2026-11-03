@@ -84,7 +84,7 @@ const SURFACE_COMMANDS: { [surface: string]: string } = {
 	documents: 'temcoDocs.documents',
 	sources: 'temcoProjects.editProject',
 	projects: 'temcoDocs.projects',
-	chat: 'temcoAi.chat'
+	chat: 'temcoAi.openPanel'
 };
 
 /**

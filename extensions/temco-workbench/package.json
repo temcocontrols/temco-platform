@@ -34,7 +34,6 @@
     "onView:temcoLearn.panel",
     "onWebviewPanel:temcoWorkbench.overview",
     "onWebviewPanel:temcoWorkbench.activity",
-    "onWebviewPanel:temcoWorkbench.needs",
     "onWebviewPanel:temcoWorkbench.settings.general",
     "onWebviewPanel:temcoWorkbench.settings.modules",
     "onWebviewPanel:temcoWorkbench.settings.branding",
@@ -99,11 +98,6 @@
         "command": "temcoWorkbench.home",
         "title": "Home",
         "icon": "$(home)"
-      },
-      {
-        "command": "temcoWorkbench.openNeeds",
-        "title": "What Needs Doing",
-        "icon": "$(checklist)"
       },
       {
         "command": "temcoWorkbench.welcome",
@@ -296,6 +290,22 @@
           "id": "temcoSettings",
           "title": "Settings",
           "icon": "media/settings.svg"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "temcoWorkbench.overview",
+          "when": "view == temcoProjects.projects",
+          "group": "navigation",
+          "title": "Overview"
+        },
+        {
+          "command": "temcoWorkbench.overview",
+          "when": "view == temcoWorkbench.overviewView",
+          "group": "navigation",
+          "title": "Overview"
         }
       ]
     }

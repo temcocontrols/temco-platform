@@ -3,7 +3,6 @@
 // Two of them, and neither is about one module's work:
 //
 //   * **the dashboard** — the application itself, what it is made of and what to do first;
-//   * **the needs page** — everything one list that wants a person, from every module.
 //
 // It is also where the application *starts*: which tab opens, and which sidebar section comes forward when the
 // project being worked on changes. Both are layout decisions, so they are made here rather than in a module that
@@ -17,11 +16,10 @@ import { roots, onDidChange, refresh as reread, totals } from './docs';
 import { DashboardPages } from './dashboard';
 import { HelpPages } from './helpPages';
 import { LearnPages } from './learnPages';
-import { NeedsPage } from './needsPage';
 import { registerSettings } from './settingsPages';
 import { registerSidebarViews } from './sidebar';
-import { OverviewTree } from './overviewTree';
 import { Catalog, selection } from './store';
+import { OverviewTree } from './overviewTree';
 import { onDidRestorePage, restore, restoredAny } from './ui';
 export function activate(context: vscode.ExtensionContext): void {
 	// How many drafts a person still has to settle. A queue is not in the registry, so it is read from the catalog
@@ -35,7 +33,8 @@ export function activate(context: vscode.ExtensionContext): void {
 		modules: vscode.extensions.all.filter((extension) => extension.packageJSON.publisher === 'temcocontrols').length,
 		needs: totals(roots()).neverReviewed + waiting,
 	}));
-	// The Home panel's Overview: the platform's facts as rows, each opening the page behind it.
+	// The Home panel's Overview: this window's facts as rows, each opening the page behind them. It is redrawn by the
+	// same signal as everything else, so a read or a settled draft changes the numbers without a reload.
 	const overview = new OverviewTree(context);
 	context.subscriptions.push(
 		vscode.window.createTreeView('temcoWorkbench.overviewView', { treeDataProvider: overview }),
@@ -57,8 +56,6 @@ export function activate(context: vscode.ExtensionContext): void {
 		}
 		sidebars.refresh();
 	};
-	// The page behind the Library's *Needs attention* row: what wants a person, said in full.
-	const needs = new NeedsPage(context, () => roots());
 	// The page a window with nothing better to show opens on: the application, not one project's work, and the
 	// five other pages that answer a question about the window itself. Welcome used to be its own panel and Help one
 	// page with everything on it; the mock gives six surfaces, each with one question to answer.
@@ -82,7 +79,6 @@ export function activate(context: vscode.ExtensionContext): void {
 		...restore(context, [
 			{ viewType: 'temcoWorkbench.overview', open: (panel) => void dashboard.open('overview', panel) },
 			{ viewType: 'temcoWorkbench.activity', open: (panel) => void dashboard.open('activity', panel) },
-			{ viewType: 'temcoWorkbench.needs', open: (panel) => needs.open(panel) },
 			{ viewType: 'temcoWorkbench.settings.general', open: (panel) => settings.pages.general(panel) },
 			{ viewType: 'temcoWorkbench.settings.modules', open: (panel) => settings.pages.modules(panel) },
 			{ viewType: 'temcoWorkbench.settings.branding', open: (panel) => settings.pages.branding(panel) },
@@ -99,7 +95,6 @@ export function activate(context: vscode.ExtensionContext): void {
 			{ viewType: 'temcoWorkbench.learn.downloads', open: (panel) => void learn.downloads(panel) }
 		]),
 		vscode.commands.registerCommand('temcoWorkbench.home', () => dashboard.open('overview')),
-		vscode.commands.registerCommand('temcoWorkbench.openNeeds', () => needs.open()),
 		vscode.commands.registerCommand('temcoWorkbench.welcome', () => help.welcome()),
 		vscode.commands.registerCommand('temcoWorkbench.help', () => help.home()),
 		vscode.commands.registerCommand('temcoWorkbench.help.welcome', () => help.welcome()),
@@ -155,11 +150,10 @@ export function activate(context: vscode.ExtensionContext): void {
 			help.refresh();
 			settings.pages.refresh();
 		}),
-		// The two surfaces below the Library follow the documentation module's one signal: it re-read the sets, so
-		// the needs page says something new.
+		// The panel's numbers follow the documentation module's one signal: it re-read the sets, so a count on a row
+		// says something new.
 		onDidChange(() => {
 			sidebars.refresh();
-			needs.refresh();
 			void countDrafts();
 		})
 	);

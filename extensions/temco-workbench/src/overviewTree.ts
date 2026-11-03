@@ -1,47 +1,40 @@
 /*---------------------------------------------------------------------------------------------
- *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Copyright (c) Temco Controls. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// The Home panel's Overview: the platform's facts as rows, each opening the page behind it.
+// The Home panel's Overview: this window's own facts, one row per subject, each opening the page behind it.
 //
-// Five rows, and every number in them is one this window can attest to: the projects the catalog holds, the pages the
-// sets in front declare, the sources they read, what is waiting for a person, and the last version published. A number
-// that cannot be read says so — the row is drawn with a dash rather than with a zero nothing measured.
+// Four rows, and every number in them is one this window can attest to: the projects the catalog holds, the pages the
+// sets in front declare, what is waiting for a person, and the last version published. A number that cannot be read
+// says so — a dash rather than a zero nothing measured.
+//
+// The number is the row's `description`, which is the slot a native tree draws at the right-hand end of the row. An
+// earlier version pushed it there through a file-decoration provider and a URI scheme of its own, which is a lot of
+// machinery for a string this property already draws.
 
 import * as vscode from 'vscode';
 import { roots, totals } from './docs';
 import { Catalog, selection } from './store';
 
-const COUNT_SCHEME = 'temco-workbench-count';
-
-/** The row the facts hang under. */
-interface RootNode extends vscode.TreeItem {
-	isRoot?: boolean;
-}
-
-/** The number, as the badge a row pushes to its right edge — a tree item's description would sit beside the label. */
-function badge(text: string, key: string): vscode.Uri {
-	return vscode.Uri.parse(`${COUNT_SCHEME}:/${encodeURIComponent(text)}/${encodeURIComponent(key)}`);
+/** One row of the panel: a subject, its number, and the page that answers it. */
+interface RowOptions {
+	/** Stable across refreshes, so the tree keeps its selection when a number changes. */
+	id: string;
+	label: string;
+	/** The number, at the row's right-hand end. */
+	value: string;
+	icon: string;
+	/** What the number counts, in the tooltip. */
+	what: string;
+	command: string;
 }
 
 export class OverviewTree implements vscode.TreeDataProvider<vscode.TreeItem> {
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChangeTreeData = this.changed.event;
 
-	constructor(private readonly context: vscode.ExtensionContext) {
-		context.subscriptions.push(
-			vscode.window.registerFileDecorationProvider({
-				provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
-					if (uri.scheme !== COUNT_SCHEME) {
-						return undefined;
-					}
-					const text = decodeURIComponent(uri.path.split('/')[1] ?? '');
-					return text.length === 0 ? undefined : { badge: text, tooltip: text };
-				},
-			})
-		);
-	}
+	constructor(private readonly context: vscode.ExtensionContext) { }
 
 	refresh(): void {
 		this.changed.fire();
@@ -51,27 +44,9 @@ export class OverviewTree implements vscode.TreeDataProvider<vscode.TreeItem> {
 		return item;
 	}
 
+	/** Four rows and no parent: the view is already named Overview, so a root row would only indent them. */
 	async getChildren(item?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
-		if (item !== undefined) {
-			return (item as RootNode).isRoot === true ? this.facts() : [];
-		}
-		return [this.root()];
-	}
-
-	/**
-	 * The one row everything else hangs under.
-	 *
-	 * It exists for two reasons: the five numbers are facts about *this window*, and a list needs a subject; and a tree
-	 * indents a child by a level, which is the only left margin a native tree row has to give.
-	 */
-	private root(): RootNode {
-		const item: RootNode = new vscode.TreeItem('Temco Platform', vscode.TreeItemCollapsibleState.Expanded);
-		item.isRoot = true;
-		item.id = 'temcoWorkbench.overview.root';
-		item.iconPath = new vscode.ThemeIcon('folder-library');
-		item.tooltip = 'What this window holds';
-		item.command = { command: 'temcoWorkbench.overview', title: 'Overview' };
-		return item;
+		return item === undefined ? this.facts() : [];
 	}
 
 	private async facts(): Promise<vscode.TreeItem[]> {
@@ -97,23 +72,49 @@ export class OverviewTree implements vscode.TreeDataProvider<vscode.TreeItem> {
 			catalog?.close();
 		}
 
-		const row = (label: string, value: string, icon: string, command?: vscode.Command): vscode.TreeItem => {
-			const entry = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
-			entry.iconPath = new vscode.ThemeIcon(icon);
-			entry.tooltip = `${label} — ${value}`;
-			// The one slot a row pushes to its right edge: the number, at the end of the row and not beside the label.
-			entry.resourceUri = badge(value, label);
-			if (command !== undefined) {
-				entry.command = command;
-			}
+		const row = (options: RowOptions): vscode.TreeItem => {
+			const entry = new vscode.TreeItem(options.label, vscode.TreeItemCollapsibleState.None);
+			entry.id = options.id;
+			entry.iconPath = new vscode.ThemeIcon(options.icon);
+			entry.description = options.value;
+			entry.tooltip = `${options.label} — ${options.what}`;
+			entry.command = { command: options.command, title: options.label };
 			return entry;
 		};
 
 		return [
-			row('Projects', projects === undefined ? '—' : String(projects), 'folder-library', { command: 'temcoProjects.projectsPage', title: 'Projects' }),
-			row('Pages', String(counted.pages), 'book', { command: 'temcoDocs.pages.focus', title: 'Show the Pages' }),
-			row('Needs review', String(counted.neverReviewed + (waiting ?? 0)), 'check', { command: 'temcoDocs.review', title: 'Review Center' }),
-			row('Last release', published ?? 'never', 'cloud-upload', { command: 'temcoDocs.releases', title: 'Releases' })
+			row({
+				id: 'overview.projects',
+				label: 'Projects',
+				value: projects === undefined ? '—' : String(projects),
+				icon: 'folder-library',
+				what: 'the documentation sets this machine holds',
+				command: 'temcoDocs.projects'
+			}),
+			row({
+				id: 'overview.pages',
+				label: 'Pages',
+				value: String(counted.pages),
+				icon: 'book',
+				what: 'the pages the sets in front declare',
+				command: 'temcoDocs.pages.focus'
+			}),
+			row({
+				id: 'overview.review',
+				label: 'Needs review',
+				value: String(counted.neverReviewed + (waiting ?? 0)),
+				icon: 'check',
+				what: 'pages never reviewed, plus the drafts still waiting',
+				command: 'temcoDocs.review'
+			}),
+			row({
+				id: 'overview.release',
+				label: 'Last release',
+				value: published ?? 'never',
+				icon: 'cloud-upload',
+				what: 'the last version frozen for readers',
+				command: 'temcoDocs.releases'
+			})
 		];
 	}
 }
