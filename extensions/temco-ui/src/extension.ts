@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { fileColumn, isOurViewType, pageColumn } from './columns';
 import { ActionBarOptions, CalloutOptions, CheckCardsOptions, ChoiceCardsOptions, CodeOptions, EntryRowOptions, FeatureCard, FormField, HeroOptions, NumberItem, OptionCard, Question, SectionOptions, actionBar, callout, cards, checkCards, choiceCards, code, entryRow, floatAction, formFields, hero, icon, numbers, optionCards, questions, section, toneMark } from './components';
 import { COMMAND_SCRIPT, PageMessage, PageOptions, escapeHtml, page, runPageCommand } from './page';
+import { ButtonOptions, EntryOptions, Figure, HeadOptions, NoticeOptions, PartOptions, button, entries, entry, figures, head, n, notice, part } from './pageKit';
 import { RestorablePage, onDidRestorePage, remember, remembered, restore, restoredAny } from './restore';
 import { rowSlug } from './rows';
 
@@ -58,6 +59,22 @@ export interface TemcoUiApi {
 	code(options: CodeOptions): string;
 	/** The floating action in the corner of the page. */
 	floatAction(options: { label: string; command: string; mark?: string }): string;
+	/** The top of a page: the area it belongs to, its only `h1`, one line of why, and the acts it opens with. */
+	head(options: HeadOptions): string;
+	/** One part of a page: its title, the count and sentence under it, and what can be done from here. */
+	part(options: PartOptions): string;
+	/** The list a part's rows lie in. */
+	entries(rows: string): string;
+	/** One row: the glyph, the thing, the facts about it, its state, and what can be done to it. */
+	entry(options: EntryOptions): string;
+	/** The figures a page opens on. */
+	figures(items: readonly Figure[]): string;
+	/** The one tinted paragraph a page is allowed, and the thing to do about it. */
+	notice(options: NoticeOptions): string;
+	/** A button, rendered the one way this application renders them. */
+	button(label: string, command: string, options?: ButtonOptions): string;
+	/** The count with its noun, as the pages write it: "1 table", "34 tables". */
+	n(count: number, one: string, many: string): string;
 	/** The script a page runs to post `data-command` clicks back to its module. */
 	commandScript: string;
 	/** Runs one of those messages. The module's `onDidReceiveMessage` calls this. */
@@ -98,6 +115,14 @@ export function activate(context: vscode.ExtensionContext): TemcoUiApi {
 		actionBar,
 		code,
 		floatAction,
+		head,
+		part,
+		entries,
+		entry,
+		figures,
+		notice,
+		button,
+		n,
 		commandScript: COMMAND_SCRIPT,
 		runCommand: runPageCommand,
 		remember,

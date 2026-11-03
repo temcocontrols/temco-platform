@@ -4092,12 +4092,33 @@ body {
 	min-width: 0;
 }
 
+/*
+ * The mark that tells a section's title apart from the page's own: a 2px brand bar, drawn inside the title's box
+ * rather than beside it, so every page's headings start on the same left edge as its rows.
+ *
+ * It lives here because eight pages had written it out for themselves, and a heading that has drifted by a pixel on
+ * one page is exactly the drift the kit exists to prevent.
+ */
 .az-section__title {
+	position: relative;
+	padding-left: 10px;
 	margin: 0;
 	color: var(--ink-1);
 	font-size: 16px;
 	font-weight: 500;
 	line-height: 22px;
+}
+
+.az-section__title::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 2px;
+	height: 12px;
+	border-radius: 1px;
+	background: var(--az-blue, #0078d4);
 }
 
 .az-section__desc {
@@ -4119,6 +4140,47 @@ body {
 	font-size: 11.5px;
 	line-height: 16px;
 }
+
+/*
+ * The fold under a section's rows: the rest of a list, counted rather than shown.
+ *
+ * A page that lists a queue in full is a page nobody scrolls to the end of, so a long list is cut and the cut is a
+ * word a person can open. Styled here because six pages had their own copy of this triangle.
+ */
+.az-more {
+	margin: var(--sp-2) 0 0;
+}
+
+.az-more > summary {
+	padding: 2px 0;
+	color: var(--fg-muted);
+	font-size: 12px;
+	line-height: 17px;
+	cursor: pointer;
+}
+
+.az-more > summary:hover {
+	color: var(--az-blue, #0078d4);
+}
+
+/*
+ * A state, as a word: what a row is doing, at its right-hand end.
+ *
+ * It is deliberately not a pill. A filled badge is a shape you read the colour of; a state is a fact, and the word
+ * is what carries it — the tint is only there so a scan down the column finds the two that are not fine.
+ */
+.az-state {
+	color: var(--fg-muted);
+	font-size: 12px;
+	line-height: 17px;
+	white-space: nowrap;
+}
+
+.az-state--ok { color: var(--ok); }
+.az-state--warn { color: var(--warn); }
+.az-state--err { color: var(--err); }
+.az-state--info { color: var(--info); }
+.az-state--accent { color: var(--az-blue, #0078d4); }
 
 .az-section__actions {
 	margin-left: auto;
@@ -4903,6 +4965,58 @@ body.vscode-dark .az-code .tok-name { color: #c6b3ff; }
 	.az-split {
 		grid-template-columns: minmax(0, 1fr);
 	}
+}
+
+/* ---- a row without its outline: a card that sits on the page, not on a border ---- */
+/*
+ * The same entry, with its border taken away rather than its padding: a group of rows that are one subject reads
+ * calmer as filled cards than as boxes, and the avatar-sized gap between a heading and its rows is all the separation
+ * they need. The border stays in the box model (transparent) so a row does not jump a pixel when it is hovered.
+ */
+.az-entries--plain > .az-entry {
+	border-color: transparent;
+}
+
+.az-entries--plain > .az-entry:hover {
+	border-color: var(--hairline);
+}
+
+/* ---- rows that lie side by side: a few things that are one subject, read across ---- */
+/*
+ * The same entry, laid out as a card: at a third of the page the icon-and-text-and-link row has no room to breathe, so
+ * the pieces stack — icon beside the title, the facts under it, and the way out at the bottom of the text column where
+ * a hand already is. It stays `.az-entry`, so nothing here is a second row style.
+ */
+.az-entries--row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: var(--sp-2);
+}
+
+.az-entries--row > .az-entry {
+	grid-template-columns: 26px minmax(0, 1fr);
+	align-items: start;
+	padding: var(--sp-3);
+}
+
+.az-entries--row > .az-entry > .az-entry__state,
+.az-entries--row > .az-entry > .az-entry__go,
+.az-entries--row > .az-entry > .az-entry__aside {
+	grid-column: 2;
+	justify-self: start;
+	margin-top: var(--sp-1);
+}
+
+/*
+ * A title that carries its own way out: the act sits at the far end of the first line, so a card that says what a
+ * thing is and where to go about it is two lines rather than three — and the facts under it keep the full width of the
+ * card instead of being squeezed beside a button.
+ */
+.az-entry__headline {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--sp-2);
 }
 
 /* A destructive button is the same button, in the one colour a page uses for "this forgets something". */

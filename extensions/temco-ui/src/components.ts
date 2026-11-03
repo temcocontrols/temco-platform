@@ -71,6 +71,13 @@ export interface HeroOptions {
 	descWide?: boolean;
 	search?: HeroSearch;
 	actions?: readonly HeroAction[];
+	/**
+	 * The ways in, already rendered.
+	 *
+	 * A page whose buttons come from its own helper hands the markup over rather than rebuilding it as data: the two
+	 * are the same `.az-btn` buttons, and a page should not have to know the shape of its own acts twice.
+	 */
+	actionsHtml?: string;
 	/** The front page's title is 40/52; every other page's is 32/40. */
 	hero?: boolean;
 	/**
@@ -129,7 +136,8 @@ export function hero(options: HeroOptions): string {
 	const search = options.search === undefined
 		? ''
 		: `<button type="button" class="az-field" data-command="${escapeHtml(options.search.command)}" title="${escapeHtml(options.search.label)}">${icon('search')}<span class="az-field__label">${escapeHtml(options.search.label)}</span>${options.search.hint === undefined ? '' : `<kbd class="az-field__hint">${escapeHtml(options.search.hint)}</kbd>`}</button>`;
-	const actions = options.actions === undefined || options.actions.length === 0 ? '' : buttons(options.actions);
+	const actions = options.actionsHtml
+		?? (options.actions === undefined || options.actions.length === 0 ? '' : buttons(options.actions));
 	const row = search === '' && actions === '' ? '' : `<div class="az-row">${search}${actions}</div>`;
 	const size = options.hero === true ? ' az-title--hero' : '';
 	const mark = options.mark === undefined ? '' : `<span class="az-title__mark">${icon(options.mark)}</span>`;

@@ -120,8 +120,16 @@ export interface PageMessage {
 }
 
 /** Runs a page's command message. Every module's `onDidReceiveMessage` is this function. */
+/**
+ * Runs a command a page's button named.
+ *
+ * `data-args` is written as a **list** — `[id]`, `['slug']` — because that is how a page thinks about "the things this
+ * command needs", and the list is spread here so the command receives them one by one. A page that named a single
+ * value rather than a list of one still works: a value that is not an array is the whole argument list.
+ */
 export function runPageCommand(message: PageMessage): void {
 	if (message.type === 'command' && typeof message.command === 'string') {
-		void vscode.commands.executeCommand(message.command, message.args);
+		const args = message.args === undefined ? [] : Array.isArray(message.args) ? message.args : [message.args];
+		void vscode.commands.executeCommand(message.command, ...args);
 	}
 }
