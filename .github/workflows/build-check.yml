@@ -1,0 +1,44 @@
+name: Build check
+
+# A tag spends forty minutes before it reports that a module's dependency was never installed. This runs the
+# expensive half of a release - compiling every built-in extension and bundling its webviews - on every push,
+# so the same mistake costs minutes instead.
+
+on:
+  push:
+    branches:
+      - t3000-platform
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci || npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare Electron types
+        run: node build/npm/electronTypes.ts
+
+      - name: Compile extensions and webviews
+        run: |
+          npm run gulp compile-extensions
+          npm run build-webviews
