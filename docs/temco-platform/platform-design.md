@@ -3,7 +3,7 @@
 **Host: the VS Code fork. UI library: Fluent UI v9. Editor engine: ONLYOFFICE Docs.**
 
 Status: design for implementation. Written to be handed to a code generator.
-Target repository: `temcocontrols/temco-platform` (VS Code 1.143.0 fork, 12 `temco-*` extensions).
+Target repository: `temcocontrols/temco-platform` (VS Code 1.144.0.0 fork, 12 `temco-*` extensions).
 Supersedes: [`platform-design-v1-web-hosted.md`](./platform-design-v1-web-hosted.md).
 
 ---
@@ -1873,7 +1873,7 @@ The ONLYOFFICE canvas is cross-origin. We cannot assert on its DOM. We assert on
 ## 16. Repository shape and dependencies
 
 ```
-temco-platform/                     (VS Code 1.143.0 fork)
+temco-platform/                     (VS Code 1.144.0.0 fork)
   src/vs/…                          untouched
   extensions/
     temco-ui/                       ★ NEW: the design system
