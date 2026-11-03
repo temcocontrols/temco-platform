@@ -151,7 +151,7 @@ This repository is a fork of `microsoft/vscode`, so the two jobs are kept on two
 | `main` | a **mirror** of `upstream/main` — no Temco file, no Temco commit | upstream only, fast-forwarded |
 | `t3000-platform` | **the product**: the shell, every module, the product identity | every Temco change, and each upstream sync |
 
-`main` is never edited and never carries a release: a tag on it would build an app with none of this product in it. Everything Temco is committed on `t3000-platform`, which is 156 commits ahead of `main` with `main` as its merge base.
+`main` is never edited and never carries a release: a tag on it would build an app with none of this product in it. Everything Temco is committed on `t3000-platform`, with `main` as its merge base.
 
 **Set `t3000-platform` as the repository's default branch** (*Settings → General → Default branch*) — it is `main` today. GitHub only reads `workflow_dispatch` from the default branch, so while `main` is default the release workflow has no *Run workflow* button at all, and a clone lands on upstream's source rather than on the product. A ruleset blocking direct pushes to `main` is worth adding at the same time: the release guards stop a *release* from `main`, not a *commit* to it.
 
@@ -164,7 +164,7 @@ git reset --hard upstream/main
 git push --force-with-lease origin main
 ```
 
-Bringing that merge into the product — a **merge**, never a rebase: 156 shared commits rewritten on every upstream release would make `t3000-platform` unusable for anyone who has cloned it.
+Bringing that merge into the product — a **merge**, never a rebase: the shared commits rewritten on every upstream release would make `t3000-platform` unusable for anyone who has cloned it.
 
 ```bash
 git switch t3000-platform
@@ -184,7 +184,7 @@ A release is a **tag on `t3000-platform`**. GitHub builds the installers from it
    git push origin t3000-platform
    ```
 2. **Make `t3000-platform` the default branch** — *Settings → General → Default branch*. Until this is done the workflow has no *Run workflow* button. Add a ruleset blocking direct pushes to `main` while you are there.
-3. **Keep `package.json`'s version inside the base range.** Every module declares `engines.vscode: ^1.143.0`, so a number below that — `2026.1.0`, `0.1.0`, or a prerelease such as `1.144.0-2026.1` — makes all of them incompatible and the application starts as plain VS Code with no Temco surface. Leave the version at the VS Code base (`1.144.0`) and tag `v1.144.0`; renumber only as a package-wide change to the manifests and this field together.
+3. **Keep `package.json`'s version inside the base range.** The application reports this number to every extension that is not built in, and `engines.vscode` is enforced for those: `2026.1.0`, `1.0.0` or `0.1.0` makes any extension requiring `^1.143.0` incompatible - through a gallery if one is configured, and through *Install from VSIX* regardless. The Temco modules ship built in and are exempt, so the range protects the ecosystem rather than them. Leave the version at the VS Code base (`1.144.0`) and tag `v1.144.0`; express a preview with the release's *Set as a pre-release* flag, and a Temco build number as `1.144.1`-style increments with `extensions/copilot/package.json`'s `engines.vscode` moved to match.
 4. **Tag that commit and push the tag.**
    ```bash
    git tag -a v<version> -m "Temco Platform <version>"

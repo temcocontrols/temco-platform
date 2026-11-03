@@ -11,7 +11,7 @@ The application is built on VS Code - the open-source Code - OSS tree, base `1.1
 | Application | `temco-platform` in `product.json`, window title **Temco Platform** |
 | Branch that ships | `t3000-platform` - the default branch, and the only branch a release is cut from |
 | Branch that mirrors upstream | `main` - never edited, never released |
-| Distance from `main` | 156 commits: 153 authored, 3 upstream sync merges |
+| Distance from `main` | everything Temco wrote: `main` carries none of it |
 | Modules | 14 folders: 10 active, 4 reserved |
 | Seams into VS Code | 2 additive lines ([entry-points.md](docs/temco-platform/entry-points.md)) |
 | A release is | a tag `v<version>` on `t3000-platform`, built by [`.github/workflows/release.yml`](.github/workflows/release.yml) |
@@ -44,7 +44,7 @@ The application is built on VS Code - the open-source Code - OSS tree, base `1.1
              folder, so the help ships with the product it documents
 ```
 
-Step 2 is the only step that needs a Windows desktop: the PDFs are printed from Chromium and the CHM is compiled by HTML Help Workshop. Steps 3 and 4 also run in CI.
+Step 2 needs the tools the repository's own scripts ask for: Chromium prints the PDFs, and HTML Help Workshop compiles the CHM, so today it runs on a Windows desktop. The platform builds nothing itself - it runs those scripts and judges the artefact they leave behind. The site's CI builds the pages on every push but never the PDF or the CHM, so those are produced locally and committed before a release.
 
 ## What a build leaves behind
 
@@ -52,14 +52,14 @@ Step 2 is the only step that needs a Windows desktop: the PDFs are printed from 
 |---|---|---|---|
 | site folder (`dist/docs`) | the product repository's `docs:site` / `docs:build`, run from the platform's Builds page | `temco-learn` at `public/imported/<product>/<version>/` | a browser, as one page of the site |
 | Markdown content | the platform's pages, written into the project | `temco-learn` at `content/<product>/<version>/` | the site's reader and its search |
-| PDF | `npm run pdf` in `temco-learn` (Chromium prints each page) | `public/pdf/<product>/<version>.pdf` | a reader without the product |
+| PDF | `npm run pdf` in `temco-learn` (Chromium prints each page) | `public/pdf/<product>/<version>.pdf` for the whole guide, and one PDF per page under `public/pdf/<product>/<version>/` | a reader without the product |
 | CHM | `npm run chm` in `temco-learn`, or `build:help:dry` in the product repository | `public/chm/<product>/<version>.chm`, and the product's release folder | the product's own Help menu |
 
 Nothing is produced from a page that is not in the registry, and nothing is published from the platform: the platform writes a page only when asked, and the site builds from what was committed.
 
 ## Modules
 
-A module is folder under `extensions/`. It becomes **active** when it has a manifest, a `tsconfig.json` and `src/`, and the build then compiles and ships it; a **reserved** folder holds a `README.md` only, so the build ignores it and no surface appears.
+A module is a folder under `extensions/`. It becomes **active** when it has a manifest, a `tsconfig.json` and `src/`, and the build then compiles and ships it; a **reserved** folder holds a `README.md` only, so the build ignores it and no surface appears.
 
 | Module | Purpose | State |
 |---|---|---|
@@ -116,17 +116,15 @@ scripts\code.bat       # Windows
 
 ## The first release, in order
 
-1. **Commit what is pending on `t3000-platform`** and push it.
+1. **Commit what is pending on `t3000-platform`** - the release workflow, this README and `docs/temco-platform/README.md` - and push it:
 
    ```bash
-   git add .github/workflows/release.yml README.md docs/temco-platform/README.md
-   git commit -m "Release workflow, and the branch model it releases from"
    git push origin t3000-platform
    ```
 
 2. **Make `t3000-platform` the default branch** - *Settings > General > Default branch*. GitHub only reads `workflow_dispatch` from the default branch, so until this is done the workflow has no *Run workflow* button, and a clone lands on upstream's source instead of the product. A ruleset blocking direct pushes to `main` belongs here too: the guards stop a *release* from `main`, not a *commit* to it.
 
-3. **Leave `version` in `package.json` at `1.144.0`.** It is not a marketing number: every module declares `engines.vscode: ^1.143.0`, so a lower or prerelease value makes all ten incompatible and the application starts as plain VS Code with no Temco surface. A Temco release number is a package-wide change - the manifests and this field together - never an edit here alone.
+3. **Leave `version` in `package.json` alone.** It carries the VS Code base the product builds on (`1.144.0` today), and the application reports it to every extension that is not built in, where `engines.vscode` is enforced: at `1.0.0`, `0.1.0` or `2026.1.0` any extension requiring `^1.143.0` is refused - by a gallery if one is enabled, and by *Install from VSIX* in any case. Temco's own modules ship built in, so they are exempt from that check - the range is about the ecosystem, not about them. A Temco build number belongs in the patch digit (`1.144.1`), and `extensions/copilot/package.json`'s `engines.vscode` moves with the base whenever an upstream sync changes it.
 
 4. **Tag that commit and push the tag.**
 
@@ -135,7 +133,7 @@ scripts\code.bat       # Windows
    git push origin v1.144.0
    ```
 
-5. **Wait for the run, then publish the draft.** *Actions > Release* builds three installers in parallel - Windows x64, Linux x64, macOS arm64 - and leaves a **draft** release named after the tag. Open it, check the assets, press **Publish** (tick *Set as a pre-release* for a trial build).
+5. **Wait for the run, then publish the draft.** *Actions > Release* builds the three platforms in parallel - Windows x64, Linux x64, macOS arm64 - uploads each one's packages, and leaves a **draft** release named after the tag. Open it, check the assets, press **Publish** (tick *Set as a pre-release* for a trial build).
 
 Two rules the workflow enforces before it builds anything:
 
@@ -143,6 +141,23 @@ Two rules the workflow enforces before it builds anything:
 |---|---|
 | the tag is `v` followed by `version` in `package.json` | the installer reports the manifest's version, so a release named after something else installs a version nobody can support |
 | the tagged commit is on `t3000-platform` | `main` is the upstream mirror, and a build from it would contain none of this product |
+
+### Versioning over time
+
+The number is a floor, not an appointment: nothing forces a Temco release to appear when VS Code ships one. What has to hold is that the number the application reports is at least what an extension asks for.
+
+| When | `package.json` version | Tag | What happened |
+|---|---|---|---|
+| base `1.144.0` | `1.144.0` | `v1.144.0` | the first release |
+| still `1.144.0` | `1.144.1` | `v1.144.1` | a Temco build, no upstream sync |
+| merged `main` at `1.145.0` | `1.145.0` | `v1.145.0` | the base moved with the sync |
+| still `1.145.0` | `1.145.1` | `v1.145.1` | another Temco build |
+
+- **The base updates itself.** `main` already carries upstream's `version`; merging it into `t3000-platform` conflicts on `package.json`, and the resolution is upstream's number. From there the patch digit belongs to Temco.
+- **Never use a prerelease suffix.** `1.144.0-temco.1` sorts *below* `1.144.0`, so every extension requiring `^1.143.0` would reject it. A patch increment is the safe way to make a second build.
+- **This fork configures no extension gallery.** `product.json` has no `extensionsGallery`, so nothing installs from a marketplace today; the reported number still decides what *Install from VSIX* accepts, and it is what any gallery enabled later will be judged by.
+- **Preview versus production belongs on the release, not in `package.json`.** A draft published with *Set as a pre-release* ticked is a preview: GitHub then keeps it out of *Latest* and out of `/releases/latest`, while the manifest number stays a compatibility floor. A build number the installer should show is a patch digit (`1.144.1`), not a jump to `1.0.0`.
+- **Sync on a schedule you choose.** Skipping several upstream versions is one merge: going from `1.144.0` straight to `1.150.0` is the same operation as one step, and no intermediate number has to be reproduced. Lagging far behind is the only real cost - newer extensions ask for newer bases and are refused.
 
 ## Documentation
 
