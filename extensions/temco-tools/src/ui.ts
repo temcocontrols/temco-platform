@@ -42,6 +42,38 @@ interface UiApi {
 	numbers(items: readonly { value: string; label: string }[]): string;
 	entryRow(options: { title: string; meta?: string; mark?: string; command?: string; args?: unknown; go?: string }): string;
 	callout(options: { title: string; desc: string; mark?: string; actions?: string }): string;
+	/** The top of a page: the area it belongs to, its only `h1`, one line of why, and the acts it opens with. */
+	head(options: {
+		studio: string;
+		title: string;
+		mark: string;
+		desc: string;
+		actions?: readonly { label: string; command: string; args?: unknown; mark?: string; kind?: 'primary' | 'link' }[];
+		stats?: readonly { value: string; label: string }[];
+		note?: { text: string; mark?: string; mono?: boolean };
+	}): string;
+	/** One part of a page: its title, the count and sentence under it, and what can be done from here. */
+	part(options: { title: string; note?: string; count?: string; actions?: string }): string;
+	/** The list a part's rows lie in. */
+	entries(rows: string): string;
+	/** One row: the glyph, the thing, the facts about it, its state, and what can be done to it. */
+	entry(options: {
+		mark?: string;
+		tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent';
+		title: string;
+		meta?: readonly (string | undefined)[];
+		state?: string;
+		actions?: string;
+		aside?: string;
+	}): string;
+	/** The figures a page opens on. */
+	figures(items: readonly { value: string; label: string }[]): string;
+	/** The one tinted paragraph a page is allowed, and the thing to do about it. */
+	notice(options: { title: string; desc: string; mark?: string; actions?: string }): string;
+	/** A button, rendered the one way this application renders them. */
+	button(label: string, command: string, options?: { kind?: 'primary' | 'ghost' | 'link'; mark?: string; args?: unknown; small?: boolean }): string;
+	/** The count with its noun, as the pages write it. */
+	n(count: number, one: string, many: string): string;
 	/** Records the subject a page is being opened on, so a restored tab opens on the same one. */
 	remember(context: vscode.ExtensionContext, viewType: string, arg?: string): void;
 	/** One serializer per page, so the window can bring a page's tab back after a restart. */
@@ -110,4 +142,28 @@ export const commandScript = ui.commandScript;
 
 /** Runs the message a page's buttons send. */
 export const runCommand = ui.runCommand;
+
+/** The page vocabulary: a page is a head, its parts, the rows under them, and the one tint it is allowed. */
+export const head = ui.head;
+
+/** One part of a page: its title, the count and sentence under it, and what can be done from here. */
+export const part = ui.part;
+
+/** The list a part's rows lie in. */
+export const entries = ui.entries;
+
+/** One row: the glyph, the thing, the facts about it, its state, and what can be done to it. */
+export const entry = ui.entry;
+
+/** The figures a page opens on. */
+export const figures = ui.figures;
+
+/** The one tinted paragraph a page is allowed, and the thing to do about it. */
+export const notice = ui.notice;
+
+/** A button, rendered the one way this application renders them. */
+export const button = ui.button;
+
+/** The count with its noun, as the pages write it: "1 table", "34 tables". */
+export const n = ui.n;
 

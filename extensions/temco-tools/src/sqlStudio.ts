@@ -19,8 +19,7 @@
 
 import * as vscode from 'vscode';
 import { Catalog, SqlResult, TableFact } from './store';
-import * as kit from './pageKit';
-import { PageMessage, commandScript, esc, icon, page, pageColumn } from './ui';
+import { PageMessage, button as kitButton, commandScript, entries, entry, esc, figures, head, icon, n, notice, page, pageColumn, part } from './ui';
 
 /** One surface of the SQL container: the row, the command, and the page it draws. */
 export interface SqlPage {
@@ -129,11 +128,13 @@ interface StudioState {
 
 /* ------------------------------------------------------------------ page vocabulary */
 
-// The vocabulary is the application's (`pageKit.ts`, on `temco-ui`'s kit), plus the four primitives a query surface
+// The vocabulary is the application's (`ui.ts`, on `temco-ui`'s kit), plus the four primitives a query surface
 // needs and a page of prose does not: a grid of rows, a toolbar over a statement, the editor itself, and the one line
 // that says what the last run did. Those live in the kit's stylesheet as `az-grid`, `az-toolbar`, `az-editor` and
 // `az-message` — the Data page and the Query Editor draw the same table, so they use the same rules.
-const { button: kitButton, entries, entry: row, figures, head, n, notice, part } = kit;
+
+/** A row of the studio's tables and lists, under the name this file reads it by. */
+const row = entry;
 
 /** A button; `danger` is the one colour a page uses for an act that forgets something. */
 const button = (
