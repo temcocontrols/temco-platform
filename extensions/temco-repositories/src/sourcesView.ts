@@ -18,61 +18,18 @@ export const SOURCES_VIEW_ID = 'temcoRepositories.list';
 
 const MARK: { [kind: string]: string } = { git: 'repo', folder: 'folder', archive: 'package' };
 
+/** The scheme a file row carries before the repository is cloned. Only its path matters: that is what names the icon. */
+const VIRTUAL_SCHEME = 'temco-source';
+
 /**
- * The glyph a file carries: the type where there is one, the plain file where there is not.
+ * The address a file or folder row is drawn from, under the repository's own base.
  *
- * The Explorer draws these from the **file icon theme**, which an extension cannot read — a tree item carries a
- * codicon or an image, and nothing that resolves a path against the theme — so this is the same idea in the one
- * vocabulary the window already has. The name is asked first (`package.json` is a package, not a JSON file), then the
- * extension, and the folder a file sits in is the last question, because code under `docs/` is still code.
+ * It is what makes the row carry the **file icon theme's** glyph — the same one the Explorer shows — instead of a
+ * codicon chosen here: VS Code resolves the icon by name, then extension, then the language the path implies. Nothing
+ * in this module decides what type a file is any more, and a different theme repaints the panel with no code change.
  */
-function fileMark(file: string): vscode.ThemeIcon {
-	const name = (file.split('/').pop() ?? file).toLowerCase();
-	const byName: { [key: string]: string } = {
-		'package.json': 'package',
-		'package-lock.json': 'lock',
-		'yarn.lock': 'lock',
-		'pnpm-lock.yaml': 'lock',
-		'tsconfig.json': 'json',
-		'jsconfig.json': 'json',
-		'dockerfile': 'server',
-		'docker-compose.yml': 'server',
-		'license': 'law',
-		'license.md': 'law',
-		'.gitignore': 'source-control',
-		'.gitattributes': 'source-control',
-		'.editorconfig': 'settings',
-		'.npmrc': 'settings',
-	};
-	const byExtension: { [key: string]: string } = {
-		md: 'markdown', markdown: 'markdown', mdx: 'markdown',
-		json: 'json', jsonc: 'json', json5: 'json',
-		yml: 'settings', yaml: 'settings', toml: 'settings', ini: 'settings', conf: 'settings', env: 'settings',
-		ts: 'code', mts: 'code', cts: 'code', tsx: 'code', js: 'code', mjs: 'code', cjs: 'code', jsx: 'code',
-		html: 'code', htm: 'code', vue: 'code', svelte: 'code',
-		css: 'symbol-color', scss: 'symbol-color', sass: 'symbol-color', less: 'symbol-color',
-		py: 'python', rb: 'ruby',
-		go: 'symbol-method', rs: 'symbol-method', java: 'symbol-class', kt: 'symbol-class', cs: 'symbol-class',
-		c: 'symbol-struct', h: 'symbol-struct', cc: 'symbol-struct', cpp: 'symbol-struct', hpp: 'symbol-struct',
-		sql: 'database',
-		sh: 'terminal', bash: 'terminal', zsh: 'terminal', ps1: 'terminal', bat: 'terminal', cmd: 'terminal',
-		png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', svg: 'file-media',
-		webp: 'file-media', ico: 'file-media',
-		pdf: 'book',
-		txt: 'note',
-		lock: 'lock',
-		csv: 'table', tsv: 'table',
-	};
-	const named = byName[name];
-	if (named !== undefined) {
-		return new vscode.ThemeIcon(named);
-	}
-	const extension = name.includes('.') ? name.split('.').pop() ?? '' : '';
-	const byType = byExtension[extension];
-	if (byType !== undefined) {
-		return new vscode.ThemeIcon(byType);
-	}
-	return new vscode.ThemeIcon(isDocumentation(file) ? 'markdown' : 'file');
+function resourceOf(base: vscode.Uri, path: string): vscode.Uri {
+	return vscode.Uri.joinPath(base, ...path.split('/'));
 }
 
 /**
@@ -107,8 +64,9 @@ function languageMark(language: string | undefined): vscode.ThemeIcon {
 type Node =
 	| { kind: 'organisation'; row: OrganisationRow }
 	| { kind: 'repository'; row: RepositoryCacheRow; source?: string }
-	| { kind: 'folder'; key: string; repository: string; path: string }
-	| { kind: 'file'; key: string; repository: string; path: string; size: number }
+	/** `base` is what a file's or folder's resource is resolved against — the clone, or a virtual address for it. */
+	| { kind: 'folder'; key: string; repository: string; base: vscode.Uri; path: string }
+	| { kind: 'file'; key: string; repository: string; base: vscode.Uri; path: string; size: number }
 	| { kind: 'other'; label: string; note: string }
 	| { kind: 'source'; row: SourceRow }
 	| { kind: 'empty'; label: string; note: string; command?: vscode.Command };
@@ -176,6 +134,9 @@ function item(node: Node): NodeItem {
 			const folder = new NodeItem(node, vscode.TreeItemCollapsibleState.Collapsed);
 			folder.label = node.path.split('/').pop() ?? node.path;
 			folder.id = `dir:${node.key}/${node.path}`;
+			// A folder with a resource and the plain `folder` icon is drawn by the icon theme: its collapsed glyph now,
+			// its open glyph by the theme's own CSS when the row is expanded — no bookkeeping here.
+			folder.resourceUri = resourceOf(node.base, node.path);
 			folder.iconPath = new vscode.ThemeIcon('folder');
 			folder.tooltip = node.path;
 			return folder;
@@ -184,7 +145,10 @@ function item(node: Node): NodeItem {
 			const file = new NodeItem(node, vscode.TreeItemCollapsibleState.None);
 			file.label = node.path.split('/').pop() ?? node.path;
 			file.id = `file:${node.key}/${node.path}`;
-			file.iconPath = fileMark(node.path);
+			// Same deal for a file: the `file` icon defers to the icon theme's mapping of this path — by name, extension
+			// and language — so `app.c`, `README.md` and `package.json` each look like they do in the Explorer.
+			file.resourceUri = resourceOf(node.base, node.path);
+			file.iconPath = new vscode.ThemeIcon('file');
 			file.contextValue = 'temcoFile';
 			file.description = kilo(node.size);
 			file.tooltip = `${node.path} — ${kilo(node.size)}`;
@@ -238,12 +202,6 @@ function item(node: Node): NodeItem {
 	}
 }
 
-/** A file of the repository under `docs/`, in one of the shapes a page is written in. */
-function isDocumentation(file: string): boolean {
-	const lower = file.toLowerCase();
-	return /\.(md|markdown)$/.test(lower) || /(^|\/)docs\//.test(lower);
-}
-
 /** One entry of a repository's flat listing, folded into the folder it belongs to. */
 interface TreeEntry {
 	files: { path: string; size: number }[];
@@ -278,8 +236,6 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 	readonly onDidChangeTreeData = this.changed.event;
 	/** One listing per repository, so expanding a folder does not ask GitHub again. */
 	private readonly trees = new Map<string, TreeEntry | { error: string }>();
-	/** The folders that are open, so a row can show the open glyph the Explorer shows. */
-	private readonly open = new Set<string>();
 	/** Every item this provider has handed out, by id: `reveal` needs the element, not a second copy of it. */
 	private readonly made = new Map<string, vscode.TreeItem>();
 
@@ -288,28 +244,6 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 	refresh(): void {
 		this.trees.clear();
 		this.changed.fire();
-	}
-
-	/**
-	 * Remember that a folder opened or closed, and repaint that one row.
-	 *
-	 * A tree item's icon is fixed once it is made, so the row is re-asked for rather than mutated in place: that is what
-	 * makes `folder` become `folder-opened` without rebuilding the tree under it.
-	 */
-	setOpen(element: vscode.TreeItem, open: boolean): void {
-		if (!(element instanceof NodeItem) || element.node.kind !== 'folder' || element.id === undefined) {
-			return;
-		}
-		const id = String(element.id);
-		if (open === this.open.has(id)) {
-			return;
-		}
-		if (open) {
-			this.open.add(id);
-		} else {
-			this.open.delete(id);
-		}
-		this.changed.fire(element);
 	}
 
 	/**
@@ -327,7 +261,13 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 		if (node.kind === 'folder' || node.kind === 'file') {
 			const cut = node.path.lastIndexOf('/');
 			if (cut > 0) {
-				return this.make({ kind: 'folder', key: node.key, repository: node.repository, path: node.path.slice(0, cut) });
+				return this.make({
+					kind: 'folder',
+					key: node.key,
+					repository: node.repository,
+					base: node.base,
+					path: node.path.slice(0, cut),
+				});
 			}
 			return (await this.locate(node.key.replace(/^repo:/, ''))).row;
 		}
@@ -341,9 +281,6 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 	}
 
 	getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-		if (element instanceof NodeItem && element.node.kind === 'folder' && element.id !== undefined) {
-			element.iconPath = new vscode.ThemeIcon(this.open.has(String(element.id)) ? 'folder-opened' : 'folder');
-		}
 		return element;
 	}
 
@@ -391,7 +328,7 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 				}
 				return entry === undefined
 					? []
-					: this.entriesOf(parent.key, parent.repository, entry, parent.path);
+					: this.entriesOf(parent.key, parent.repository, entry, parent.path, parent.base);
 			}
 			return [];
 		} catch {
@@ -452,11 +389,18 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 	 * anything is downloaded — it just costs GitHub's allowance instead of the disk.
 	 */
 	private async repositoryChildren(catalog: Catalog, row: RepositoryCacheRow): Promise<vscode.TreeItem[]> {
-		const held = this.trees.get(`repo:${row.fullName}`);
+		const key = `repo:${row.fullName}`;
+		const record = catalog.source(slugOf(row.name));
+		// The clone's own folder when there is one — so an open editor, the Explorer's decorations and this panel all look
+		// at the same resource — and a virtual address under the repository's name when there is not, which is enough for
+		// the icon theme to tell a `.c` from a `.md`.
+		const base = record?.path === undefined
+			? vscode.Uri.parse(`${VIRTUAL_SCHEME}:/${row.fullName}`)
+			: vscode.Uri.file(record.path);
+		const held = this.trees.get(key);
 		let tree: TreeEntry | { error: string } | undefined = held;
 
 		if (tree === undefined) {
-			const record = catalog.source(slugOf(row.name));
 			const source: RepositorySource = {
 				name: row.name,
 				path: record?.path,
@@ -468,7 +412,7 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 			tree = 'error' in listed
 				? { error: listed.error }
 				: foldTree(listed.files);
-			this.trees.set(`repo:${row.fullName}`, tree);
+			this.trees.set(key, tree);
 		}
 
 		if ('error' in tree) {
@@ -481,7 +425,7 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 				}),
 			];
 		}
-		const children = this.entriesOf(`repo:${row.fullName}`, row.name, tree, '');
+		const children = this.entriesOf(key, row.name, tree, '', base);
 		if (children.length === 0) {
 			return [
 				item({
@@ -496,14 +440,14 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 	}
 
 	/** Folders first, then files — the order every file browser uses, for the same reason. */
-	private entriesOf(key: string, repository: string, entry: TreeEntry, prefix: string): vscode.TreeItem[] {
+	private entriesOf(key: string, repository: string, entry: TreeEntry, prefix: string, base: vscode.Uri): vscode.TreeItem[] {
 		const folders = [...entry.folders.keys()].sort((left, right) => left.localeCompare(right));
 		const files = [...entry.files].sort((left, right) => left.path.localeCompare(right.path));
 		return [
 			...folders.map((name) =>
-				item({ kind: 'folder', key, repository, path: prefix === '' ? name : `${prefix}/${name}` })
+				item({ kind: 'folder', key, repository, base, path: prefix === '' ? name : `${prefix}/${name}` })
 			),
-			...files.map((file) => item({ kind: 'file', key, repository, path: file.path, size: file.size })),
+			...files.map((file) => item({ kind: 'file', key, repository, base, path: file.path, size: file.size })),
 		];
 	}
 
@@ -581,9 +525,6 @@ export function registerSourcesView(context: vscode.ExtensionContext, changed: v
 	context.subscriptions.push(
 		tree,
 		changed(() => view.refresh()),
-		// The Explorer's own distinction: a folder that is open says so in its glyph.
-		tree.onDidExpandElement((event) => view.setOpen(event.element, true)),
-		tree.onDidCollapseElement((event) => view.setOpen(event.element, false)),
 		// A page's "View it in the panel": focus the view, then select the repository's own row in it.
 		//
 		// `reveal` needs `getParent` (see below) and the row the provider itself would hand out, which `locate()` builds;
