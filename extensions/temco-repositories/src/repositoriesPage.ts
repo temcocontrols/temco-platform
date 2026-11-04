@@ -580,6 +580,11 @@ export class RepositoriesPage {
   }
 }
 
+/** One glyph from the page sprite: the same markup every page uses, at the size an icon control asks for. */
+function sprite(name: string): string {
+  return `<svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+}
+
 function html(citing = false): string {
   const style = `
     /* A dashboard, not a document: the strip of enterprises comes first, the list is the body, the help is the
@@ -598,7 +603,7 @@ function html(citing = false): string {
     .org { display: inline-flex; align-items: baseline; gap: .45em; padding: .38em .7em;
            border: 0; border-radius: var(--radius); background: var(--bg-inset); color: var(--fg);
            font: inherit; font-size: var(--fs-sm); cursor: pointer; }
-    .org:hover { background: var(--bg-hover); }
+    .org:hover { background: color-mix(in srgb, var(--accent) 10%, var(--bg-inset)); }
     .org.is-on { background: color-mix(in srgb, var(--accent) 18%, var(--bg-inset)); color: var(--fg-strong); font-weight: 600; }
     .org__n { color: var(--fg-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
     .org__x { color: var(--fg-subtle); padding: 0 .1em; }
@@ -609,8 +614,33 @@ function html(citing = false): string {
     .adder .input { flex: 1 1 22em; max-width: 46em; }
     .adder__note { flex-basis: 100%; margin: 0; color: var(--fg-subtle); font-size: var(--fs-xs); }
 
+    /* The two fields on this page are Fluent inputs: one box, one hairline, and a 2px brand underline under the cursor.
+       The kit's default is a small tinted pill; a page with exactly two fields can afford the real control. */
+    .adder .input,
+    .toolbar .input { height: 32px; padding: 0 11px; border: 1px solid var(--border); border-bottom-color: var(--border-strong);
+                      border-radius: 4px; background: var(--editor-bg); color: var(--fg); font: inherit;
+                      font-size: var(--fs-sm); outline: none;
+                      transition: border-color 90ms ease-out, box-shadow 90ms ease-out; }
+    .adder .input::placeholder,
+    .toolbar .input::placeholder { color: var(--fg-subtle); }
+    .adder .input:hover,
+    .toolbar .input:hover { border-color: var(--border-strong); }
+    .adder .input:focus,
+    .toolbar .input:focus { border-color: var(--border-strong); border-bottom-color: var(--accent);
+                            box-shadow: inset 0 -1px 0 var(--accent); }
+
     .toolbar { display: flex; gap: .6em; align-items: center; flex-wrap: wrap; margin: 1em 0 .2em; }
-    .toolbar input { flex: 1 1 18em; min-width: 10em; }
+    .toolbar input { flex: 1 1 18em; min-width: 10em; max-width: 34em; }
+
+    /* The page's operations, pushed to the far end of the filter's own row: a quiet glyph each, in the muted colour,
+       so the filter still reads as the one thing to type in. */
+    .ops { display: flex; gap: .1em; align-items: center; margin-left: auto; }
+    .ops__btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+                border: 0; border-radius: 4px; background: none; color: var(--fg-muted); cursor: pointer;
+                transition: background-color 90ms ease-out, color 90ms ease-out; }
+    .ops__btn:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--fg-strong); }
+    .ops__btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+    .ops__btn .icon { width: 16px; height: 16px; }
 
     /* A selection bar is an answer to a tick, not a permanent second toolbar. */
     .selection { display: flex; gap: .6em; align-items: center; flex-wrap: wrap; margin: .7em 0 0; }
@@ -619,16 +649,26 @@ function html(citing = false): string {
 
     .rows { margin: .6em 0 0; }
 
-    /* A repository is a line in a list, not a card: the name leads, what it is follows, and the acts sit at the end
-       of the line. The only fill is the hover and the selection — a list of twenty-two boxes is a list nobody scans. */
-    .repo { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 0 .75em;
-            align-items: start; padding: .75em .5em; border-bottom: 1px solid var(--border); }
+    /* A repository is a line in a list, not a card: the mark and the name lead, the facts follow, and the acts sit on a
+       line of their own under them. The only fill is the hover and the selection — a list of twenty-two boxes is a list
+       nobody scans. */
+    .repo { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: .1em .7em; align-items: start;
+            padding: .7em .6em .8em; border-bottom: 1px solid var(--border);
+            transition: background-color 90ms ease-out; }
     .repo:last-child { border-bottom: 0; }
-    .repo:hover { background: var(--bg-hover); }
-    .repo.is-selected { background: color-mix(in srgb, var(--accent) 8%, transparent); }
-    .repo input[type=checkbox] { margin: .35em 0 0; }
-    .repo__mark { margin: .12em 0 0; color: var(--fg-subtle); }
-    .repo__main { min-width: 0; }
+    /* A tint of the link colour rather than the theme's flat grey: it reads as "this row, here", and it is the same
+       family as the selected fill one step stronger, so hovering a ticked row does not repaint it. */
+    .repo:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+    .repo.is-selected { background: color-mix(in srgb, var(--accent) 13%, transparent); }
+    .repo input[type=checkbox] { grid-column: 1; grid-row: 1; margin: .45em 0 0; }
+    /* The mark is a tile, not a glyph: at 28px it anchors the row, and it is the same tile a page uses for a thing it
+       names. It brightens with the row instead of staying a grey speck in a long list. */
+    .repo__mark { grid-column: 2; grid-row: 1; display: inline-flex; align-items: center; justify-content: center;
+                  width: 28px; height: 28px;
+                  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+    .repo__mark .icon { width: 16px; height: 16px; }
+    .repo:hover .repo__mark { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+    .repo__main { min-width: 0; grid-column: 3; grid-row: 1; }
     .repo__head { display: flex; gap: .55em; align-items: baseline; flex-wrap: wrap; }
     .repo__name { font-weight: 600; color: var(--fg-strong); border: 0; background: none; padding: 0;
                   font-family: inherit; font-size: inherit; cursor: pointer; text-align: left; }
@@ -641,10 +681,14 @@ function html(citing = false): string {
     .repo__meta { margin: .25em 0 0; color: var(--fg-subtle); font-size: var(--fs-xs); display: flex; gap: .5em;
                   flex-wrap: wrap; }
     .repo__meta span + span::before { content: '·'; margin-right: .5em; color: var(--fg-subtle); }
-    .repo__do { display: flex; gap: .35em; align-items: center; flex-wrap: nowrap; justify-content: flex-end;
-                flex: none; }
-    /* The acts get room of their own: the name and the description can wrap, a row of buttons cannot. */
-    .repo__do .az-btn { white-space: nowrap; }
+    /* The acts, under the row's own words: one line of links beneath the name and its facts, starting where the text
+       starts. They are words, not boxes — a list of rows each ending in four buttons is a toolbar repeated twenty times. */
+    .repo__do { grid-column: 2 / -1; grid-row: 2; display: flex; gap: .9em; align-items: baseline; flex-wrap: wrap;
+                justify-content: flex-start; margin-top: .5em; }
+    .repo__do .az-btn { white-space: nowrap; font-size: var(--fs-sm); }
+    /* The one act a row exists for keeps the accent; the rest are quiet, so a scan down the column finds "Start". */
+    .repo__do .az-btn--primary-link { color: var(--fg-strong); font-weight: 600; }
+    .repo__do .az-btn--primary-link:hover { color: var(--az-blue-hover); }
 
     .warn { border-radius: var(--radius); padding: .8em 1em; margin: 1em 0;
             background: color-mix(in srgb, var(--warn) 22%, var(--bg-inset)); color: var(--fg); }
@@ -664,13 +708,9 @@ function html(citing = false): string {
   <div class="az-wash"><header class="az-lead">
     <h1 class="az-title" id="title">Repositories</h1>
     <p class="az-intro az-intro--wide" id="lede">Reading the organisation from GitHub…</p>
-    <div class="az-row">
-      <button type="button" class="az-btn az-btn--primary" id="reload">Read GitHub again</button>
-      <button type="button" class="az-btn" id="add-toggle">Add an enterprise</button>
-      <button type="button" class="az-btn" id="dashboard">Dashboard</button>
-      <button type="button" class="az-btn" id="new-project">New project</button>
-      ${citing ? '<button type="button" class="az-btn az-btn--link" id="back-to-form">Back to the New Project form</button>' : ''}
-    </div>
+    ${citing ? `<div class="az-row">
+      <button type="button" class="az-btn az-btn--link" id="back-to-form">Back to the New Project form</button>
+    </div>` : ''}
   </header></div>
 
   <form class="adder" hidden id="adder">
@@ -689,6 +729,14 @@ function html(citing = false): string {
   <div class="toolbar" hidden id="bar">
     <input class="input" type="search" id="filter" placeholder="Filter by name, description or language" aria-label="Filter">
     <span id="count" class="cell-muted"></span>
+    <!-- The page's own operations, at the far end of the row that acts on this list: an icon each, named for a reader
+         who cannot see it, and explained on hover. -->
+    <div class="ops" role="group" aria-label="Operations">
+      <button type="button" class="ops__btn" id="reload" title="Read GitHub again" aria-label="Read GitHub again">${sprite('refresh')}</button>
+      <button type="button" class="ops__btn" id="add-toggle" title="Add an enterprise" aria-label="Add an enterprise">${sprite('plus')}</button>
+      <button type="button" class="ops__btn" id="dashboard" title="Dashboard" aria-label="Dashboard">${sprite('dashboard')}</button>
+      <button type="button" class="ops__btn" id="new-project" title="New project" aria-label="New project">${sprite('layers')}</button>
+    </div>
   </div>
 
   <div class="selection" hidden id="selection">
@@ -995,26 +1043,28 @@ function row(repo) {
 
   const do_ = document.createElement('div');
   do_.className = 'repo__do';
-  const start = button('az-btn az-btn--sm az-btn--primary', isCited ? 'Start again' : 'Start', () =>
+  // The acts are links: a row is a thing to read, and four buttons under every row would be a toolbar repeated down the
+  // page. "Start" keeps the weight — it is what a row is for.
+  const start = button('az-btn az-btn--link az-btn--primary-link', isCited ? 'Start again' : 'Start', () =>
     vscode.postMessage({ type: 'start', name: repo.name }));
   start.title = 'Add this repository as a source of the project being worked on, and read what it publishes';
 
-  const project = button('az-btn az-btn--sm', 'New project', () =>
+  const project = button('az-btn az-btn--link', 'New project', () =>
     vscode.postMessage({ type: 'project', name: repo.name }));
   project.title = 'Pick this repository’s files, then create a project from them';
 
-  const open = button('az-btn az-btn--sm', 'Open', () => {
+  const open = button('az-btn az-btn--link', 'Open', () => {
     if (repo.webUrl) { vscode.postMessage({ type: 'open', url: repo.webUrl }); }
   });
   open.title = 'Open the repository on GitHub';
 
-  const local = button('az-btn az-btn--sm', cloned ? 'Pull' : 'Clone', () =>
+  const local = button('az-btn az-btn--link', cloned ? 'Pull' : 'Clone', () =>
     vscode.postMessage({ type: cloned ? 'pull' : 'fetch', name: repo.name }));
   local.title = cloned ? 'Pull the latest changes into the clone' : 'Clone a copy into the shared source folder';
 
   do_.append(start, project, open, local);
   if (cloned) {
-    const drop = button('az-btn az-btn--sm', 'Remove copy', () =>
+    const drop = button('az-btn az-btn--link', 'Remove copy', () =>
       vscode.postMessage({ type: 'removeClone', name: repo.name }));
     drop.title = 'Remove the clone — the repository is left untouched';
     do_.append(drop);
