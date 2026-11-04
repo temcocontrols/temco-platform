@@ -90,6 +90,14 @@ export interface SourceDetail {
 	lastRead?: string;
 }
 
+/** A project row, as the store lists them — enough to say which projects cite a source. */
+export interface DocumentRow {
+	slug: string;
+	name: string;
+	/** How many sources the project cites. */
+	sources: number;
+}
+
 /** A source as a list reads it back. */
 export interface SourceRow {
 	id: number;
@@ -144,6 +152,8 @@ export interface RepositoryCacheRow {
 export interface Catalog {
 	readonly file: vscode.Uri;
 	sources(): SourceRow[];
+	/** The projects, as the store lists them. */
+	documents(): DocumentRow[];
 	addSource(source: SourceInput): number;
 	removeSource(slug: string): void;
 	source(slug: string): SourceDetail | undefined;

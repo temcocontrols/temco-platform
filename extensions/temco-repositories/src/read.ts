@@ -1,4 +1,4 @@
-// Reading a source: the step between "I have a project" and "I can see its pages".
+﻿// Reading a source: the step between "I have a project" and "I can see its pages".
 //
 // Three ways to read, chosen by *what the job needs*, not by taste (see `docs/platform-design.md`):
 //
@@ -28,10 +28,10 @@ export function registerReadCommands(
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('temcoRepositories.readSource', (target?: unknown) =>
-      readSource(context, selection, output, refresh, rowSlug(target))
+      readSource(context, output, refresh, rowSlug(target))
     ),
     vscode.commands.registerCommand('temcoRepositories.readAllSources', (target?: unknown) =>
-      readAllSources(context, selection, output, refresh, rowSlug(target))
+      readAllSources(context, output, refresh, rowSlug(target))
     ),
     vscode.commands.registerCommand('temcoRepositories.removeSource', (target?: unknown) =>
       removeSource(context, refresh, rowSlug(target))
@@ -58,7 +58,6 @@ export function registerReadCommands(
  */
 async function readAllSources(
   context: vscode.ExtensionContext,
-  selection: Selection,
   output: vscode.OutputChannel,
   refresh: () => void,
   /** A project's slug: read only what *it* cites. Nothing means every source that has never been read. */
@@ -98,7 +97,7 @@ async function readAllSources(
     async (progress) => {
       for (const [index, source] of wanted.entries()) {
         progress.report({ message: `${source.name} (${index + 1} of ${wanted.length})` });
-        await readSource(context, selection, output, refresh, source.slug, true);
+        await readSource(context, output, refresh, source.slug, true);
       }
     }
   );
@@ -265,14 +264,13 @@ async function openFile(selection: Selection, target?: unknown): Promise<void> {
     await vscode.window.showTextDocument(document, { preview: false, viewColumn: fileColumn() });
   } catch {
     void vscode.window.showInformationMessage(
-      `Temco Repositories: ${path} is not on this machine — pages read over the API are recorded, not downloaded.`
+      `Temco Repositories: ${path} is not on this machine — pages read over the API are recorded, not cloned.`
     );
   }
 }
 
 async function readSource(
   context: vscode.ExtensionContext,
-  selection: Selection,
   output: vscode.OutputChannel,
   refresh: () => void,
   wanted?: string,
@@ -359,10 +357,10 @@ async function readSource(
       }
 
       // A local copy is never made behind anyone's back: this says that one would help, and offers it.
-      if (source.path === undefined && (source.remoteUrl ?? '').length > 0 && !(await hasClone(selection.project() ?? '', source.name))) {
+      if (source.path === undefined && (source.remoteUrl ?? '').length > 0 && !(await hasClone(source.name))) {
         void vscode.window
           .showInformationMessage(
-            `Temco Repositories: ${source.name} is read over the API. A local copy lets the AI read its files and its history, ` +
+            `Temco Repositories: ${source.name} is read over the API. A clone lets the AI read its files and its history, ` +
             'and no longer touches the repository itself.',
             'Fetch it now'
           )

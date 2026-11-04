@@ -1,11 +1,15 @@
-// The working area: our own folder, outside every repository.
+﻿// The working area: our own folder, outside every repository.
 //
 // A source is cloned here so that its **files** can be read. A page is written from code, and code that exists
 // only behind an API is one file per call, no history, and no working tree for a build. The clone is a copy we
 // own: **nothing is ever written to the origin, and nothing is ever pushed.**
 //
-//   <root>/<project>/<source>/     the clone — one branch, full history
-//   <root>/<project>/work/         what we make: drafts, notes. Files, not state.
+//   <root>/source/<source>/        the clone — one branch, full history, one copy per repository
+//   <root>/<project>/              what we make for a project: drafts, notes. Files, not state.
+//
+// A clone is a copy of a **repository**, not a part of a project: the same repository cited by three projects is one
+// copy here, and removing a project never deletes code. What a project owns is its own folder — the drafts and notes
+// written for it — because that is the only thing that is *its*.
 //
 // `<root>` is the `temcoRepositories.workspaceFolder` setting, or `~/temco`, visible on purpose so it can
 // be looked at, moved and deleted with the file manager. The catalog stays the single index of what was read; it
@@ -35,20 +39,25 @@ export function workRoot(): string {
     : path.join(os.homedir(), 'temco');
 }
 
-/** The folder one project owns: its clones and what we make from them. */
+/** The folder one project owns: what we made for it. Clones do not live here — a repository is not a project's. */
 export function projectFolder(project: string): string {
   return path.join(workRoot(), slugOf(project));
 }
 
+/** Where every clone lives: one folder per repository, shared by every project that cites it. */
+export function cloneRoot(): string {
+  return path.join(workRoot(), 'source');
+}
+
 /** The folder one source is cloned into. */
-export function cloneFolder(project: string, source: string): string {
-  return path.join(projectFolder(project), slugOf(source));
+export function cloneFolder(source: string): string {
+  return path.join(cloneRoot(), slugOf(source));
 }
 
 /** Whether a clone is really there — a folder with a `.git` in it, not an empty directory. */
-export async function hasClone(project: string, source: string): Promise<boolean> {
+export async function hasClone(source: string): Promise<boolean> {
   try {
-    await fs.stat(path.join(cloneFolder(project, source), '.git'));
+    await fs.stat(path.join(cloneFolder(source), '.git'));
     return true;
   } catch {
     return false;
@@ -56,8 +65,8 @@ export async function hasClone(project: string, source: string): Promise<boolean
 }
 
 /** What git says the clone costs, which is the number a person cares about before removing it. */
-export async function cloneSize(project: string, source: string): Promise<string | undefined> {
-  const result = await git(['count-objects', '-vH'], cloneFolder(project, source));
+export async function cloneSize(source: string): Promise<string | undefined> {
+  const result = await git(['count-objects', '-vH'], cloneFolder(source));
   const match = /size-pack:\s*([\d.]+\s*\w+)/.exec(result.output);
   return match?.[1];
 }
@@ -70,21 +79,25 @@ export function registerWorkareaCommands(
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('temcoRepositories.fetchSource', (target?: unknown) =>
-      fetchSource(context, selection, output, refresh, slugOfTarget(target))
+      fetchSource(context, output, refresh, slugOfTarget(target))
     ),
     // The same clone, asked for by something that needs the *files* rather than the person: a draft, an analysis. It
     // returns the folder instead of reporting, and still asks before it writes anything to the machine.
     vscode.commands.registerCommand('temcoRepositories.ensureClone', (target?: unknown) =>
-      ensureClone(context, selection, output, refresh, slugOfTarget(target))
+      ensureClone(context, output, refresh, slugOfTarget(target))
     ),
     vscode.commands.registerCommand('temcoRepositories.pullSource', (target?: unknown) =>
-      pullSource(context, selection, output, refresh, slugOfTarget(target))
+      pullSource(context, output, refresh, slugOfTarget(target))
     ),
     vscode.commands.registerCommand('temcoRepositories.openClone', (target?: unknown) =>
-      openClone(context, selection, slugOfTarget(target))
+      openClone(context, slugOfTarget(target))
     ),
     vscode.commands.registerCommand('temcoRepositories.removeClone', (target?: unknown) =>
-      removeClone(context, selection, refresh, slugOfTarget(target))
+      removeClone(context, refresh, slugOfTarget(target))
+    ),
+    // The clones made before clones had a folder of their own: a rename, not a re-clone.
+    vscode.commands.registerCommand('temcoRepositories.moveClones', () =>
+      moveClones(context, output, refresh)
     ),
     // Kept for the palette entry that existed before the folder dialog: one command does the work, the other names it.
     vscode.commands.registerCommand('temcoRepositories.changeWorkspaceFolder', () =>
@@ -102,33 +115,85 @@ export function registerWorkareaCommands(
   );
 }
 
+/** The one place the detail behind a notice lives: the output channel this module writes git into. */
+const SHOW_LOG = 'Show the Log';
+
 /**
- * Fetch a source: clone it into the project's folder in the working area.
+ * The project an act belongs to, asking for one when the window is working on none.
+ *
+ * **Citing** a source belongs to a project — a project's source list is where a draft looks for its pages — so the
+ * question is asked here, inside the act the person started, and the act carries on with the answer. Cloning does not
+ * come through here: a clone is a copy of a repository and lives in the shared `source` folder, project or no project.
+ */
+export async function projectFor(
+  selection: Selection,
+  output: vscode.OutputChannel | undefined,
+  what: string
+): Promise<string | undefined> {
+  const current = selection.project();
+  if (current !== undefined) {
+    return current;
+  }
+  const area = path.join(workRoot(), '<project>');
+  output?.appendLine(`[work] ${what} needs a project: what we make for one goes to ${area}`);
+  const answer = await vscode.window.showInformationMessage(
+    `Temco Repositories: ${what} needs the project being worked on — a source is cited *in* a project, and no ` +
+    'project is open.',
+    'Choose a Project',
+    SHOW_LOG
+  );
+  if (answer === SHOW_LOG) {
+    output?.show(true);
+    return undefined;
+  }
+  if (answer !== 'Choose a Project') {
+    output?.appendLine('[work] no project chosen, so nothing was done');
+    return undefined;
+  }
+  await vscode.commands.executeCommand('temcoProjects.selectProject');
+  const chosen = selection.project();
+  if (chosen === undefined) {
+    output?.appendLine('[work] still no project, so nothing was done');
+    void vscode.window.showInformationMessage(
+      'Temco Repositories: no project is open, so nothing was done.'
+    );
+    return undefined;
+  }
+  output?.appendLine(`[work] project ${chosen}: what we make for it goes to ${projectFolder(chosen)}`);
+  return chosen;
+}
+
+/**
+ * Report a failure with the words git used, and the log one click away.
+ *
+ * A toast is one line; a clone that fails says why in twenty. The line names the source, the button opens the
+ * channel the whole command is written into — which is the only place the reason survives long enough to be read.
+ */
+function failed(output: vscode.OutputChannel, message: string, detail: string): void {
+  output.appendLine(`[work] failed: ${detail}`);
+  void vscode.window.showErrorMessage(message, SHOW_LOG).then((answer) => {
+    if (answer === SHOW_LOG) {
+      output.show(true);
+    }
+  });
+}
+
+/**
+ * Fetch a source: clone it into the shared `source` folder, then read it.
  *
  * After the clone the catalog records **where** the copy is, so the source is read from disk from then on — the
- * same read, with the working tree behind it: the registry and its checks, the code files, and the history.
+ * same read, with the working tree behind it: the registry and its checks, the code files, and the history. That
+ * read runs as part of this command, because a cloned source nobody read would still say "never read" and its pages
+ * would still not be in the catalog: the copy and the read are one act, not two that look alike.
  */
 async function fetchSource(
   context: vscode.ExtensionContext,
-  selection: Selection,
   output: vscode.OutputChannel,
   refresh: () => void,
   wanted?: string
 ): Promise<void> {
-  const project = selection.project();
   const source = await sourceOf(context, wanted);
   if (source === undefined) {
-    return;
-  }
-  if (project === undefined) {
-    void vscode.window.showInformationMessage(
-      'Temco Repositories: the working area belongs to the project being worked on. Choose one first.',
-      'Projects'
-    ).then((answer) => {
-      if (answer === 'Projects') {
-        void vscode.commands.executeCommand('temcoDocs.projects');
-      }
-    });
     return;
   }
   if (source.remoteUrl === undefined || source.remoteUrl.length === 0) {
@@ -138,9 +203,9 @@ async function fetchSource(
     return;
   }
 
-  const folder = cloneFolder(project, source.name);
-  if (await hasClone(project, source.name)) {
-    void vscode.window.showInformationMessage(`Temco Repositories: ${source.name} already has a local copy.`, 'Pull it').then(
+  const folder = cloneFolder(source.name);
+  if (await hasClone(source.name)) {
+    void vscode.window.showInformationMessage(`Temco Repositories: ${source.name} already has a clone.`, 'Pull it').then(
       (answer) => {
         if (answer === 'Pull it') {
           void vscode.commands.executeCommand('temcoRepositories.pullSource', wanted);
@@ -166,26 +231,29 @@ async function fetchSource(
 
   await fs.mkdir(path.dirname(folder), { recursive: true });
   const args = ['clone', '--single-branch', ...(source.branch ? ['--branch', source.branch] : []), source.remoteUrl, folder];
+  output.appendLine(
+    `[work] cloning ${source.name} — ${source.remoteUrl}, branch ${source.branch ?? source.defaultBranch ?? 'as the remote decides'}, into ${folder}`
+  );
   const result = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Temco Repositories: cloning ${source.name}` },
     () => git(args, undefined, output)
   );
   if (!result.ok) {
-    void vscode.window.showErrorMessage(`Temco Repositories: ${source.name} could not be cloned. ${firstLine(result.output)}`);
+    failed(
+      output,
+      `Temco Repositories: ${source.name} could not be cloned. ${firstLine(result.output)}`,
+      `git clone ${source.remoteUrl} into ${folder}`
+    );
     return;
   }
 
   await withCatalog(context, (catalog) => catalog.setSourcePath(source.slug, folder));
   output.appendLine(`[work] ${source.name} cloned into ${folder}`);
   refresh();
-  void vscode.window.showInformationMessage(
-    `Temco Repositories: ${source.name} has a local copy. Read it again to work from the files.`,
-    'Read it'
-  ).then((choice) => {
-    if (choice === 'Read it') {
-      void vscode.commands.executeCommand('temcoRepositories.readSource', source.slug);
-    }
-  });
+  // The copy and the read are one act. A clone nobody read leaves the row saying "never read", and what the source
+  // declares is the reason to have the copy at all — so the read runs here, through the same command the Read action
+  // runs, which records the pages and stamps the watermark exactly once.
+  await vscode.commands.executeCommand('temcoRepositories.readSource', source.slug);
 }
 
 /**
@@ -198,18 +266,13 @@ async function fetchSource(
  */
 async function ensureClone(
   context: vscode.ExtensionContext,
-  selection: Selection,
   output: vscode.OutputChannel,
   refresh: () => void,
   wanted?: string
 ): Promise<{ path?: string; error?: string }> {
-  const project = selection.project();
   const source = await sourceOf(context, wanted);
   if (source === undefined) {
     return { error: 'That source is not in the catalog.' };
-  }
-  if (project === undefined) {
-    return { error: 'No project is being worked on, so there is no working area to clone into.' };
   }
   if (source.path !== undefined && source.remoteUrl === undefined) {
     // A folder on this machine is already the code.
@@ -219,8 +282,8 @@ async function ensureClone(
     return { error: `${source.name} has no repository URL and no folder, so there is no code to read.` };
   }
 
-  const folder = cloneFolder(project, source.name);
-  if (await hasClone(project, source.name)) {
+  const folder = cloneFolder(source.name);
+  if (await hasClone(source.name)) {
     return { path: folder };
   }
 
@@ -229,13 +292,13 @@ async function ensureClone(
     {
       modal: true,
       detail:
-        'The code is read from the local copy: one branch, full history, and nothing is ever pushed back. ' +
+        'The code is read from the clone: one branch, full history, and nothing is ever pushed back. ' +
         'Without it there are no files to draft from.',
     },
     'Clone it'
   );
   if (answer !== 'Clone it') {
-    return { error: 'No local copy, so there are no files to read.' };
+    return { error: 'No clone, so there are no files to read.' };
   }
 
   await fs.mkdir(path.dirname(folder), { recursive: true });
@@ -254,22 +317,21 @@ async function ensureClone(
   return { path: folder };
 }
 
-/** Pull a source's local copy, and read it again: the counts a list shows are about a revision. */async function pullSource(
+/** Pull a source's local copy, and read it again: the counts a list shows are about a revision. */
+async function pullSource(
   context: vscode.ExtensionContext,
-  selection: Selection,
   output: vscode.OutputChannel,
   refresh: () => void,
   wanted?: string
 ): Promise<void> {
-  const project = selection.project();
   const source = await sourceOf(context, wanted);
-  if (source === undefined || project === undefined) {
+  if (source === undefined) {
     return;
   }
-  const folder = cloneFolder(project, source.name);
-  if (!(await hasClone(project, source.name))) {
+  const folder = cloneFolder(source.name);
+  if (!(await hasClone(source.name))) {
     void vscode.window.showInformationMessage(
-      `Temco Repositories: ${source.name} has no local copy yet.`,
+      `Temco Repositories: ${source.name} has no clone yet.`,
       'Fetch it'
     ).then((answer) => {
       if (answer === 'Fetch it') {
@@ -285,8 +347,10 @@ async function ensureClone(
     () => git(['pull', '--ff-only'], folder, output)
   );
   if (!result.ok) {
-    void vscode.window.showErrorMessage(
-      `Temco Repositories: ${source.name} could not be pulled. ${firstLine(result.output)}`
+    failed(
+      output,
+      `Temco Repositories: ${source.name} could not be pulled. ${firstLine(result.output)}`,
+      `git pull --ff-only in ${folder}`
     );
     return;
   }
@@ -302,15 +366,14 @@ async function ensureClone(
 }
 
 /** Show a local copy in the file manager — the ordinary way to look at what was cloned. */
-async function openClone(context: vscode.ExtensionContext, selection: Selection, wanted?: string): Promise<void> {
-  const project = selection.project();
+async function openClone(context: vscode.ExtensionContext, wanted?: string): Promise<void> {
   const source = await sourceOf(context, wanted);
-  if (source === undefined || project === undefined) {
+  if (source === undefined) {
     return;
   }
-  const folder = cloneFolder(project, source.name);
-  if (!(await hasClone(project, source.name))) {
-    void vscode.window.showInformationMessage(`Temco Repositories: ${source.name} has no local copy.`);
+  const folder = cloneFolder(source.name);
+  if (!(await hasClone(source.name))) {
+    void vscode.window.showInformationMessage(`Temco Repositories: ${source.name} has no clone.`);
     return;
   }
   await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(folder));
@@ -319,28 +382,28 @@ async function openClone(context: vscode.ExtensionContext, selection: Selection,
 /** Remove a local copy: the folder only. The repository, the catalog row and the project are untouched. */
 async function removeClone(
   context: vscode.ExtensionContext,
-  selection: Selection,
   refresh: () => void,
   wanted?: string
 ): Promise<void> {
-  const project = selection.project();
   const source = await sourceOf(context, wanted);
-  if (source === undefined || project === undefined) {
+  if (source === undefined) {
     return;
   }
-  const folder = cloneFolder(project, source.name);
-  if (!(await hasClone(project, source.name))) {
-    void vscode.window.showInformationMessage(`Temco Repositories: ${source.name} has no local copy.`);
+  const folder = cloneFolder(source.name);
+  if (!(await hasClone(source.name))) {
+    void vscode.window.showInformationMessage(`Temco Repositories: ${source.name} has no clone.`);
     return;
   }
-  const size = await cloneSize(project, source.name);
+  const size = await cloneSize(source.name);
+  const cited = await citingProjects(context, source.name);
   const answer = await vscode.window.showWarningMessage(
-    `Remove the local copy of ${source.name}?`,
+    `Remove the clone of ${source.name}?`,
     {
       modal: true,
       detail:
         `${folder}${size ? ` (${size})` : ''} is deleted from this machine. The repository is not touched, ` +
-        'and the source stays in the catalog — it is read over the API again until a copy is fetched.',
+        'and the source stays in the catalog — it is read over the API again until a copy is fetched.' +
+        (cited.length === 0 ? '' : ` ${cited.join(', ')} ${cited.length === 1 ? 'cites' : 'cite'} this copy, so it goes for ${cited.length === 1 ? 'it' : 'them'} too.`),
     },
     'Remove it'
   );
@@ -353,7 +416,98 @@ async function removeClone(
   refresh();
 }
 
-/** Show the project's own folder: where its clones and what we make from them live. */
+/**
+ * Move the clones made before clones had a folder of their own.
+ *
+ * A clone used to live inside the project's folder (`<root>/<project>/<source>`), which made a project a precondition
+ * of copying a repository. The copy itself is fine — only the folder above it was wrong — so this renames the folder
+ * and updates the catalog's path: nothing is fetched again, nothing is read from the origin, and a source whose shared
+ * copy is already in place is left alone rather than overwritten.
+ */
+async function moveClones(
+  context: vscode.ExtensionContext,
+  output: vscode.OutputChannel,
+  refresh: () => void
+): Promise<void> {
+  const root = cloneRoot();
+  const plan: { slug: string; name: string; from: string; to: string }[] = [];
+  await withCatalog(context, (catalog) => {
+    for (const row of catalog.sources()) {
+      const detail = catalog.source(row.slug);
+      const from = detail?.path;
+      if (detail === undefined || from === undefined || detail.kind !== 'git' || isInside(from, root)) {
+        continue;
+      }
+      plan.push({ slug: row.slug, name: row.name, from, to: cloneFolder(row.name) });
+    }
+  });
+  if (plan.length === 0) {
+    void vscode.window.showInformationMessage(
+      `Temco Repositories: every clone is already in ${root}.`
+    );
+    return;
+  }
+  const answer = await vscode.window.showWarningMessage(
+    `Move ${plan.length === 1 ? 'one clone' : `${plan.length} clones`} into ${root}?`,
+    {
+      modal: true,
+      detail:
+        'A folder rename and a path update: nothing is cloned again, nothing is read from the origin, and nothing is ' +
+        'pushed. A clone stays where it is when the shared folder already holds one of the same repository.'
+    },
+    'Move them'
+  );
+  if (answer !== 'Move them') {
+    output.appendLine('[work] the move was cancelled, so the clones are where they were');
+    return;
+  }
+
+  let moved = 0;
+  const kept: string[] = [];
+  for (const item of plan) {
+    try {
+      if (!(await isThere(item.from))) {
+        kept.push(`${item.name} — no folder at ${item.from}`);
+        continue;
+      }
+      if (await isThere(item.to)) {
+        kept.push(`${item.name} — ${item.to} already holds a clone`);
+        continue;
+      }
+      await fs.mkdir(path.dirname(item.to), { recursive: true });
+      await fs.rename(item.from, item.to);
+      await withCatalog(context, (catalog) => catalog.setSourcePath(item.slug, item.to));
+      output.appendLine(`[work] moved ${item.from} to ${item.to}`);
+      moved += 1;
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error);
+      kept.push(`${item.name} — ${why}`);
+      output.appendLine(`[work] could not move ${item.from}: ${why}`);
+    }
+  }
+  refresh();
+  const said = `${moved} clone${moved === 1 ? '' : 's'} moved into ${root}`;
+  if (kept.length === 0) {
+    void vscode.window.showInformationMessage(`Temco Repositories: ${said}.`, SHOW_LOG).then((choice) => {
+      if (choice === SHOW_LOG) {
+        output.show(true);
+      }
+    });
+    return;
+  }
+  output.appendLine(`[work] left where they were: ${kept.join('; ')}`);
+  void vscode.window.showWarningMessage(
+    `Temco Repositories: ${said}; ${kept.length} left where ${kept.length === 1 ? 'it was' : 'they were'}. ` +
+    `${kept[0]}${kept.length > 1 ? ` (and ${kept.length - 1} more)` : ''}`,
+    SHOW_LOG
+  ).then((choice) => {
+    if (choice === SHOW_LOG) {
+      output.show(true);
+    }
+  });
+}
+
+/** Show the project's own folder: what we made for it — drafts, notes. Clones are not in here. */
 async function openProjectFolder(selection: Selection): Promise<void> {
   const project = selection.project();
   if (project === undefined) {
@@ -384,13 +538,13 @@ async function projectWorkFolder(
 }
 
 /**
- * Deleting a project deletes the folder it owns: its clones and what we made from them.
+ * Deleting a project deletes the folder it owns: what we made for it.
  *
- * Two kinds of recorded source lived in that folder, and each is dealt with as what it is. A **clone** is what a
- * source with an origin has instead of a copy we made: the source stays in the catalog and its path is cleared, so it
- * is read over the API again — exactly what removing one copy on its own means. A **folder** source is nothing *but*
- * its path (it is how a project's own `docs/` is cited), so a folder source whose folder has just been deleted is
- * removed with it rather than left standing over nothing. No origin is ever touched: this deletes copies we own.
+ * Clones do not live in there any more — they live in the shared `source` folder, and a project that is removed never
+ * deletes code. What is still handled here is what a folder can *contain*: a **clone** made before clones moved (its
+ * path is cleared, so the source is read over the API again — exactly what removing one copy means), and a **folder**
+ * source, which is nothing *but* its path (it is how a project's own `docs/` is cited), so it is removed with the
+ * folder rather than left standing over nothing. No origin is ever touched: this deletes copies we own.
  */
 async function deleteProjectFolder(
   context: vscode.ExtensionContext,
@@ -439,8 +593,7 @@ async function deleteProjectFolder(
 }
 
 /** Whether a folder is really there. */
-async function isThere(folder: string): Promise<boolean> {
-  try {
+async function isThere(folder: string): Promise<boolean> {  try {
     await fs.stat(folder);
     return true;
   } catch {
@@ -484,6 +637,25 @@ function isInside(file: string, folder: string): boolean {
 }
 
 // ------------------------------------------------------------------ helpers
+
+/**
+ * The projects that cite a source, by name.
+ *
+ * One copy is shared, so this is what a removal dialog has to say out loud: the copy goes for every project that
+ * reads it, not only the one on screen.
+ */
+async function citingProjects(context: vscode.ExtensionContext, sourceName: string): Promise<string[]> {
+  const slug = slugOf(sourceName);
+  const names: string[] = [];
+  await withCatalog(context, (catalog) => {
+    for (const document of catalog.documents()) {
+      if (catalog.documentSourceSlugs(document.slug).includes(slug)) {
+        names.push(document.name);
+      }
+    }
+  });
+  return names;
+}
 
 /** A source's coordinates, by slug. A menu entry hands us a slug; the palette hands us nothing. */
 async function sourceOf(

@@ -16,7 +16,7 @@ import { Catalog, OrganisationRow, RepositoryCacheRow, Selection, slugOf } from 
 import { REPOSITORIES_VIEW_TYPE } from './surface';
 import { page, pageColumn, remember } from './ui';
 import { listRepositories } from './repository';
-import { cloneSize, hasClone, workRoot } from './workarea';
+import { cloneRoot, cloneSize, hasClone, projectFor } from './workarea';
 
 /** The enterprise the platform ships its own documentation from — written as the first organisation. */
 const DEFAULT_ORGANISATION = 'temcocontrols';
@@ -87,6 +87,7 @@ export class RepositoriesPage {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly selection: Selection,
+    private readonly output: vscode.OutputChannel,
     private readonly refresh: () => void
   ) { }
 
@@ -230,25 +231,24 @@ export class RepositoriesPage {
       citeTargetName: citeName,
       takenAt: org.lastRead,
       state: org.state,
-      // Where a download lands, and what a draft is written beside — the one setting this page acts on.
-      where: workRoot(),
-      copies: await this.clones(repositories, project),
+      // Where a clone lands — the shared `source` folder — and what a draft is written beside it.
+      where: cloneRoot(),
+      copies: await this.clones(repositories),
       repositories,
     };
   }
 
-  /** Which of the rows already have a local copy, so the page offers *Fetch* or *Pull* rather than both. */
-  private async clones(
-    rows: readonly RepositoryCacheRow[],
-    project: string | undefined
-  ): Promise<Record<string, string | undefined>> {
+  /**
+   * Which of the rows already have a local copy, so the page offers *Fetch* or *Pull* rather than both.
+   *
+   * A clone belongs to no project — one copy per repository, in the shared `source` folder — so this asks about the
+   * repository, not about what the window happens to be working on.
+   */
+  private async clones(rows: readonly RepositoryCacheRow[]): Promise<Record<string, string | undefined>> {
     const copies: Record<string, string | undefined> = {};
-    if (project === undefined) {
-      return copies;
-    }
     for (const row of rows) {
-      if (await hasClone(project, row.name)) {
-        copies[row.name] = (await cloneSize(project, row.name)) ?? '';
+      if (await hasClone(row.name)) {
+        copies[row.name] = (await cloneSize(row.name)) ?? '';
       }
     }
     return copies;
@@ -412,7 +412,7 @@ export class RepositoriesPage {
       await this.start(names[0]);
       return;
     }
-    const label = action === 'fetch' ? 'Downloading' : action === 'start' ? 'Starting' : action === 'pull' ? 'Pulling' : 'Removing';
+    const label = action === 'fetch' ? 'Cloning' : action === 'start' ? 'Starting' : action === 'pull' ? 'Pulling' : 'Removing';
     // One notification for the queue, with a Stop: a clone per row is slow, and ten modal prompts in a row is not a
     // way to run a command.
     await vscode.window.withProgress(
@@ -513,19 +513,11 @@ export class RepositoriesPage {
    */
   private async start(name: string): Promise<void> {
     const row = this.listed.find((candidate) => candidate.name === name);
-    const project = this.selection.project();
     if (row === undefined) {
       return;
     }
+    const project = await projectFor(this.selection, this.output, `starting from ${row.name}`);
     if (project === undefined) {
-      void vscode.window.showInformationMessage(
-        'Temco Repositories: a source belongs to a project being worked on. Choose one first — the Library’s Projects row.',
-        'Projects'
-      ).then((answer) => {
-        if (answer === 'Projects') {
-          void vscode.commands.executeCommand('temcoDocs.projects');
-        }
-      });
       return;
     }
 
@@ -565,7 +557,7 @@ function html(citing = false): string {
        foot. No boxes anywhere — a fill, a hairline and spacing carry the hierarchy. */
     /* The description carries what used to be a second bar above the list: where copies land, and the one link that
        changes it. The path is mono because it is a path; the link is the kit's link, not a button beside it. */
-    .az-intro code { color: var(--fg-strong); font-family: ui-monospace, monospace; font-size: 12.5px;
+    .az-intro code { color: var(--fg-strong); font-family: ui-monospace, monospace; font-size: inherit;
                      overflow-wrap: anywhere; }
     /* The summary under the strip is the kit's note, one step up in spacing because it introduces the list. */
     .az-note#stats { margin: .9em 0 0; }
@@ -674,9 +666,9 @@ function html(citing = false): string {
     <span class="count" id="selection-count">0 selected</span>
     <button type="button" class="az-btn az-btn--sm az-btn--primary" id="bulk-start">Start</button>
     <button type="button" class="az-btn az-btn--sm" id="bulk-cite">${citing ? 'Cite in this project' : 'Cite in the new project'}</button>
-    <button type="button" class="az-btn az-btn--sm" id="bulk-fetch">Download</button>
+    <button type="button" class="az-btn az-btn--sm" id="bulk-fetch">Clone</button>
     <button type="button" class="az-btn az-btn--sm" id="bulk-pull">Pull</button>
-    <button type="button" class="az-btn az-btn--sm" id="bulk-remove">Remove the local copy</button>
+    <button type="button" class="az-btn az-btn--sm" id="bulk-remove">Remove the clone</button>
     <button type="button" class="az-btn az-btn--sm" id="bulk-clear">Clear</button>
   </div>
 
@@ -694,10 +686,11 @@ function html(citing = false): string {
         its files are still there to draft from. Nothing is cloned and nothing is written to the repository.</li>
       <li><b>Project</b> opens a new project <em>from</em> this repository: it is cited as the source, its own
         documentation and classes are listed to pick from, and the AI can draft the first page from what you picked.</li>
-      <li><b>Download</b> clones one branch, with full history, into the folder named in the description above — the
-        working area, which is outside every repository. That copy is what lets a draft, the AI and its citations
-        read the files and the history behind them.</li>
-      <li><b>Pull</b> freshens that copy when the repository has moved on. <b>Remove the local copy</b> deletes the
+      <li><b>Clone</b> copies one branch, with full history, into the shared <code>source</code> folder under the
+        working area named above — one copy per repository, outside every repository and not owned by any project —
+        and then reads what the repository declares, so its pages appear at once. That copy is what lets a draft, the
+        AI and its citations read the files and the history behind them.</li>
+      <li><b>Pull</b> freshens that copy when the repository has moved on. <b>Remove the clone</b> deletes the
         copy only — the repository is never written to and never pushed to.</li>
       <li>A private repository needs a token: <b>Set a GitHub Token</b>, from the warning above or the palette.</li>
     </ol>
@@ -821,13 +814,13 @@ window.addEventListener('message', (event) => {
 function renderLede(message) {
   const line = $('lede');
   line.replaceChildren(text('span', '', lede(message)));
-  line.append(document.createTextNode(' · local copies and drafts in '));
+  line.append(document.createTextNode(' · clones and drafts in '));
   const path = text('code', '', message.where || 'not chosen yet');
   path.id = 'where-path';
   line.append(path);
   line.append(document.createTextNode(' · '));
   const settings = button('link', 'Settings', () => vscode.postMessage({ type: 'command', command: 'temcoRepositories.settings' }));
-  settings.title = 'The default enterprise, where local copies are cloned, and the GitHub token';
+  settings.title = 'The default enterprise, where clones are made, and the GitHub token';
   line.append(settings);
 }
 
@@ -879,7 +872,7 @@ function drawStats() {
   const parts = [
     repositories.length + (repositories.length === 1 ? ' repository' : ' repositories'),
     started === 0 ? 'none cited by this project' : started + ' cited by this project',
-    clones === 0 ? 'no local copies' : clones + (clones === 1 ? ' local copy' : ' local copies')
+    clones === 0 ? 'nothing cloned yet' : clones + (clones === 1 ? ' clone' : ' clones')
   ];
   if (state === 'refused') {
     parts.push('held from ' + (takenAt ? readAt(takenAt) : 'an earlier read'));
@@ -946,10 +939,10 @@ function row(repo) {
   const head = document.createElement('div');
   head.className = 'repo__head';
   const name = button('repo__name', repo.name, () => vscode.postMessage({ type: 'detail', name: repo.name }));
-  name.title = 'Open this repository — its files, its local copy, and creating a project from it';
+  name.title = 'Open this repository — its files, its clone, and creating a project from it';
   head.append(name);
   if (isCited) { head.append(text('span', 'repo__badge repo__badge--cited', 'cited')); }
-  if (cloned) { head.append(text('span', 'repo__badge repo__badge--local', 'local copy')); }
+  if (cloned) { head.append(text('span', 'repo__badge repo__badge--local', 'clone')); }
 
   const main = document.createElement('div');
   main.className = 'repo__main';
@@ -983,15 +976,15 @@ function row(repo) {
   });
   open.title = 'Open the repository on GitHub';
 
-  const local = button('az-btn az-btn--sm', cloned ? 'Pull' : 'Download', () =>
+  const local = button('az-btn az-btn--sm', cloned ? 'Pull' : 'Clone', () =>
     vscode.postMessage({ type: cloned ? 'pull' : 'fetch', name: repo.name }));
-  local.title = cloned ? 'Pull the latest changes into the local copy' : 'Download a copy into the working area';
+  local.title = cloned ? 'Pull the latest changes into the clone' : 'Clone a copy into the shared source folder';
 
   do_.append(start, project, open, local);
   if (cloned) {
     const drop = button('az-btn az-btn--sm', 'Remove copy', () =>
       vscode.postMessage({ type: 'removeClone', name: repo.name }));
-    drop.title = 'Remove the local copy — the repository is left untouched';
+    drop.title = 'Remove the clone — the repository is left untouched';
     do_.append(drop);
   }
 

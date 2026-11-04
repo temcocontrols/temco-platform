@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import { sourceTree, CodeFile, RepositorySource } from './repository';
 import { Catalog, RepositoryCacheRow, Selection, slugOf } from './store';
 import { page, pageColumn, remember } from './ui';
-import { cloneSize, hasClone } from './workarea';
+import { cloneSize, hasClone, projectFor } from './workarea';
 
 export const REPOSITORY_DETAIL_VIEW_TYPE = 'temcoRepositories.repositoryDetail';
 
@@ -54,6 +54,7 @@ export class RepositoryDetailPage {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly selection: Selection,
+    private readonly output: vscode.OutputChannel,
     private readonly refresh: () => void
   ) { }
 
@@ -116,9 +117,11 @@ export class RepositoryDetailPage {
       state.branch = source?.branch;
       if (project !== undefined) {
         state.cited = catalog.documentSources(project).some((row) => row.name === this.name);
-        state.localCopy = await hasClone(project, this.name);
-        state.copySize = state.localCopy ? (await cloneSize(project, this.name)) ?? '' : undefined;
       }
+      // A copy belongs to the repository, not to the project on screen: two projects that cite this one read the
+      // same clone.
+      state.localCopy = await hasClone(this.name);
+      state.copySize = state.localCopy ? (await cloneSize(this.name)) ?? '' : undefined;
     } catch (error) {
       state.error = error instanceof Error ? error.message : String(error);
     } finally {
@@ -267,16 +270,8 @@ export class RepositoryDetailPage {
 
   /** Records the repository as a source of the project being worked on — the same act as *Start* on the dashboard. */
   private async start(): Promise<void> {
-    const project = this.selection.project();
+    const project = await projectFor(this.selection, this.output, `starting from ${this.name}`);
     if (project === undefined) {
-      void vscode.window.showInformationMessage(
-        'Temco Repositories: a source belongs to a project being worked on. Choose one first — the Library’s Projects row.',
-        'Projects'
-      ).then((answer) => {
-        if (answer === 'Projects') {
-          void vscode.commands.executeCommand('temcoDocs.projects');
-        }
-      });
       return;
     }
     const coordinates = await this.coordinates();
@@ -340,13 +335,13 @@ function html(name: string): string {
     <h1 class="az-title" id="title">${name}</h1>
     <p class="az-intro az-intro--wide" id="lede">Reading what the platform holds of it…</p>
     <div class="az-row">
-      <button type="button" class="az-btn az-btn--primary" id="fetch">${glyph('download')}<span>Download the code</span></button>
+      <button type="button" class="az-btn az-btn--primary" id="fetch">${glyph('download')}<span>Clone the code</span></button>
       <button type="button" class="az-btn az-btn--primary" id="pull" hidden>${glyph('upload')}<span>Pull the latest</span></button>
       <button type="button" class="az-btn az-btn--primary" id="start" hidden>${glyph('plus')}<span>Start — add it to the project</span></button>
       <button type="button" class="az-btn" id="open-github">${glyph('globe')}<span>Open on GitHub</span></button>
       <button type="button" class="az-btn" id="copy-url">${glyph('link')}<span>Copy the clone URL</span></button>
       <button type="button" class="az-btn" id="reload">${glyph('refresh')}<span>Refresh</span></button>
-      <button type="button" class="az-btn" id="remove-copy" hidden>${glyph('close')}<span>Remove the local copy</span></button>
+      <button type="button" class="az-btn" id="remove-copy" hidden>${glyph('close')}<span>Remove the clone</span></button>
     </div>
   </header></div>
 
@@ -433,8 +428,8 @@ window.addEventListener('message', (event) => {
   note = message.note || '';
   $('bar').hidden = files.length === 0;
   $('files-note').textContent = (state.localCopy
-    ? 'Read from the local copy in the working area.'
-    : 'Read over the GitHub API, because there is no local copy. Downloading one makes this faster and gives the history behind each file.')
+    ? 'Read from the clone in the working area.'
+    : 'Read over the GitHub API, because there is no clone yet. Cloning one makes this faster and gives the history behind each file.')
     + (note ? ' ' + note + '.' : '');
   draw();
 });
@@ -451,8 +446,8 @@ function drawFacts() {
   else if (state.isSource) { parts.push('recorded, not cited by this project'); }
   else { parts.push('not started'); }
   parts.push(state.localCopy
-    ? 'local copy' + (state.copySize ? ' · ' + state.copySize : ' ready')
-    : 'no local copy — Download reads it into the working area');
+    ? 'clone' + (state.copySize ? ' · ' + state.copySize : ' ready')
+    : 'not cloned — Clone reads it into the working area');
   $('facts').textContent = parts.join(' · ');
   $('lede').textContent = (state.organisation ? state.organisation + ' · ' : '')
     + (state.row && state.row.description ? state.row.description : 'No description.')

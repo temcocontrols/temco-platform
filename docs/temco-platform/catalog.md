@@ -43,5 +43,7 @@ Two settings decide what the repositories surfaces act on, and both are written 
 
 - `temcoRepositories.organisation` — the enterprise the dashboard opens on, and the one seeded into
   `organisations` the first time the page opens.
-- `temcoRepositories.workspaceFolder` — where local copies are downloaded and drafts are written. Empty means
-  `~/Temco`. It is outside every repository on purpose: nothing is ever written to a source, and nothing is pushed.
+- `temcoRepositories.workspaceFolder` — the root of the working area. Clones go to `source/` under it (one copy
+  per repository, shared by every project that cites it) and what we make for a project goes to `<project>/`.
+  Empty means `~/temco`. It is outside every repository on purpose: nothing is ever written to a source, and
+  nothing is pushed.

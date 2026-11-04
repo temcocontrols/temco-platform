@@ -1,4 +1,4 @@
-// The repositories module's entry point.
+﻿// The repositories module's entry point.
 //
 // It owns the organisation and the local copies of it: the list of repositories, the token that reaches them,
 // cloning one branch with full history into the working area, pulling it, removing it, and reading a source —
@@ -60,9 +60,9 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 	const refresh = (): void => changed.fire();
 
 	// The page that lists the organisation: what is there, what has been read, and what has a local copy.
-	const repositories = new RepositoriesPage(context, selection, refresh);
+	const repositories = new RepositoriesPage(context, selection, output, refresh);
 	// One repository, opened from a row or from the panel: its facts, its local copy, and what is inside it.
-	const detail = new RepositoryDetailPage(context, selection, refresh);
+	const detail = new RepositoryDetailPage(context, selection, output, refresh);
 	// What decides both: the enterprise the page opens on, where a download lands, and the token.
 	const settings = new RepositorySettingsPage(context, refresh);
 	// Every clone at once, grouped by project: what moved since the last read, and the pages that name it. It repaints
@@ -86,6 +86,9 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 		),
 		vscode.commands.registerCommand('temcoRepositories.settings', () => settings.open()),
 		vscode.commands.registerCommand('temcoRepositories.dashboard', () => dashboard.open()),
+		// The detail behind every notice: the commands this module ran and what git said about them. A toast is one
+		// line, and the line that explains a failure is usually the twentieth.
+		vscode.commands.registerCommand('temcoRepositories.showLog', () => output.show(true)),
 		// The panel's enterprise rows: read that list again, or forget it. A row is one click away from its list,
 		// which is what the page is for.
 		vscode.commands.registerCommand('temcoRepositories.rowReadOrg', (target?: unknown) => {
@@ -100,7 +103,7 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 		// A file in the panel's tree: the local copy when there is one, GitHub when there is not. Its own id —
 		// `temcoRepositories.openFile` is the documentation page opener in `read.ts`.
 		vscode.commands.registerCommand('temcoRepositories.openRepositoryFile', (name?: unknown, file?: unknown) =>
-			void openRepositoryFile(context, selection, name, file)
+			void openRepositoryFile(context, name, file)
 		),
 		vscode.commands.registerCommand('temcoRepositories.repository', (name?: string, organisation?: string) => {
 			if (typeof name === 'string' && name.length > 0) {
@@ -122,8 +125,8 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 				canSelectFiles: false,
 				canSelectFolders: true,
 				canSelectMany: false,
-				openLabel: 'Keep local copies here',
-				title: 'Where should local copies and drafts be kept?'
+				openLabel: 'Keep clones here',
+				title: 'Where should clones and drafts be kept?'
 			});
 			const folder = picked?.[0];
 			if (folder === undefined) {
@@ -227,16 +230,15 @@ async function rowCoordinates(
  */
 async function openRepositoryFile(
 	context: vscode.ExtensionContext,
-	selection: { project(): string | undefined },
 	name?: unknown,
 	file?: unknown
 ): Promise<void> {
 	if (typeof name !== 'string' || typeof file !== 'string' || name.length === 0 || file.length === 0) {
 		return;
 	}
-	const project = selection.project();
-	if (project !== undefined && (await hasClone(project, name))) {
-		const target = path.join(cloneFolder(project, name), ...file.split('/'));
+	// The copy is the repository's, so an open file needs no project — only a clone.
+	if (await hasClone(name)) {
+		const target = path.join(cloneFolder(name), ...file.split('/'));
 		try {
 			await vscode.window.showTextDocument(vscode.Uri.file(target));
 			return;

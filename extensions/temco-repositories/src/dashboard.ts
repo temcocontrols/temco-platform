@@ -50,6 +50,8 @@ interface Clone {
 	fresh: string[];
 	/** Pages the documentation module says name those paths. */
 	docs: { id: string; title: string }[];
+	/** The projects that cite this source. One copy can serve several, so the row says which. */
+	cited: string[];
 }
 
 /** A project, and the clones it cites. */
@@ -125,11 +127,27 @@ async function clones(context: vscode.ExtensionContext, project: string | undefi
 		const sources: SourceRow[] = catalog.sources().filter((row) => row.kind === 'git');
 		// What the project being worked on cites: the first group, and the only one with a name.
 		const cited = new Set(project === undefined ? [] : catalog.documentSources(project).map((source) => source.name));
+		// One copy serves every project that cites it, so each row has to say which those are: the page groups by
+		// citation, and a clone that two projects read belongs in both answers.
+		const citing = new Map<string, string[]>();
+		for (const document of catalog.documents()) {
+			for (const slug of catalog.documentSourceSlugs(document.slug)) {
+				citing.set(slug, [...(citing.get(slug) ?? []), document.name]);
+			}
+		}
 
-		for (const [title, list] of [
-			[project === undefined ? 'Cited by this project' : `Cited by ${project}`, sources.filter((row) => cited.has(row.name))],
-			['Not cited by a project', sources.filter((row) => !cited.has(row.name))]
-		] as [string, SourceRow[]][]) {
+		// With no project on screen "cited" is not a question anyone can answer, so the page shows one list instead of
+		// splitting every clone into a group called "not cited". With a project, the second group is where the clones
+		// it does not cite go — named for what they are (other clones), not for what they lack.
+		const otherNote = 'No project on screen cites these. Reading one records what it says; citing it is what lets a draft name its pages.';
+		const wanted: { title: string; note: (count: number) => string; list: SourceRow[] }[] = project === undefined
+			? [{ title: 'Every clone', note: () => 'Every clone on this machine. Reading one records what it says; citing it is what lets a draft name its pages.', list: sources }]
+			: [
+				{ title: `Cited by ${project}`, note: (count) => `${count} ${count === 1 ? 'clone' : 'clones'} the project on screen cites.`, list: sources.filter((row) => cited.has(row.name)) },
+				{ title: 'Other clones', note: () => otherNote, list: sources.filter((row) => !cited.has(row.name)) }
+			];
+
+		for (const { title, note, list } of wanted) {
 			if (list.length === 0) {
 				continue;
 			}
@@ -155,15 +173,14 @@ async function clones(context: vscode.ExtensionContext, project: string | undefi
 					commits,
 					read: waterline,
 					fresh,
-					docs: await pagesFor(fresh)
+					docs: await pagesFor(fresh),
+					cited: citing.get(source.slug) ?? []
 				});
 				total += 1;
 			}
 			groups.push({
 				title,
-				note: title.startsWith('Cited')
-					? `${clones.length} ${clones.length === 1 ? 'clone' : 'clones'} the project on screen cites.`
-					: 'Clones no project has started — read them, or cite one from the repositories page.',
+				note: note(clones.length),
 				clones: clones.sort((a, b) => (b.last?.date ?? '').localeCompare(a.last?.date ?? ''))
 			});
 		}
@@ -291,36 +308,53 @@ function pagesPhrase(clone: Clone): string {
 	return clone.docs.length > 3 ? `${named} and ${clone.docs.length - 3} more` : named;
 }
 
+/** The projects that read this copy, as one phrase: one clone can be cited by several. */
+function citedPhrase(clone: Clone): string {
+	if (clone.cited.length === 0) {
+		return 'no project cites it';
+	}
+	const named = clone.cited.slice(0, 3).join(', ');
+	return `cited by ${clone.cited.length > 3 ? `${named} and ${clone.cited.length - 3} more` : named}`;
+}
+
 /**
  * One clone, as a row: what moved, whether it is new to the reader, and the pages that name it.
  *
- * The state word is the answer, and the meta carries the evidence — the branch, the folder, the last commit and the
- * pages. The acts are the two the reader would take next, and they are words, not boxes: a row already says what it is.
+ * The state word sits beside the name, because it is a fact about this copy — not cloned, never read, nothing new.
+ * The meta carries the evidence — the branch, the folder, the last commit and the pages. The acts are the ones the
+ * reader would take next, and they are words, not boxes: a row already says what it is.
  */
 function cloneRow(clone: Clone, canDraft: boolean): string {
 	const fresh = clone.fresh.length;
 	const last = clone.last;
+	// "Not cloned" is a state, not a fault: the copy is optional and reading works without it. The acts therefore say
+	// which of the two the reader wants — make the copy, or read what the source declares.
 	const state = !clone.cloned
-		? 'no local copy'
+		? 'not cloned'
 		: clone.read === undefined
 			? 'never read'
 			: fresh === 0
 				? 'nothing new'
 				: `${n(fresh, 'file', 'files')} since the last read`;
 	const row = entry({
-		mark: clone.cloned ? 'repo' : 'alert',
-		tone: !clone.cloned ? 'warn' : fresh === 0 ? 'ok' : 'info',
+		mark: 'repo',
+		tone: !clone.cloned ? 'info' : fresh === 0 ? 'ok' : 'info',
 		title: clone.name,
+		status: state,
 		meta: [
 			clone.branch,
 			clone.path,
 			last === undefined ? 'no commit to read' : `${last.short} · ${last.subject} · ${last.date}`,
+			citedPhrase(clone),
 			pagesPhrase(clone)
 		],
-		state,
-		// Drafting belongs to the AI module: where that module is not installed the word would be a control that does
-		// nothing, which is worse than not offering it.
-		actions: button('Read', 'temcoRepositories.readSource', { kind: 'link', args: [clone.slug] })
+		// One act per state, not two that look alike: a source with no clone is cloned (which reads it in the same
+		// pass), and a source with a clone is read again or pulled. Drafting belongs to the AI module — where that
+		// module is not installed, the word would be a control that does nothing, which is worse than not offering it.
+		actions: (clone.cloned
+			? button('Read', 'temcoRepositories.readSource', { kind: 'link', args: [clone.slug] })
+				+ button('Pull', 'temcoRepositories.pullSource', { kind: 'link', args: [clone.slug] })
+			: button('Clone it', 'temcoRepositories.fetchSource', { kind: 'link', args: [clone.slug] }))
 			+ (canDraft && clone.docs.length > 0 ? button('Draft', 'temcoAi.stale', { kind: 'link' }) : '')
 	});
 	return `${row}${commitFold(clone)}`;
@@ -357,6 +391,7 @@ function body(groups: readonly Group[], total: number, project: string | undefin
 		actions: [
 			{ label: 'Read every source', command: 'temcoRepositories.readAllSources', kind: 'primary', mark: 'refresh' },
 			...(canDraft ? [{ label: 'Draft the affected pages', command: 'temcoAi.stale', mark: 'sparkle' }] : []),
+			{ label: 'Show the Log', command: 'temcoRepositories.showLog', mark: 'output' },
 			{ label: 'Repositories', command: 'temcoRepositories.page', mark: 'repo' }
 		],
 		stats: [
@@ -372,7 +407,7 @@ function body(groups: readonly Group[], total: number, project: string | undefin
 ${notice({
 			mark: 'repo',
 			title: 'No repository is recorded yet',
-			desc: 'Add an enterprise on the repositories page, then download a copy. This page reads the clones on this machine, so it has nothing to say until there is one.',
+			desc: 'Add an enterprise on the repositories page, then clone a copy. This page reads the clones on this machine, so it has nothing to say until there is one.',
 			actions: button('Open the repositories', 'temcoRepositories.page', { kind: 'primary', mark: 'repo' })
 		})}`;
 	}
@@ -385,5 +420,5 @@ ${notice({
 ${entries(group.clones.map((clone) => cloneRow(clone, canDraft)).join(''))}</div>`).join('');
 
 	return `${head}${sections}
-<p class="az-note">Read from the clones on this machine · a commit before the last read is dimmed, not dropped${project === undefined ? '' : ` · project ${escapeHtml(project)}`}.</p>`;
+<p class="az-note">Cloned copies on this machine · a commit before the last read is dimmed, not dropped${project === undefined ? '' : ` · project ${escapeHtml(project)}`}.</p>`;
 }

@@ -4393,11 +4393,26 @@ body {
 	min-width: 0;
 }
 
+.az-entry__head {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--sp-2);
+	min-width: 0;
+}
+
 .az-entry__title {
 	display: block;
 	color: var(--ink-1);
 	font-size: 13px;
 	line-height: 18px;
+}
+
+.az-entry__status {
+	color: var(--fg-muted);
+	font-size: 12px;
+	line-height: 18px;
+	white-space: nowrap;
 }
 
 .az-entry__meta {

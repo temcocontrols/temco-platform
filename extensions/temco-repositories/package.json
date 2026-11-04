@@ -1,7 +1,7 @@
 {
   "name": "temco-repositories",
   "displayName": "Temco Repositories",
-  "description": "Temco Repositories — the organisation and its local copies: the repository list, the working area, and reading a source into the platform's memory.",
+  "description": "Temco Repositories — the organisation and its clones: the repository list, the working area, and reading a source into the platform's memory.",
   "version": "0.0.1",
   "publisher": "temcocontrols",
   "private": true,
@@ -54,7 +54,7 @@
       },
       {
         "command": "temcoRepositories.rowFetch",
-        "title": "Fetch the Local Copy",
+        "title": "Clone This Repository",
         "icon": "$(cloud-download)"
       },
       {
@@ -70,7 +70,7 @@
       {
         "command": "temcoRepositories.dashboard",
         "title": "Repositories — Dashboard",
-        "icon": "$(history)"
+        "icon": "$(dashboard)"
       },
       {
         "command": "temcoRepositories.applyToSource",
@@ -135,12 +135,12 @@
       },
       {
         "command": "temcoRepositories.openClone",
-        "title": "Open the Local Copy",
+        "title": "Open the Clone",
         "icon": "$(folder-opened)"
       },
       {
         "command": "temcoRepositories.removeClone",
-        "title": "Remove the Local Copy",
+        "title": "Remove the Clone",
         "icon": "$(trash)"
       },
       {
@@ -152,22 +152,32 @@
         "command": "temcoRepositories.openWorkFolder",
         "title": "Open the Working Area",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "temcoRepositories.showLog",
+        "title": "Show the Log",
+        "icon": "$(output)"
+      },
+      {
+        "command": "temcoRepositories.moveClones",
+        "title": "Move the Clones Into the Shared Folder",
+        "icon": "$(folder-library)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "temcoRepositories.page",
+          "command": "temcoRepositories.dashboard",
           "when": "view == temcoRepositories.list",
           "group": "navigation@0"
         },
         {
-          "command": "temcoRepositories.readAllSources",
+          "command": "temcoRepositories.page",
           "when": "view == temcoRepositories.list",
           "group": "navigation@1"
         },
         {
-          "command": "temcoProjects.addSource",
+          "command": "temcoRepositories.readAllSources",
           "when": "view == temcoRepositories.list",
           "group": "navigation@2"
         }
@@ -231,7 +241,7 @@
         "temcoRepositories.workspaceFolder": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Where local copies of sources are downloaded, and where what we make from them is written. Empty means `~/temco`. It is outside every repository on purpose: **nothing is ever written to a source, and nothing is ever pushed**."
+          "markdownDescription": "Where clones of sources are made, and where what we make from them is written. Empty means `~/temco`. It is outside every repository on purpose: **nothing is ever written to a source, and nothing is ever pushed**."
         }
       }
     }

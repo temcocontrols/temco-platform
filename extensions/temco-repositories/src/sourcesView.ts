@@ -351,7 +351,7 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 				item({
 					kind: 'empty',
 					label: 'No file to show',
-					note: 'download the local copy',
+					note: 'clone it into the working area',
 					command: { command: 'temcoRepositories.repository', title: 'Open the repository', arguments: [row.name] },
 				}),
 			];

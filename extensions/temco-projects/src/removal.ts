@@ -2,8 +2,11 @@
 //
 // A project is a row in the catalog, and the row is all the rest of the platform reads — which is why removing it
 // used to be the whole act. But the project also owns a folder in the working area (`~/temco/<slug>` by default):
-// the clones it fetched and what we made from them. Leaving that behind means the Library forgets a project while
-// the disk keeps it, and the next project with the same name inherits a stranger's clones.
+// what we made for it — drafts and notes. Leaving that behind means the Library forgets a project while the disk
+// keeps it, and the next project with the same name inherits a stranger's drafts.
+//
+// Clones are **not** in that folder: a clone is a copy of a repository and lives in the shared `source` folder, so
+// removing a project never deletes code.
 //
 // The folder is owned by `temco-repositories`, which owns the working area; this module only knows which project the
 // application follows. So the two halves are asked for by command — what the folder is, then delete it — and the
@@ -40,7 +43,8 @@ export function folderConsequence(workFolder: ProjectWorkFolder | undefined): st
     return '';
   }
   return workFolder.exists
-    ? `${workFolder.folder} — the folder this project owns, with its local copies — is deleted from this machine.`
+    ? `${workFolder.folder} — the folder this project owns, with what was made for it — is deleted from this machine. ` +
+      'Clones are elsewhere and are kept.'
     : `It has no folder on this machine (${workFolder.folder}), so only what the catalog recorded goes.`;
 }
 

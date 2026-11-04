@@ -92,6 +92,8 @@ export interface EntryOptions {
 	mark?: string;
 	tone?: Tone;
 	title: string;
+	/** Words beside the title: a state that belongs to the name rather than to the end of the row. */
+	status?: string;
 	meta?: readonly (string | undefined)[];
 	/** The state in words, at the right-hand end. */
 	state?: string;
@@ -112,10 +114,11 @@ export function entry(options: EntryOptions): string {
 	const chip = options.mark === undefined ? '' : toneMark(options.mark, options.tone ?? 'info');
 	const facts = (options.meta ?? []).filter((fact): fact is string => fact !== undefined && fact.length > 0);
 	const meta = facts.length === 0 ? '' : `<span class="az-entry__meta">${facts.map(escapeHtml).join(' · ')}</span>`;
+	const status = options.status === undefined || options.status === '' ? '' : `<span class="az-entry__status">${escapeHtml(options.status)}</span>`;
 	const actions = options.actions === undefined || options.actions === '' ? '' : `<span class="az-entry__state">${options.actions}</span>`;
 	const aside = options.aside === undefined ? '' : `<span class="az-entry__aside">${options.aside}</span>`;
 	const state = options.state === undefined ? '' : `<span class="az-entry__go">${escapeHtml(options.state)}</span>`;
-	return `<div class="az-entry">${chip}<div class="az-entry__main"><span class="az-entry__title">${escapeHtml(options.title)}</span>${meta}</div>${aside}${actions}${state}</div>`;
+	return `<div class="az-entry">${chip}<div class="az-entry__main"><span class="az-entry__head"><span class="az-entry__title">${escapeHtml(options.title)}</span>${status}</span>${meta}</div>${aside}${actions}${state}</div>`;
 }
 
 /** The figures a page opens on. */

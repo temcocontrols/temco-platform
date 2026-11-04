@@ -83,6 +83,8 @@ interface EntryOptions {
 	mark?: string;
 	tone?: Tone;
 	title: string;
+	/** Words beside the title: a state that belongs to the name rather than to the end of the row. */
+	status?: string;
 	meta?: readonly (string | undefined)[];
 	state?: string;
 	actions?: string;

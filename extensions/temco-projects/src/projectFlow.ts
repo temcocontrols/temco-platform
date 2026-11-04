@@ -141,10 +141,15 @@ export class ProjectFlowPage {
 	 * Brings the form forward **without rebuilding it**.
 	 *
 	 * The form is a live document: re-rendering it would throw away everything typed and ticked. Coming back from the
-	 * repositories page is a return, not a refresh.
+	 * repositories page is a return, not a refresh — but only while the tab is still there. When it was closed there
+	 * is nothing to return to and nothing to lose, so "back to the form" opens a new one instead of doing nothing.
 	 */
 	reveal(): void {
-		this.panel?.reveal(pageColumn());
+		if (this.panel === undefined) {
+			void this.open();
+			return;
+		}
+		this.panel.reveal(pageColumn());
 	}
 
 	/**

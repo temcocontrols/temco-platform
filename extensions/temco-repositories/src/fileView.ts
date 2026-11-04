@@ -98,7 +98,7 @@ export class RepositoryFileProvider implements vscode.TextDocumentContentProvide
 				'',
 				`The file could not be read: ${read.error}`,
 				'',
-				'Download the local copy of this repository to read it from disk, or check the branch.',
+				'Clone this repository to read it from disk, or check the branch.',
 				'',
 			].join('\n');
 		}
