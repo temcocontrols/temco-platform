@@ -505,6 +505,10 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
       : provider.showsProjectRow()
         ? undefined
         : `${projectName} · ${totals(roots).pages} pages`;
+    // The strip above the tree answers about a project, so it exists only while there is one: with no project the view
+    // is hidden by this key and the Pages tree carries VS Code's own welcome content instead. A strip that has to say
+    // "No project" in the same breath as its own title is a heading with nothing under it.
+    void vscode.commands.executeCommand('setContext', 'temcoDocs.hasProject', projectName !== undefined);
     publishDiagnostics(diagnostics, roots);
     for (const { uri, message } of broken) {
       diagnostics.set(uri, [
@@ -1725,13 +1729,25 @@ async function pickProject(context: vscode.ExtensionContext): Promise<void> {
     return;
   }
   const current = selection.project();
+  // A picker with one entry cannot pick anything: say which project this is and offer the way to a second one.
+  if (projects.length === 1) {
+    const only = projects[0];
+    const answer = await vscode.window.showInformationMessage(
+      `Temco Docs: ${only.name} is the only project in this window.`,
+      'Create a Project'
+    );
+    if (answer === 'Create a Project') {
+      await vscode.commands.executeCommand('temcoProjects.newProject');
+    }
+    return;
+  }
   const pick = await vscode.window.showQuickPick(
     projects.map((project) => ({
       label: project.slug === current ? `$(check) ${project.name}` : project.name,
       description: project.version,
       slug: project.slug,
     })),
-    { title: 'Switch Project', placeHolder: 'Which project are you working on?' }
+    { title: 'Switch Project', placeHolder: 'Choose a project to work on' }
   );
   if (pick !== undefined) {
     await vscode.commands.executeCommand('temcoDocs.selectProject', pick.slug);

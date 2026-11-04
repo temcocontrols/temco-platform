@@ -37,7 +37,11 @@ assert.ok(statSync(built).mtimeMs >= statSync(source).mtimeMs, 'out/panelView.js
 const { panelHtml, escapeHtml, nonce } = createRequire(import.meta.url)(built) as PanelModule;
 
 const manifest = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as {
-	contributes?: { commands?: { command?: string }[] };
+	contributes?: {
+		commands?: { command?: string }[];
+		views?: Record<string, { id?: string; when?: string }[]>;
+		viewsWelcome?: { view?: string; when?: string; contents?: string }[];
+	};
 };
 const declared = new Set((manifest.contributes?.commands ?? []).map(entry => entry.command));
 
@@ -78,10 +82,22 @@ test('every count is a number, including the ones that are zero', () => {
 	assert.equal((html.match(/<b>0<\/b>/gu) ?? []).length, 4, 'every empty count should still read as zero');
 });
 
-test('no project says what to do, and still offers the way there', () => {
+// With no project the strip is not on screen at all — its view is gated on `temcoDocs.hasProject` — so the way out of the
+// empty state is VS Code's own welcome content on the Pages tree. That is where the buttons live now, so that is what is
+// checked, and the empty strip is checked for having nothing to click.
+test('no project draws no control, and the Pages view carries the welcome', () => {
 	const html = panelHtml({ pages: 0, issues: 0, unshipped: 0, owed: 0 }, 'NONCE1234567890ABCDEFGH');
-	assert.ok(html.includes('No project'));
-	assert.ok(html.includes('Home'));
+	assert.ok(!html.includes('data-command="'), 'the empty strip must not offer a control that does nothing');
+	assert.ok(!html.includes('class="open"'), 'the empty strip must not draw the name row as a button');
+
+	const strip = (manifest.contributes?.views?.temco ?? []).find(view => view.id === 'temcoDocs.panel');
+	assert.equal(strip?.when, 'temcoDocs.hasProject', 'the strip belongs to a project, so its view is gated on one');
+
+	const welcome = (manifest.contributes?.viewsWelcome ?? []).find(entry => entry.view === 'temcoDocs.pages');
+	assert.equal(welcome?.when, '!temcoDocs.hasProject', 'the welcome is for the state without a project');
+	for (const command of ['temcoProjects.selectProject', 'temcoProjects.newProject', 'temcoDocs.projects']) {
+		assert.ok((welcome?.contents ?? '').includes(`command:${command}`), `the welcome should offer ${command}`);
+	}
 });
 
 test('nothing is loaded from anywhere', () => {
@@ -172,10 +188,11 @@ test('the way to the project page is the name row, and it is the only non-act bu
 	assert.ok(html.includes('aria-hidden="true"><path'), 'the row should carry a glyph, not the icon font');
 });
 
-test('with no project the row is not a button, because there is nowhere to go', () => {
+test('with no project the strip offers no page and no acts, because there is nothing to act on', () => {
 	const html = panelHtml({ pages: 0, issues: 0, unshipped: 0, owed: 0 }, 'NONCE1234567890ABCDEFGH');
-	assert.ok(html.includes('open open--empty'), 'the empty row should not look clickable');
+	assert.ok(!html.includes('data-command="'), 'an empty strip should not carry a button');
 	assert.ok(!html.includes('temcoDocs.projectPage'), 'an empty panel should not offer the project page');
+	assert.ok(!html.includes('class="open"'), 'the name row is a button only when there is a name');
 });
 
 test('the script acquires the editor API exactly once', () => {

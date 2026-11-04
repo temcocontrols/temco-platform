@@ -173,9 +173,6 @@ export function panelHtml(state: DocsPanelState, nonceValue: string): string {
 	.open:hover, .icon:hover { background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
 	.open:active, .icon:active { background: var(--vscode-toolbar-activeBackground, var(--vscode-list-activeSelectionBackground)); }
 	.open:focus-visible, .icon:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
-	/* With no project there is no page to go to, so the row stops being a button and stops looking like one. */
-	.open--empty { cursor: default; }
-	.open--empty:hover, .open--empty:active { background: transparent; }
 	.glyph { display: flex; flex: 0 0 auto; color: var(--vscode-icon-foreground, var(--vscode-foreground)); }
 	.name {
 		font-size: 13px;
@@ -194,7 +191,6 @@ export function panelHtml(state: DocsPanelState, nonceValue: string): string {
 		border-radius: 3px;
 		padding: 0 4px;
 	}
-	.facts { margin: 2px 0 0; padding-left: 22px; color: var(--vscode-descriptionForeground); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	/* The name and the acts share one line: the name says what the project is, the icons say where to go about it. */
 	.head { display: flex; align-items: center; gap: 2px; margin-left: -4px; }
 	/* The acts sit together at the far end, a hair apart, the way a title bar's actions do. */
@@ -227,8 +223,7 @@ export function panelHtml(state: DocsPanelState, nonceValue: string): string {
 </head>
 <body>
 ${project === undefined
-	? `<div class="open open--empty"><span class="glyph" aria-hidden="true">${PROJECT}</span><span class="name">No project</span></div>
-<p class="facts">Pick a project in <b>Home ▸ Projects</b>.</p>`
+	? `<p class="info">No project is open.</p>`
 	: `<div class="head"><button type="button" class="open" data-command="temcoDocs.projectPage" title="Open the project page"><span class="glyph" aria-hidden="true">${PROJECT}</span><span class="name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>${version}</button>
 	<span class="acts">
 	<button type="button" class="icon" data-command="temcoDocs.overview" title="Documentation overview" aria-label="Documentation overview">${HOME}</button>

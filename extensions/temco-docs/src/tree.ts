@@ -339,8 +339,10 @@ export class DocsTreeProvider implements vscode.TreeDataProvider<DocsNode> {
         // says so. A book read as a different kind of row sitting among folders.
         item.iconPath = new vscode.ThemeIcon('folder');
         item.contextValue = 'project';
-        item.tooltip = `${node.project.name}${node.project.detail ? ` · ${node.project.detail}` : ''} — click to switch project`;
-        item.command = { command: 'temcoDocs.switchProject', title: 'Switch Project' };
+        item.tooltip = `${node.project.name}${node.project.detail ? ` · ${node.project.detail}` : ''} — open the project page`;
+        // The row carries the project's own name, so it opens that project: the switcher lives in the view's title bar,
+        // where "choose another project" is a different sentence from "Test1".
+        item.command = { command: 'temcoDocs.projectPage', title: 'Project Detail' };
         return item;
       }
       case 'folder':
