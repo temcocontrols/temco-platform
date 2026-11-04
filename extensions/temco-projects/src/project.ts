@@ -387,7 +387,6 @@ async function pickProject(
   return await vscode.window.showQuickPick(
     projects.map((project) => ({
       label: project.slug === current ? `$(pass-filled) ${project.name}` : project.name,
-      detail: project.description,
       slug: project.slug,
       name: project.name,
       description: project.slug === current ? 'the project being worked on' : project.description,

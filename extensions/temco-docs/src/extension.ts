@@ -915,6 +915,17 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
     // different questions, and a page that only switched was a menu wearing a page's clothes.
     vscode.commands.registerCommand('temcoDocs.projects', () => docsPages.projects()),
     vscode.commands.registerCommand('temcoDocs.switchProject', () => pickProject(context)),
+    // The Pages tree shows the project this window is working on, and that row carries no slug — so removing it from
+    // there names the current project rather than asking "which project?", which a caller with no selection cannot
+    // answer. The modal confirmation still comes from the projects module, because the folder is its business.
+    vscode.commands.registerCommand('temcoDocs.removeProject', async () => {
+      const slug = selection.project();
+      if (slug === undefined) {
+        void vscode.window.showInformationMessage('Temco Docs: no project is open, so there is nothing to remove.');
+        return;
+      }
+      await vscode.commands.executeCommand('temcoProjects.removeProject', slug);
+    }),
     // The project as a page: what it cites, what it produces, and the acts on it. The read argument is the row it
     // was invoked from — a tree row is not a slug, so it is read with `rowSlug` like every other row command here.
     vscode.commands.registerCommand('temcoDocs.projectPage', (target?: unknown) =>
@@ -1258,8 +1269,13 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
   // The Page pane: the page's headings as a jump list, and its length in the status bar.
   registerWordCount(context);
   // The Library's project rows are read from the catalog, so a project created, edited or removed in the
-  // projects module has to bring them back: its own signal, listened to here.
-  context.subscriptions.push(projects().onDidChange(() => void refresh()));
+  // projects module has to bring them back: its own signal, listened to here. The pages this module has open are
+  // views of that same catalog — the Projects page, the project's own page, the Build Center — so they are
+  // re-rendered too, rather than left showing a project that no longer exists until someone reopens them.
+  context.subscriptions.push(projects().onDidChange(() => {
+    void refresh();
+    docsPages.refreshOpen();
+  }));
   // Reading a source and the working area that holds a clone of one are the repositories module's: its own
   // activation registers them, and its own page shows what came of them. This module names it in its own
   // `extensionDependencies`, so its commands are there whenever a row here points at one.
@@ -1275,7 +1291,14 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
   // anything. Whichever tree or editor the person used last decides which page it belongs to.
   let lastTouched: 'tree' | 'page' = 'page';
   context.subscriptions.push(
-    treeView.onDidChangeSelection(() => { lastTouched = 'tree'; }),
+    treeView.onDidChangeSelection((event) => {
+      lastTouched = 'tree';
+      // What the view's `⋯` may offer is decided by what is selected: commands that act on a row are hidden until
+      // there is a row to act on, which is why the same menu has five entries with nothing selected and twelve with
+      // a page. The kinds are the tree's own (`DocsNode['kind']`), so a new kind shows up here the day it exists.
+      const node = event.selection[0];
+      void vscode.commands.executeCommand('setContext', 'temcoDocs.selected', node?.kind ?? 'none');
+    }),
     vscode.window.onDidChangeTextEditorSelection(() => { lastTouched = 'page'; })
   );
   registerMediaCommands(context, {

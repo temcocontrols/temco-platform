@@ -122,7 +122,9 @@ export class ProjectList implements vscode.TreeDataProvider<vscode.TreeItem> {
 				? act('Work on the pages', 'list-selection', open('temcoDocs.pages.focus', 'Show the Pages'))
 				: act('Work on this project', 'play', open('temcoProjects.selectProject', 'Work on this Project', [row.slug])),
 			act('Open the project page', 'go-to-file', open('temcoDocs.projectPage', 'Open the Project', [row.slug])),
-			act('Edit the project', 'gear', open('temcoProjects.editProject', 'Edit the Project', [row.slug]))
+			act('Edit the project', 'gear', open('temcoProjects.editProject', 'Edit the Project', [row.slug])),
+			// Removing a project is the one act that cannot be undone, so it is last and it asks first.
+			act('Remove this project', 'trash', open('temcoProjects.removeProject', 'Remove Project', [row.slug]))
 		];
 
 		return [sources, pageCount, built, waiting, ...acts];

@@ -69,7 +69,7 @@
       },
       {
         "command": "temcoProjects.removeProject",
-        "title": "Remove",
+        "title": "Remove Project",
         "category": "Temco Projects",
         "icon": "$(trash)"
       },

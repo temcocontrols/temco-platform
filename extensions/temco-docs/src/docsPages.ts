@@ -700,6 +700,36 @@ ${roots.length === 0
 		}
 		this.panels.clear();
 	}
+
+	/**
+	 * Re-renders the pages that are open, from the same reads that opened them.
+	 *
+	 * Every one of these surfaces is a view of the catalog, and the catalog changes from places that are not this
+	 * module — a project removed on the Projects page, a source read by the repositories module, a build left behind
+	 * by the pipeline. A page that keeps showing what it read five minutes ago is the one bug a reload always wins.
+	 * Pages that name a subject of their own (exports, the registry) keep their own Refresh, because re-opening them
+	 * without that subject would answer a different question.
+	 */
+	refreshOpen(): void {
+		if (this.panels.has('projects')) {
+			this.projects();
+		}
+		if (this.panels.has('project')) {
+			this.project();
+		}
+		if (this.panels.has('documents')) {
+			this.documents();
+		}
+		if (this.panels.has('review')) {
+			this.review();
+		}
+		if (this.panels.has('builds')) {
+			this.builds();
+		}
+		if (this.panels.has('releases')) {
+			this.releases();
+		}
+	}
 }
 
 /**
@@ -932,7 +962,7 @@ function projectCard(row: ProjectRow, current: boolean): string {
 		</span>
 		<span class="az-entry__meta">${esc(facts)}</span>
 	</div>
-	<span class="az-entry__state">${button(t('Open'), 'temcoDocs.projectPage', { kind: 'link', args: [row.slug] })}${button(t('Edit'), 'temcoProjects.editProject', { kind: 'link', args: [row.slug] })}</span>
+	<span class="az-entry__state">${button(t('Open'), 'temcoDocs.projectPage', { kind: 'link', args: [row.slug] })}${button(t('Edit'), 'temcoProjects.editProject', { kind: 'link', args: [row.slug] })}${button(t('Remove'), 'temcoProjects.removeProject', { kind: 'link', args: [row.slug] })}</span>
 </div>`;
 }
 
