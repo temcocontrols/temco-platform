@@ -19,7 +19,7 @@
 
 import * as vscode from 'vscode';
 import { Catalog, SqlResult, TableFact } from './store';
-import { PageMessage, button as kitButton, commandScript, entries, entry, esc, figures, hero, icon, n, notice, page, pageColumn, part } from './ui';
+import { PageMessage, button as kitButton, commandScript, entries, entry, esc, figures, hero, icon, n, notice, page, pageColumn, part, section } from './ui';
 
 /** One surface of the SQL container: the row, the command, and the page it draws. */
 export interface SqlPage {
@@ -42,8 +42,9 @@ export interface SqlPage {
 export const SQL_PAGES: SqlPage[] = [
 	{ id: 'query', label: 'Query Editor', note: 'ask a question in SQL', mark: 'code', command: 'temcoTools.sql.query', viewType: 'temcoTools.sql.query', group: 'rows' },
 	{ id: 'data', label: 'Data', note: 'the rows themselves, table by table', mark: 'list', command: 'temcoTools.sql.data', viewType: 'temcoTools.sql.data', group: 'rows' },
-	{ id: 'reports', label: 'Presets', note: 'statements that answer a question worth asking', mark: 'chart', command: 'temcoTools.sql.reports', viewType: 'temcoTools.sql.reports', group: 'rows' },
-	{ id: 'saved', label: 'Saved Queries', note: 'the questions worth asking more than once', mark: 'book', command: 'temcoTools.sql.saved', viewType: 'temcoTools.sql.saved', group: 'rows' },
+	// Presets and saved queries were two pages of the same list — a name, a sentence, and a Load — so they are one page
+	// with two groups. The old commands stay registered as ways into it, so a keybinding or a menu item still lands.
+	{ id: 'queries', label: 'Query Library', note: 'statements to load, built-in and your own', mark: 'book', command: 'temcoTools.sql.queries', viewType: 'temcoTools.sql.queries', group: 'rows' },
 	{ id: 'history', label: 'History', note: 'what was run in this window, newest first', mark: 'clock', command: 'temcoTools.sql.history', viewType: 'temcoTools.sql.history', group: 'rows' },
 	{ id: 'schema', label: 'Schema', note: 'the tables the file actually has', mark: 'list', command: 'temcoTools.sql.schema', viewType: 'temcoTools.sql.schema', group: 'file' },
 	{ id: 'connections', label: 'Database', note: 'the file, its size, and how to put it back', mark: 'database', command: 'temcoTools.sql.connections', viewType: 'temcoTools.sql.connections', group: 'file' }
@@ -478,9 +479,8 @@ ${resultTable(last.result)}`;
 	})}
 <div class="qz-bar">
 	<button type="button" class="az-btn az-btn--primary qz-bar__btn" id="sql-run">${icon('play')}<span>Run</span></button>
-	<span class="qz-bar__x"></span>${button('Presets', 'temcoTools.sql.reports', { small: true, kind: 'ghost', mark: 'chart' })
-		+ button('History', 'temcoTools.sql.history', { small: true, kind: 'ghost', mark: 'clock' })
-		+ button('Saved', 'temcoTools.sql.saved', { small: true, kind: 'ghost', mark: 'book' })}
+	<span class="qz-bar__x"></span>${button('Library', 'temcoTools.sql.queries', { small: true, kind: 'ghost', mark: 'book' })
+		+ button('History', 'temcoTools.sql.history', { small: true, kind: 'ghost', mark: 'clock' })}
 	<span class="qz-bar__facts">SQLite · ${esc(name)} · schema ${schemaVersion} · ${n(state.history.length, 'statement', 'statements')} run this session</span>
 </div>
 <label class="qz-writes${state.write ? ' is-on' : ''}" id="sql-writes-bar">
@@ -499,77 +499,80 @@ ${message}
 ${results}`;
 }
 
-/** The Data page's own layout: two columns that scroll inside themselves. */
+/**
+ * The Data page's own styles: a strip of tables, then one table's rows at the full width of the page.
+ *
+ * The two-column layout is gone. A 260px sidebar repeated the Schema page's own index in a narrower column and cost a
+ * third of the width for every row; a table is picked from a strip that wraps, and the grid — the reason the page
+ * exists — gets the whole width. The grid is the only thing that scrolls, so the table's name and its page controls
+ * stay on screen while a fifty-row page is read.
+ */
 const DATA_CSS = `
-/* The page is the window: the head keeps its height and the two columns take everything under it, so neither
-   the page nor the area below the table scrolls. */
-body { min-height: 100vh; display: flex; flex-direction: column; }
-.view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.view__inner { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 14px; }
-.data-split { flex: 1 1 auto; min-height: 0; display: grid;
-	grid-template-columns: 260px minmax(0, 1fr); gap: 28px; align-items: stretch; }
-.data-side { min-height: 0; overflow-y: auto; overflow-x: hidden; }
-.data-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-/* One head height for both columns, so the table list and the rows begin on the same line. */
-.data-split .group-head,
-.data-split .group-head:first-of-type { min-height: 26px; margin: 0 0 8px; }
-	text-align: left; white-space: nowrap; }
-	background: var(--vscode-editorWidget-background, rgba(127, 127, 127, 0.10)); }
-@media (max-width: 900px) {
-	.data-split { grid-template-columns: minmax(0, 1fr); grid-template-rows: 240px minmax(0, 1fr); }
+.dq-tables { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0 0; }
+.dq-table { display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 10px; border: 1px solid var(--border);
+  border-radius: 0; background: none; color: var(--fg); font: inherit; font-size: 12px; line-height: 17px; cursor: pointer;
+  transition: background-color 90ms ease-out, border-color 90ms ease-out; }
+.dq-table:hover { background: color-mix(in srgb, var(--az-blue) 7%, transparent); }
+.dq-table.is-on { background: color-mix(in srgb, var(--az-blue) 12%, transparent); border-color: var(--az-blue);
+  color: var(--fg-strong); font-weight: 600; }
+.dq-table__n { color: var(--fg-subtle); font-variant-numeric: tabular-nums; font-weight: 400; }
+.dq-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 20px 0 0;
+  padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.dq-head__title { font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: 13px; font-weight: 600;
+  color: var(--fg-strong); }
+.dq-head__facts { color: var(--fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
+.dq-head__acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.dq-head__acts .az-btn { flex: 0 0 auto; white-space: nowrap; }
+.az-grid { max-height: calc(100vh - 330px); min-height: 220px; margin-top: 12px; }
+@media (max-width: 700px) {
+  .az-grid { max-height: none; }
 }
 `;
 
-/** *Data* — one table at a time, a page of rows at a time, in two columns that scroll on their own. */
+/** *Data* — one table's rows at the width of the page, a page of rows at a time. */
 function dataBody(
 	tables: { name: string; rows: number }[],
 	table: string | undefined,
 	page: { columns: string[]; rows: unknown[][]; total: number } | undefined,
 	offset: number
 ): string {
-	const picker = tables
-		.map((item) => row({
-			mark: 'list',
-			tone: row.name === table ? 'accent' : undefined,
-			title: item.name,
-			meta: [`${item.rows.toLocaleString('en-US')} rows`],
-			actions: button('Query', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', args: [item.name] }),
-			state: item.name === table ? 'showing' : 'open'
-		}))
+	// The strip is how a table is picked: every table, its size, and the one on screen marked. It wraps instead of
+	// scrolling sideways, so a table at the end of the list is never hiding behind an edge.
+	const strip = tables
+		.map((item) => `<button type="button" class="dq-table${item.name === table ? ' is-on' : ''}" data-command="temcoTools.sql.browse" data-args="${esc(JSON.stringify([item.name]))}"${item.name === table ? ' aria-current="true"' : ''}>${esc(item.name)}<span class="dq-table__n">${item.rows.toLocaleString('en-US')}</span></button>`)
 		.join('');
 
 	const head = page === undefined ? '' : page.columns.map((column) => `<th>${esc(column)}</th>`).join('');
 	const body = page === undefined ? '' : page.rows.map((row) => `<tr>${row.map((value) => `<td>${cell(value)}</td>`).join('')}</tr>`).join('');
 	const from = offset + 1;
 	const to = offset + (page?.rows.length ?? 0);
+	const range = page === undefined || page.total === 0
+		? 'no rows'
+		: `${from.toLocaleString('en-US')}–${to.toLocaleString('en-US')} of ${page.total.toLocaleString('en-US')}`;
 
 	return `${pageHead({
 		title: 'Data',
 		mark: 'list',
-		desc: 'The rows of one table, a page at a time. Read-only here on purpose: a change to a row is a change to what the platform believes, and that belongs in the Query Editor with writes enabled.',
-		actions: button('Query Editor', 'temcoTools.sql.query', { kind: 'primary', mark: 'code' })
-			+ button('Schema', 'temcoTools.sql.schema', { mark: 'list' })
-			+ button('Reset Database', 'temcoTools.sql.reset', { kind: 'danger', mark: 'alert', title: 'Drop every table and write this build’s schema again' })
+		desc: 'The rows of one table, a page at a time. Read-only here on purpose: a change to a row is a change to what the platform believes, and that belongs in the Query Editor with writes enabled.'
 	})}
 ${tables.length === 0
-			? `<div class="mt-16">${callout('The database has no tables yet. Reset it with <b>Reset Database</b> to write this build’s schema.', 'warn')}</div>`
-			: `<div class="data-split mt-16">
-<div class="data-side">${group({ label: 'Tables', count: n(tables.length, 'table', 'tables'), actions: button('Refresh', 'temcoTools.sql.data', { small: true, kind: 'ghost', mark: 'refresh' }), body: picker })}</div>
-<div class="data-main">${page === undefined || table === undefined
-				? callout('Pick a table on the left.')
-				: `${rule({
-					label: table,
-					count: page.total === 0 ? 'no rows' : `${from.toLocaleString('en-US')}–${to.toLocaleString('en-US')} of ${page.total.toLocaleString('en-US')}`,
-					// Query is unconditional on purpose: a header with buttons and one without are different
-					// heights, and the two columns must start their rows on the same line.
-					actions: button('Query', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', mark: 'code', args: [table] })
-						+ (offset > 0 ? button('Previous', 'temcoTools.sql.page', { small: true, kind: 'ghost', args: [-1] }) : '')
-						+ (to < page.total ? button('Next', 'temcoTools.sql.page', { small: true, kind: 'ghost', args: [1] }) : '')
-				})}
-${page.total === 0
-					? callout('This table is empty. A row appears here when something writes one — a read, a draft, a build or a release.')
-					: `<div class="az-grid"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`}`}</div>
-</div>`}`;
+			? `<div class="mt-16">${callout('The database has no tables yet. Reset it from the <b>Database</b> page to write this build’s schema.', 'warn')}</div>`
+			: `<div class="dq-tables" role="group" aria-label="Tables">${strip}</div>
+${table === undefined
+				? `<div class="mt-16">${callout('Pick a table above.')}</div>`
+				: `<div class="dq-head">
+	<span class="dq-head__title">${esc(table)}</span>
+	<span class="dq-head__facts">${n(page?.columns.length ?? 0, 'column', 'columns')} · ${range}</span>
+	<div class="dq-head__acts">${button('Query it', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', mark: 'code', args: [table] })
+					+ (offset > 0 ? button('Previous', 'temcoTools.sql.page', { small: true, kind: 'ghost', mark: 'chevron-left', args: [-1] }) : '')
+					+ (page !== undefined && to < page.total ? button('Next', 'temcoTools.sql.page', { small: true, kind: 'ghost', mark: 'chevron-right', args: [1] }) : '')
+					+ button('Schema', 'temcoTools.sql.schema', { small: true, kind: 'ghost', mark: 'list' })}</div>
+</div>
+${page === undefined
+					? callout('The rows could not be read. The file may be locked by another window.')
+					: page.total === 0
+						? callout('This table is empty. A row appears here when something writes one — a read, a draft, a build or a release.')
+						: `<div class="az-grid"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`}`}`}`;
 }
 
 /**
@@ -694,35 +697,52 @@ ${tables.length === 0
 </div>`}`;
 }
 
-/** *Saved Queries* — kept in this profile, and nothing pretends they are more than that. */
-function savedBody(saved: { name: string; sql: string }[]): string {
-	const line = (savedQuery: { name: string; sql: string }): string =>
-		`${row({ mark: 'book', tone: 'accent', title: savedQuery.name, meta: [savedQuery.sql.replace(/\s+/g, ' ').slice(0, 110)], actions: button('Load', 'temcoTools.sql.loadSaved', { small: true, kind: 'ghost', args: [savedQuery.name] }) + button('Delete', 'temcoTools.sql.deleteSaved', { small: true, kind: 'danger', args: [savedQuery.name] }) })}`;
-
-	return `${pageHead({
-		title: 'Saved Queries',
-		mark: 'book',
-		desc: 'Statements kept for the next time the question comes up. They are stored in this profile’s settings, not in the database — a saved query is a convenience, not a row.',
-		actions: button('Save the Editor', 'temcoTools.sql.saveQuery', { kind: 'primary', mark: 'plus' })
-	})}
-${saved.length === 0
-			? `<div class="mt-16">${callout('Nothing is saved yet. Write a statement in the <b>Query Editor</b> and press <b>Save This</b>, or start from a <b>Preset</b>.')}</div>`
-			: group({ label: 'Statements', count: n(saved.length, 'query', 'queries'), body: saved.map(line).join('') })}`;
+/**
+ * The Query Library's own styles: the built-in statements lie across the page, three or four to a row.
+ *
+ * They are sentences with a name, not rows to scan down — seven of them in a single column was a column of identical
+ * `Load` buttons. Laid across, the whole shelf is visible at once and the eye picks a question rather than a line.
+ */
+const QUERIES_CSS = `
+.qy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; margin-top: 10px; }
+.qy-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 0; background: none;
+  transition: background-color 90ms ease-out, border-color 90ms ease-out; }
+.qy-card:hover { background: color-mix(in srgb, var(--az-blue) 5%, transparent); border-color: var(--az-blue); }
+.qy-card__name { font-weight: 600; color: var(--fg-strong); font-size: 13px; line-height: 18px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qy-card__load { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.qy-card__note { grid-column: 1; color: var(--fg-muted); font-size: 12px; line-height: 17px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 700px) {
+  .qy-grid { grid-template-columns: minmax(0, 1fr); }
 }
+`;
 
-/** *Presets* — statements written against this schema, ready to load. */
-function presetsBody(): string {
-	const line = (preset: Preset): string =>
-		`${row({ mark: 'chart', title: preset.name, meta: [preset.note], actions: button('Load', 'temcoTools.sql.loadPreset', { small: true, kind: 'ghost', args: [preset.name] }) })}`;
+/**
+ * *Query Library* — every statement worth loading twice, in one place: the ones this module writes and the ones you kept.
+ *
+ * One page, two groups, because they are the same list with the same act: a name, a sentence about what it answers, and
+ * `Load`. Splitting them cost a row in the panel and a tab in the strip for no distinction a reader makes. The built-in
+ * ones lie across the page; yours stay rows, because a row can carry a Delete and a one-line preview of the statement.
+ */
+function queriesBody(saved: { name: string; sql: string }[]): string {
+	const preset = (entry: Preset): string =>
+		`<div class="qy-card"><span class="qy-card__name" title="${esc(entry.name)}">${esc(entry.name)}</span><span class="qy-card__note">${esc(entry.note)}</span>${button('Load', 'temcoTools.sql.loadPreset', { small: true, kind: 'ghost', mark: 'play', args: [entry.name] })}</div>`;
+	const mine = (entry: { name: string; sql: string }): string =>
+		`${row({ mark: 'book', tone: 'accent', title: entry.name, meta: [entry.sql.replace(/\s+/g, ' ').slice(0, 110)], state: 'yours', actions: button('Load', 'temcoTools.sql.loadSaved', { small: true, kind: 'ghost', args: [entry.name] }) + button('Delete', 'temcoTools.sql.deleteSaved', { small: true, kind: 'danger', args: [entry.name] }) })}`;
 
 	return `${pageHead({
-		title: 'Presets',
-		mark: 'chart',
-		desc: 'Statements written against the schema this build has. Loading one puts it in the editor; a preset that returns nothing is telling you the schema moved.',
-		actions: button('Query Editor', 'temcoTools.sql.query', { kind: 'primary', mark: 'code' })
+		title: 'Query Library',
+		mark: 'book',
+		desc: 'Statements worth loading twice: the ones written against the schema this build has, and the ones you kept. Loading one puts it in the editor — nothing on this page runs on its own.'
 	})}
-${group({ label: 'Statements', count: n(PRESETS.length, 'preset', 'presets'), body: PRESETS.map(line).join('') })}
-<div class="mt-16">${callout('A preset is written by this module, not by the database: a table it does not know about is a table it cannot ask about.')}</div>`;
+<div class="mt-16">${part({ title: 'Built in', count: n(PRESETS.length, 'preset', 'presets'), note: 'Written by this module against the schema this build has. A preset that returns nothing is telling you the schema moved.' })}</div>
+<div class="qy-grid">${PRESETS.map(preset).join('')}</div>
+<div class="mt-24">${section({ title: 'Yours', desc: saved.length === 0 ? undefined : `${n(saved.length, 'query', 'queries')} · kept in this profile’s settings, not in the database` })}</div>
+${saved.length === 0
+			? callout('Nothing of your own is saved yet. Write a statement in the <b>Query Editor</b> and press <b>Save This</b> — it appears here, with the same <b>Load</b> as a preset.')
+			: entries(saved.map(mine).join(''))}`;
 }
 
 /* ------------------------------------------------------------------ what the pages read */
@@ -987,10 +1007,12 @@ export class SqlPages {
 				}
 				return shell(definition, schemaBody(tables, facts.schemaVersion, facts.expected, this.state.schemaTable));
 			}
+			case 'queries':
+			case 'reports':
 			case 'saved':
-				return shell(definition, savedBody(this.saved()));
+				return shell(definition, queriesBody(this.saved()), QUERIES_CSS);
 			default:
-				return shell(definition, presetsBody());
+				return shell(definition, queriesBody(this.saved()), QUERIES_CSS);
 		}
 	}
 }
@@ -1060,6 +1082,10 @@ export function registerSql(context: vscode.ExtensionContext): { pages: SqlPages
 		...SQL_PAGES.map((definition) =>
 			vscode.commands.registerCommand(definition.command, () => pages.open(definition.id))
 		),
+		// The two pages that became one: their commands still open the merged page, so an old keybinding, a menu item or
+		// a restored tab keeps working.
+		vscode.commands.registerCommand('temcoTools.sql.reports', () => pages.open('queries')),
+		vscode.commands.registerCommand('temcoTools.sql.saved', () => pages.open('queries')),
 
 		// ---- Query Editor
 		vscode.commands.registerCommand('temcoTools.sql.run', () => pages.run(pages.editor, false)),
