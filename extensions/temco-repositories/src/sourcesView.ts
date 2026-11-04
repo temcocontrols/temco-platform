@@ -19,6 +19,63 @@ export const SOURCES_VIEW_ID = 'temcoRepositories.list';
 const MARK: { [kind: string]: string } = { git: 'repo', folder: 'folder', archive: 'package' };
 
 /**
+ * The glyph a file carries: the type where there is one, the plain file where there is not.
+ *
+ * The Explorer draws these from the **file icon theme**, which an extension cannot read — a tree item carries a
+ * codicon or an image, and nothing that resolves a path against the theme — so this is the same idea in the one
+ * vocabulary the window already has. The name is asked first (`package.json` is a package, not a JSON file), then the
+ * extension, and the folder a file sits in is the last question, because code under `docs/` is still code.
+ */
+function fileMark(file: string): vscode.ThemeIcon {
+	const name = (file.split('/').pop() ?? file).toLowerCase();
+	const byName: { [key: string]: string } = {
+		'package.json': 'package',
+		'package-lock.json': 'lock',
+		'yarn.lock': 'lock',
+		'pnpm-lock.yaml': 'lock',
+		'tsconfig.json': 'json',
+		'jsconfig.json': 'json',
+		'dockerfile': 'server',
+		'docker-compose.yml': 'server',
+		'license': 'law',
+		'license.md': 'law',
+		'.gitignore': 'source-control',
+		'.gitattributes': 'source-control',
+		'.editorconfig': 'settings',
+		'.npmrc': 'settings',
+	};
+	const byExtension: { [key: string]: string } = {
+		md: 'markdown', markdown: 'markdown', mdx: 'markdown',
+		json: 'json', jsonc: 'json', json5: 'json',
+		yml: 'settings', yaml: 'settings', toml: 'settings', ini: 'settings', conf: 'settings', env: 'settings',
+		ts: 'code', mts: 'code', cts: 'code', tsx: 'code', js: 'code', mjs: 'code', cjs: 'code', jsx: 'code',
+		html: 'code', htm: 'code', vue: 'code', svelte: 'code',
+		css: 'symbol-color', scss: 'symbol-color', sass: 'symbol-color', less: 'symbol-color',
+		py: 'python', rb: 'ruby',
+		go: 'symbol-method', rs: 'symbol-method', java: 'symbol-class', kt: 'symbol-class', cs: 'symbol-class',
+		c: 'symbol-struct', h: 'symbol-struct', cc: 'symbol-struct', cpp: 'symbol-struct', hpp: 'symbol-struct',
+		sql: 'database',
+		sh: 'terminal', bash: 'terminal', zsh: 'terminal', ps1: 'terminal', bat: 'terminal', cmd: 'terminal',
+		png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', svg: 'file-media',
+		webp: 'file-media', ico: 'file-media',
+		pdf: 'book',
+		txt: 'note',
+		lock: 'lock',
+		csv: 'table', tsv: 'table',
+	};
+	const named = byName[name];
+	if (named !== undefined) {
+		return new vscode.ThemeIcon(named);
+	}
+	const extension = name.includes('.') ? name.split('.').pop() ?? '' : '';
+	const byType = byExtension[extension];
+	if (byType !== undefined) {
+		return new vscode.ThemeIcon(byType);
+	}
+	return new vscode.ThemeIcon(isDocumentation(file) ? 'markdown' : 'file');
+}
+
+/**
  * The mark a repository carries: a glyph for the kind of code, and the colour GitHub gives that language.
  *
  * A tree row has one icon and one word, so the icon does the work the dashboard's left column did. Languages without
@@ -127,7 +184,7 @@ function item(node: Node): NodeItem {
 			const file = new NodeItem(node, vscode.TreeItemCollapsibleState.None);
 			file.label = node.path.split('/').pop() ?? node.path;
 			file.id = `file:${node.key}/${node.path}`;
-			file.iconPath = new vscode.ThemeIcon(isDocumentation(node.path) ? 'markdown' : 'file-code');
+			file.iconPath = fileMark(node.path);
 			file.contextValue = 'temcoFile';
 			file.description = kilo(node.size);
 			file.tooltip = `${node.path} — ${kilo(node.size)}`;
@@ -217,10 +274,12 @@ function foldTree(files: readonly { path: string; size: number }[]): TreeEntry {
 }
 
 class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
-	private readonly changed = new vscode.EventEmitter<void>();
+	private readonly changed = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
 	readonly onDidChangeTreeData = this.changed.event;
 	/** One listing per repository, so expanding a folder does not ask GitHub again. */
 	private readonly trees = new Map<string, TreeEntry | { error: string }>();
+	/** The folders that are open, so a row can show the open glyph the Explorer shows. */
+	private readonly open = new Set<string>();
 
 	constructor(private readonly context: vscode.ExtensionContext) { }
 
@@ -229,7 +288,32 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 		this.changed.fire();
 	}
 
+	/**
+	 * Remember that a folder opened or closed, and repaint that one row.
+	 *
+	 * A tree item's icon is fixed once it is made, so the row is re-asked for rather than mutated in place: that is what
+	 * makes `folder` become `folder-opened` without rebuilding the tree under it.
+	 */
+	setOpen(element: vscode.TreeItem, open: boolean): void {
+		if (!(element instanceof NodeItem) || element.node.kind !== 'folder' || element.id === undefined) {
+			return;
+		}
+		const id = String(element.id);
+		if (open === this.open.has(id)) {
+			return;
+		}
+		if (open) {
+			this.open.add(id);
+		} else {
+			this.open.delete(id);
+		}
+		this.changed.fire(element);
+	}
+
 	getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+		if (element instanceof NodeItem && element.node.kind === 'folder' && element.id !== undefined) {
+			element.iconPath = new vscode.ThemeIcon(this.open.has(String(element.id)) ? 'folder-opened' : 'folder');
+		}
 		return element;
 	}
 
@@ -392,6 +476,12 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 export function registerSourcesView(context: vscode.ExtensionContext, changed: vscode.Event<void>): vscode.TreeView<vscode.TreeItem> {
 	const view = new SourcesView(context);
 	const tree = vscode.window.createTreeView(SOURCES_VIEW_ID, { treeDataProvider: view, showCollapseAll: false });
-	context.subscriptions.push(tree, changed(() => view.refresh()));
+	context.subscriptions.push(
+		tree,
+		changed(() => view.refresh()),
+		// The Explorer's own distinction: a folder that is open says so in its glyph.
+		tree.onDidExpandElement((event) => view.setOpen(event.element, true)),
+		tree.onDidCollapseElement((event) => view.setOpen(event.element, false))
+	);
 	return tree;
 }

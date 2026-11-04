@@ -11,6 +11,7 @@
 import * as vscode from 'vscode';
 import { sourceTree, CodeFile, RepositorySource } from './repository';
 import { Catalog, RepositoryCacheRow, Selection, slugOf } from './store';
+import { FileIconTheme, loadFileIconTheme } from './fileIcons';
 import { page, pageColumn, remember } from './ui';
 import { cloneSize, hasClone, projectFor } from './workarea';
 
@@ -21,6 +22,8 @@ interface DetailMessage {
   url?: string;
   text?: string;
   files?: string[];
+  /** The file a row asked to open. */
+  path?: string;
 }
 
 /** What the page is told once, and again after every act: the row, its state in this window, and the project. */
@@ -58,6 +61,9 @@ export class RepositoryDetailPage {
     private readonly refresh: () => void
   ) { }
 
+  /** The file icon theme, read once per render: what a row's glyph is drawn from. */
+  private theme: FileIconTheme | undefined;
+
   open(name: string, organisation?: string, restored?: vscode.WebviewPanel): void {
     remember(this.context, REPOSITORY_DETAIL_VIEW_TYPE, name);
     this.name = name;
@@ -90,7 +96,14 @@ export class RepositoryDetailPage {
     if (!panel) {
       return;
     }
-    panel.webview.html = html(this.name);
+    // The glyphs are the user's file icon theme, loaded into this page: the font is a file on disk, so the page is
+    // told where it may read from before the document is written.
+    this.theme = await loadFileIconTheme(panel.webview);
+    panel.webview.options = {
+      enableScripts: true,
+      localResourceRoots: this.theme === undefined ? [] : [vscode.Uri.file(this.theme.folder)],
+    };
+    panel.webview.html = html(this.name, this.theme, panel.webview.cspSource);
     await this.send();
   }
 
@@ -172,6 +185,9 @@ export class RepositoryDetailPage {
       path: file.path,
       size: file.size,
       category: isDocumentation(file.path) ? 'docs' : 'code',
+      // The theme's own glyph when it has one, and the page's sprite when it does not: the row says what the file is
+      // either way.
+      glyph: this.theme?.classFor(file.path),
       ticked: ticked.includes(file.path),
     }));
     await panel.webview.postMessage({ type: 'files', files, note: listed.note });
@@ -197,8 +213,8 @@ export class RepositoryDetailPage {
         }
         return;
       case 'fetch':
-        // Fetching a repository that was never started makes it a source first: a clone belongs to a source.
-        await this.start();
+        // A clone needs the source recorded, not a project: copying the code is not citing it.
+        await this.record();
         await vscode.commands.executeCommand('temcoRepositories.fetchSource', slugOf(this.name));
         this.refresh();
         await this.send();
@@ -216,6 +232,12 @@ export class RepositoryDetailPage {
       case 'start':
         await this.start();
         await this.send();
+        return;
+      case 'openFile':
+        // The same opener the panel uses: the clone's copy when there is one, GitHub when there is not.
+        if (typeof message.path === 'string' && message.path.length > 0) {
+          await vscode.commands.executeCommand('temcoRepositories.openRepositoryFile', this.name, message.path);
+        }
         return;
       case 'project': {
         const coordinates = await this.coordinates();
@@ -268,9 +290,38 @@ export class RepositoryDetailPage {
     }
   }
 
+  /**
+   * Records the repository as a source — and nothing else.
+   *
+   * A clone is a copy of a repository, so it needs the source to exist in the catalog; it does **not** need a project,
+   * and it must not cite anything: citing is a separate act, with its own button, and cloning behind a person's back
+   * would put a repository into a project they did not name.
+   */
+  private async record(): Promise<void> {
+    const coordinates = await this.coordinates();
+    let catalog: Catalog | undefined;
+    try {
+      catalog = await Catalog.open(this.context);
+      catalog.addSource({
+        kind: 'git',
+        name: this.name,
+        slug: slugOf(this.name),
+        remoteUrl: coordinates.cloneUrl,
+        defaultBranch: coordinates.branch,
+      });
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Temco Repositories: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      catalog?.close();
+    }
+    this.refresh();
+  }
+
   /** Records the repository as a source of the project being worked on — the same act as *Start* on the dashboard. */
   private async start(): Promise<void> {
-    const project = await projectFor(this.selection, this.output, `starting from ${this.name}`);
+    const project = await projectFor(this.selection, this.output, `starting from ${this.name}`, this.name);
     if (project === undefined) {
       return;
     }
@@ -300,19 +351,22 @@ export class RepositoryDetailPage {
   }
 }
 
-function html(name: string): string {
+function html(name: string, theme: FileIconTheme | undefined, resources: string): string {
   const style = `
     /* The same vocabulary as the dashboard: fills, spacing, one hairline between rows, and no boxes. */
     .toolbar { display: flex; gap: .5em; align-items: center; flex-wrap: wrap; }
     .toolbar .input { flex: 1 1 16em; min-width: 9em; }
     .toolbar[hidden] { display: none; }
 
-    /* A file is a line: what it is, where it is, how big. The tick decides whether it starts the project. */
+    /* A file is a line you can press: what it is, where it is, how big, and it opens. */
     .files { margin: .4em 0 0; }
-    .file { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 0 .6em; align-items: center;
-            padding: .45em .4em; border-bottom: 1px solid var(--border); }
+    .file { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0 .6em; align-items: center;
+            padding: .45em .4em; border-bottom: 1px solid var(--border); cursor: pointer;
+            background: none; border-left: 0; border-right: 0; border-top: 0; width: 100%; text-align: left;
+            font: inherit; color: inherit; }
     .file:last-child { border-bottom: 0; }
     .file:hover { background: var(--bg-hover); }
+    .file:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
     .file__glyph { color: var(--fg-subtle); display: inline-flex; }
     .file__path { color: var(--fg); font-size: var(--fs-sm); overflow-wrap: anywhere; }
     .file__meta { color: var(--fg-subtle); font-size: var(--fs-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -353,24 +407,22 @@ function html(name: string): string {
       <h2 class="az-section__title">What is inside it</h2>
       <p class="az-section__desc" id="files-note">Reading the file list…</p>
     </div>
-    <div class="az-section__actions" id="bar" hidden>
-      <div class="toolbar">
-        <input class="input" type="search" id="filter" placeholder="Filter by path" aria-label="Filter files">
-        <button type="button" class="az-btn az-btn--sm" id="all">Select all</button>
-        <button type="button" class="az-btn az-btn--sm" id="none">Clear</button>
-      </div>
-    </div>
   </section>
   <div id="files-error"></div>
   <div class="files" id="files"></div>
 
   <div class="foot">
-    <span class="foot__summary" id="summary">No file selected.</span>
+    <span class="foot__summary">One row per file: open it, or start a project from the repository.</span>
     <button type="button" class="az-btn az-btn--primary" id="project">${glyph('plus')}<span id="project-label">Create a project from this repository</span></button>
   </div>
   `;
 
-  return page(body, { title: name, extraCss: style, script: CLIENT });
+  return page(body, {
+    title: name,
+    extraCss: style + (theme?.css ?? ''),
+    resources,
+    script: CLIENT,
+  });
 }
 
 /** One glyph from the page sprite, at the size the surrounding control asks for. */
@@ -396,10 +448,7 @@ $('fetch').addEventListener('click', () => vscode.postMessage({ type: 'fetch' })
 $('pull').addEventListener('click', () => vscode.postMessage({ type: 'pull' }));
 $('remove-copy').addEventListener('click', () => vscode.postMessage({ type: 'removeClone' }));
 $('start').addEventListener('click', () => vscode.postMessage({ type: 'start' }));
-$('project').addEventListener('click', () => vscode.postMessage({ type: 'project', files: ticked() }));
-$('all').addEventListener('click', () => { setAll(true); });
-$('none').addEventListener('click', () => { setAll(false); });
-$('filter').addEventListener('input', () => draw());
+$('project').addEventListener('click', () => vscode.postMessage({ type: 'project' }));
 
 window.addEventListener('message', (event) => {
   const message = event.data || {};
@@ -411,25 +460,22 @@ window.addEventListener('message', (event) => {
     drawFacts();
     drawActions();
     // The file list is asked for again after every act: a fetched copy changes where the files come from.
-    vscode.postMessage({ type: 'files', files: ticked() });
+    vscode.postMessage({ type: 'files', files: [] });
     return;
   }
   if (message.type !== 'files') { return; }
   if (message.error) {
     $('files-error').replaceChildren(banner(message.error));
     $('files').replaceChildren();
-    $('bar').hidden = true;
     $('files-note').textContent = 'The list could not be read.';
-    drawSummary();
     return;
   }
   $('files-error').replaceChildren();
   files = message.files || [];
   note = message.note || '';
-  $('bar').hidden = files.length === 0;
   $('files-note').textContent = (state.localCopy
-    ? 'Read from the clone in the working area.'
-    : 'Read over the GitHub API, because there is no clone yet. Cloning one makes this faster and gives the history behind each file.')
+    ? 'Read from the clone in this machine\\'s working area. Press a file to open it.'
+    : 'Read over the GitHub API, because there is no clone yet. Press a file to open it there; cloning makes this faster and gives the history behind each file.')
     + (note ? ' ' + note + '.' : '');
   draw();
 });
@@ -463,62 +509,71 @@ function drawActions() {
 }
 
 function draw() {
-  const needle = $('filter').value.trim().toLowerCase();
-  const shown = files.filter((file) => needle.length === 0 || file.path.toLowerCase().includes(needle));
-  if (shown.length === 0) {
+  if (files.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = files.length === 0 ? 'This repository has no file to show.' : 'No file matches that filter.';
+    empty.textContent = 'This repository has no file to show.';
     $('files').replaceChildren(empty);
-    drawSummary();
     return;
   }
-  $('files').replaceChildren(...shown.map((file) => {
-    const line = document.createElement('div');
+  $('files').replaceChildren(...files.map((file) => {
+    // A row is a way in, like a row in the Explorer: press it and the file opens.
+    const line = document.createElement('button');
+    line.type = 'button';
     line.className = 'file';
-    const tick = document.createElement('input');
-    tick.type = 'checkbox';
-    tick.checked = Boolean(file.ticked);
-    tick.setAttribute('aria-label', 'Select ' + file.path);
-    tick.addEventListener('change', () => { file.ticked = tick.checked; drawSummary(); });
-    // The glyph says what kind of file it is before the path is read: a page, or code.
+    line.title = 'Open ' + file.path;
+    line.addEventListener('click', () => vscode.postMessage({ type: 'openFile', path: file.path }));
+    // The glyph says what kind of file it is before the path is read: the theme's icon where there is one, the page's
+    // own sprite otherwise.
     const mark = document.createElement('span');
     mark.className = 'file__glyph';
-    mark.innerHTML = '<svg viewBox="0 0 24 24" class="icon icon--sm" aria-hidden="true"><use href="#i-'
-      + (file.category === 'docs' ? 'document' : 'code') + '"></use></svg>';
+    mark.innerHTML = file.glyph
+      ? '<span class="' + file.glyph + '" aria-hidden="true"></span>'
+      : '<svg viewBox="0 0 24 24" class="icon icon--sm" aria-hidden="true"><use href="#i-'
+        + fileGlyph(file.path) + '"></use></svg>';
     const path = document.createElement('span');
     path.className = 'file__path';
     path.textContent = file.path;
     const size = document.createElement('span');
     size.className = 'file__meta';
     size.textContent = (file.category === 'docs' ? 'doc · ' : '') + kilo(file.size);
-    line.append(tick, mark, path, size);
+    line.append(mark, path, size);
     return line;
   }));
-  drawSummary();
 }
 
-function ticked() {
-  return files.filter((file) => file.ticked).map((file) => file.path);
-}
-
-function setAll(value) {
-  const needle = $('filter').value.trim().toLowerCase();
-  files.forEach((file) => {
-    if (needle.length === 0 || file.path.toLowerCase().includes(needle)) { file.ticked = value; }
-  });
-  draw();
-}
-
-function drawSummary() {
-  const chosen = files.filter((file) => file.ticked);
-  const bytes = chosen.reduce((total, file) => total + file.size, 0);
-  $('summary').textContent = chosen.length === 0
-    ? 'No file selected — a project can start with none, and its files are picked again there.'
-    : chosen.length + (chosen.length === 1 ? ' file · ' : ' files · ') + kilo(bytes);
-  $('project-label').textContent = chosen.length === 0
-    ? 'Create a project from this repository'
-    : 'Create a project from these ' + chosen.length + (chosen.length === 1 ? ' file' : ' files');
+/**
+ * The sprite glyph a file kind gets — the page's counterpart of the panel's codicon map.
+ *
+ * A page draws from the sprite it ships with, so the vocabulary is the sprite's: a page, code, a package, a database,
+ * a shell, a setting, an image, a document. The name is asked first, then the extension, because package.json is a
+ * package before it is JSON.
+ */
+function fileGlyph(path) {
+  const name = (path.split('/').pop() || path).toLowerCase();
+  const byName = {
+    'package.json': 'package', 'package-lock.json': 'key', 'yarn.lock': 'key', 'pnpm-lock.yaml': 'key',
+    'dockerfile': 'server', 'docker-compose.yml': 'server', 'license': 'book', 'license.md': 'book',
+    '.gitignore': 'branch', '.gitattributes': 'branch', '.editorconfig': 'gear'
+  };
+  const byExtension = {
+    md: 'document', markdown: 'document', mdx: 'document', txt: 'document',
+    json: 'layers', jsonc: 'layers', json5: 'layers',
+    yml: 'gear', yaml: 'gear', toml: 'gear', ini: 'gear', conf: 'gear', env: 'gear',
+    ts: 'code', mts: 'code', cts: 'code', tsx: 'code', js: 'code', mjs: 'code', cjs: 'code', jsx: 'code',
+    html: 'code', htm: 'code', vue: 'code', svelte: 'code',
+    css: 'palette', scss: 'palette', sass: 'palette', less: 'palette',
+    py: 'code', rb: 'code', go: 'code', rs: 'code', java: 'code', kt: 'code', cs: 'code',
+    c: 'code', h: 'code', cc: 'code', cpp: 'code', hpp: 'code',
+    sql: 'database',
+    sh: 'terminal', bash: 'terminal', zsh: 'terminal', ps1: 'terminal', bat: 'terminal', cmd: 'terminal',
+    png: 'chart', jpg: 'chart', jpeg: 'chart', gif: 'chart', svg: 'chart', webp: 'chart', ico: 'chart',
+    pdf: 'book', csv: 'list', tsv: 'list', lock: 'key'
+  };
+  if (byName[name]) { return byName[name]; }
+  const extension = name.indexOf('.') >= 0 ? name.split('.').pop() : '';
+  if (byExtension[extension]) { return byExtension[extension]; }
+  return /\.(md|markdown)$/.test(name) || /(^|\/)docs\//.test(path) ? 'document' : 'code';
 }
 
 function banner(text) {

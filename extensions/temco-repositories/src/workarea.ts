@@ -21,13 +21,13 @@
 // One branch and full history, not `--depth 1`: the branch is the one the read uses, and the history is what a
 // draft reads and what a stale check needs. A shallow clone would break both.
 
-import { execFile } from 'child_process';
+import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { ClonePanel } from './clonePanel';
 import { Catalog, Selection, slugOf } from './store';
-
 /** How long a git command may take. A clone of a large repository is slow; an hour is not an answer either. */
 const GIT_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -75,11 +75,12 @@ export function registerWorkareaCommands(
   context: vscode.ExtensionContext,
   selection: Selection,
   output: vscode.OutputChannel,
-  refresh: () => void
+  refresh: () => void,
+  clones: ClonePanel
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('temcoRepositories.fetchSource', (target?: unknown) =>
-      fetchSource(context, output, refresh, slugOfTarget(target))
+      fetchSource(context, output, refresh, clones, slugOfTarget(target))
     ),
     // The same clone, asked for by something that needs the *files* rather than the person: a draft, an analysis. It
     // returns the folder instead of reporting, and still asks before it writes anything to the machine.
@@ -122,13 +123,19 @@ const SHOW_LOG = 'Show the Log';
  * The project an act belongs to, asking for one when the window is working on none.
  *
  * **Citing** a source belongs to a project — a project's source list is where a draft looks for its pages — so the
- * question is asked here, inside the act the person started, and the act carries on with the answer. Cloning does not
- * come through here: a clone is a copy of a repository and lives in the shared `source` folder, project or no project.
+ * question is asked here, inside the act the person started. Cloning does not come through here: a clone is a copy of a
+ * repository and lives in the shared `source` folder, project or no project.
+ *
+ * With no project open there are two real answers, so both are offered: **create** one from the repository the act
+ * started from (the form opens pinned to it, and takes over from there), or **choose** one of the existing projects —
+ * in which case the act carries on with the answer.
  */
 export async function projectFor(
   selection: Selection,
   output: vscode.OutputChannel | undefined,
-  what: string
+  what: string,
+  /** The repository the act started from, when there is one: the create button then creates the project *from* it. */
+  repository?: string
 ): Promise<string | undefined> {
   const current = selection.project();
   if (current !== undefined) {
@@ -136,14 +143,30 @@ export async function projectFor(
   }
   const area = path.join(workRoot(), '<project>');
   output?.appendLine(`[work] ${what} needs a project: what we make for one goes to ${area}`);
+  const create = repository === undefined ? 'Create a Project' : 'Create a Project from It';
   const answer = await vscode.window.showInformationMessage(
-    `Temco Repositories: ${what} needs the project being worked on — a source is cited *in* a project, and no ` +
-    'project is open.',
+    `Temco Repositories: ${what} needs a project — a source is cited in a project, and none is open. ` +
+    `Create one${repository === undefined ? '' : ` from ${repository}`}, or choose the project to cite it in.`,
+    create,
     'Choose a Project',
     SHOW_LOG
   );
   if (answer === SHOW_LOG) {
     output?.show(true);
+    return undefined;
+  }
+  if (answer === create) {
+    // The project form takes over: it is the next step, and it selects the project it makes, so the person comes back
+    // to this row and presses the act again. Nothing is cited into a project that does not exist yet.
+    output?.appendLine(
+      repository === undefined
+        ? '[work] opening the new-project form'
+        : `[work] opening the new-project form, pinned to ${repository}`
+    );
+    await vscode.commands.executeCommand(
+      repository === undefined ? 'temcoProjects.newProject' : 'temcoRepositories.rowProject',
+      ...(repository === undefined ? [] : [repository])
+    );
     return undefined;
   }
   if (answer !== 'Choose a Project') {
@@ -190,6 +213,7 @@ async function fetchSource(
   context: vscode.ExtensionContext,
   output: vscode.OutputChannel,
   refresh: () => void,
+  clones: ClonePanel,
   wanted?: string
 ): Promise<void> {
   const source = await sourceOf(context, wanted);
@@ -234,11 +258,15 @@ async function fetchSource(
   output.appendLine(
     `[work] cloning ${source.name} — ${source.remoteUrl}, branch ${source.branch ?? source.defaultBranch ?? 'as the remote decides'}, into ${folder}`
   );
+  // The page is where the clone explains itself: one line per thing git says, as it says it. The notification stays
+  // because a clone can run for minutes, and a window with the notification and no page is not a reason to wonder.
+  clones.begin({ slug: source.slug, name: source.name, remote: source.remoteUrl, branch: source.branch, folder });
   const result = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Temco Repositories: cloning ${source.name}` },
-    () => git(args, undefined, output)
+    () => git(args, undefined, output, (one) => clones.line(one))
   );
   if (!result.ok) {
+    clones.finish(false, `${source.name} could not be cloned — ${firstLine(result.output)}`);
     failed(
       output,
       `Temco Repositories: ${source.name} could not be cloned. ${firstLine(result.output)}`,
@@ -249,6 +277,7 @@ async function fetchSource(
 
   await withCatalog(context, (catalog) => catalog.setSourcePath(source.slug, folder));
   output.appendLine(`[work] ${source.name} cloned into ${folder}`);
+  clones.finish(true, `${source.name} is cloned into ${folder}. Reading it next, so its pages appear at once.`);
   refresh();
   // The copy and the read are one act. A clone nobody read leaves the row saying "never read", and what the source
   // declares is the reason to have the copy at all — so the read runs here, through the same command the Read action
@@ -665,23 +694,28 @@ async function sourceOf(
   let catalog: Catalog | undefined;
   try {
     catalog = await Catalog.open(context);
-    const rows = catalog.sources();
-    const slug = wanted !== undefined && catalog.source(wanted) !== undefined ? wanted : rows[0]?.slug;
+    // A named source that is not recorded is a refusal, never a guess: falling back to the first row would clone —
+    // or pull — a repository nobody asked for.
+    const slug = wanted ?? catalog.sources()[0]?.slug;
     if (slug === undefined) {
       void vscode.window.showInformationMessage('Temco Repositories: no source has been recorded yet.');
       return undefined;
     }
     const detail = catalog.source(slug);
-    return detail === undefined
-      ? undefined
-      : {
-          slug,
-          name: detail.name,
-          remoteUrl: detail.remoteUrl,
-          branch: detail.branch,
-          defaultBranch: detail.defaultBranch,
-          path: detail.path,
-        };
+    if (detail === undefined) {
+      void vscode.window.showInformationMessage(
+        `Temco Repositories: ${wanted} is not recorded as a source, so there is nothing to clone.`
+      );
+      return undefined;
+    }
+    return {
+      slug,
+      name: detail.name,
+      remoteUrl: detail.remoteUrl,
+      branch: detail.branch,
+      defaultBranch: detail.defaultBranch,
+      path: detail.path,
+    };
   } catch (error) {
     void vscode.window.showErrorMessage(
       `Temco Repositories: ${error instanceof Error ? error.message : String(error)}`
@@ -712,31 +746,65 @@ async function withCatalog(
  *
  * `git` has to be on the machine — the same bargain as `gh` for the token and the platform's own `tar` for
  * unpacking. It is run as a child process, never through a shell, so no repository name can become a command.
+ *
+ * Output arrives as it happens: `onLine` is handed every line git prints, which is what a clone page shows. The channel
+ * still gets the whole of it at the end, because that is what a person scrolls when something went wrong long ago.
  */
 async function git(
   args: readonly string[],
   cwd: string | undefined,
-  output?: vscode.OutputChannel
+  output?: vscode.OutputChannel,
+  onLine?: (line: string) => void
 ): Promise<{ ok: boolean; output: string }> {
   const line = `git ${args.join(' ')}${cwd ? `   (in ${cwd})` : ''}`;
   output?.appendLine(`[work] ${line}`);
   return new Promise((resolve) => {
-    execFile(
-      'git',
-      [...args],
-      { cwd, timeout: GIT_TIMEOUT_MS, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        const text = `${stdout ?? ''}${stderr ?? ''}`.trim();
-        if (text.length > 0) {
-          output?.appendLine(text);
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawn('git', [...args], { cwd, windowsHide: true });
+    } catch (error) {
+      resolve({ ok: false, output: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+    let text = '';
+    let done = false;
+    const append = (chunk: Buffer): void => {
+      const part = chunk.toString();
+      // Progress arrives with carriage returns: split on both, or one line becomes a hundred overprints.
+      for (const one of part.split(/\r\n|\r|\n/)) {
+        const trimmed = one.trim();
+        if (trimmed.length > 0) {
+          onLine?.(trimmed);
         }
-        if (error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
-          resolve({ ok: false, output: 'git was not found on this machine. Install git and try again.' });
-          return;
-        }
-        resolve({ ok: error === null, output: text });
       }
-    );
+      // A clone of a big repository prints little; a cap keeps a runaway command from eating the window's memory.
+      if (text.length < 1024 * 1024) {
+        text += part;
+      }
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+    }, GIT_TIMEOUT_MS);
+    const finish = (ok: boolean, said?: string): void => {
+      if (done) {
+        return;
+      }
+      done = true;
+      clearTimeout(timer);
+      const said2 = said === undefined ? text.trim() : said;
+      if (said2.length > 0) {
+        output?.appendLine(said2);
+      }
+      resolve({ ok, output: said2 });
+    };
+    child.stdout.on('data', append);
+    child.stderr.on('data', append);
+    child.on('error', (error: NodeJS.ErrnoException) => {
+      finish(false, error.code === 'ENOENT'
+        ? 'git was not found on this machine. Install git and try again.'
+        : error.message);
+    });
+    child.on('close', (code) => finish(code === 0));
   });
 }
 

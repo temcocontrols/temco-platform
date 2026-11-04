@@ -17,6 +17,7 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { REPOSITORY_FILE_SCHEME, RepositoryFileProvider, languageOf, repositoryFileUri } from './fileView';
+import { ClonePanel } from './clonePanel';
 import { registerReadCommands, tokenOf } from './read';
 import { applyToSource } from './apply';
 import { CodeFile, Material, RepositorySource, codeFiles, readMaterials, sourceTree } from './repository';
@@ -114,8 +115,11 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 
 	// Reading a source, and the token that reaches one.
 	registerReadCommands(context, selection, output, refresh);
-	// The working area: cloning a source so its files can be read, and pulling it when it has moved on.
-	registerWorkareaCommands(context, selection, output, refresh);
+	// The working area: cloning a source so its files can be read, and pulling it when it has moved on. The clone page
+	// is the one thing that outlives a command, so it is created here and disposed with the module.
+	const clones = new ClonePanel();
+	context.subscriptions.push({ dispose: () => clones.dispose() });
+	registerWorkareaCommands(context, selection, output, refresh, clones);
 
 	// Where downloads go, chosen rather than typed: the setting is one path, and a folder dialog is how a person
 	// answers it. The settings page is the other half — this is the shortcut from the page that uses the path.

@@ -260,8 +260,8 @@ export class RepositoriesPage {
         await this.start(message.name ?? '');
         return;
       case 'fetch':
-        // Downloading a repository that was never started makes it a source first: a copy belongs to a source.
-        await this.cite(message.name ?? '');
+        // A clone needs the source recorded, not a project: copying the code is not citing it.
+        await this.record(message.name ?? '');
         await vscode.commands.executeCommand('temcoRepositories.fetchSource', slugOf(message.name ?? ''));
         this.refresh();
         await this.send();
@@ -433,8 +433,8 @@ export class RepositoriesPage {
               await this.start(name);
               break;
             case 'fetch':
-              // Downloading a repository that was never started makes it a source first.
-              await this.cite(name);
+              // A clone is a copy of the code: record the source, then copy it. No citation, no project.
+              await this.record(name);
               await vscode.commands.executeCommand('temcoRepositories.fetchSource', slugOf(name));
               break;
             case 'pull':
@@ -452,6 +452,35 @@ export class RepositoriesPage {
     );
     this.refresh();
     await this.send();
+  }
+
+  /**
+   * Records a repository as a source — and nothing else.
+   *
+   * Cloning needs the source in the catalog; it does not need a project and must not cite, because citing is what puts
+   * a repository into a project's list, and a clone is only a copy of code.
+   */
+  private async record(name: string): Promise<void> {
+    const row = this.listed.find((candidate) => candidate.name === name);
+    if (row === undefined) {
+      return;
+    }
+    let catalog: Catalog | undefined;
+    try {
+      catalog = await Catalog.open(this.context);
+      catalog.addSource({
+        kind: 'git',
+        name: row.name,
+        slug: slugOf(row.name),
+        remoteUrl: row.cloneUrl,
+        defaultBranch: row.defaultBranch,
+      });
+    } catch {
+      // The commands that follow report their own refusals; this only records the coordinates.
+    } finally {
+      catalog?.close();
+    }
+    this.refresh();
   }
 
   /** Records a repository as a source of the project being worked on, without reading it. */
@@ -516,7 +545,7 @@ export class RepositoriesPage {
     if (row === undefined) {
       return;
     }
-    const project = await projectFor(this.selection, this.output, `starting from ${row.name}`);
+    const project = await projectFor(this.selection, this.output, `starting from ${row.name}`, row.name);
     if (project === undefined) {
       return;
     }

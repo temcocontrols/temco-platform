@@ -34,6 +34,11 @@ export interface PageOptions {
 	 * its own type scale, and those are the vocabulary's.
 	 */
 	extraCss?: string;
+	/**
+	 * The webview's own resource origin (`webview.cspSource`), when the page loads something from disk — a font, an
+	 * image. Without it the policy allows no source but `data:`, which is why every page up to now inlined everything.
+	 */
+	resources?: string;
 }
 
 let stylesheet: string | undefined;
@@ -66,7 +71,12 @@ function read(context: vscode.ExtensionContext, file: string): string {
 /** A document around `body`, with the shared page vocabulary and a content-security policy. */
 export function page(context: vscode.ExtensionContext, body: string, options: PageOptions = {}): string {
 	const nonce = randomBytes(16).toString('base64');
-	const policy = `default-src 'none'; style-src 'unsafe-inline'; img-src data:;${options.script ? ` script-src 'nonce-${nonce}';` : ''}`;
+	// A page may load its own resources — a file icon theme's font is the one case today — and only when the module
+	// says which origin those resources come from.
+	const sources = options.resources ?? '';
+	const policy = `default-src 'none'; style-src 'unsafe-inline'; img-src data:${sources.length > 0 ? ` ${sources}` : ''};`
+		+ `${sources.length > 0 ? ` font-src ${sources};` : ''}`
+		+ `${options.script ? ` script-src 'nonce-${nonce}';` : ''}`;
 	const script = options.script ? `<script nonce="${nonce}">${options.script}</script>` : '';
 	return `<!DOCTYPE html>
 <html lang="en">

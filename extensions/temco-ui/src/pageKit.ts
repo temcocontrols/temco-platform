@@ -90,6 +90,8 @@ export function entries(rows: string): string {
 /** One row: the glyph, the thing, the facts about it, and what can be done to it. */
 export interface EntryOptions {
 	mark?: string;
+	/** Raw markup for the mark, instead of a sprite glyph — a file icon theme's own icon, where a page can load one. */
+	markHtml?: string;
 	tone?: Tone;
 	title: string;
 	/** Words beside the title: a state that belongs to the name rather than to the end of the row. */
@@ -111,7 +113,9 @@ export interface EntryOptions {
  * because that is where a hand goes looking for them.
  */
 export function entry(options: EntryOptions): string {
-	const chip = options.mark === undefined ? '' : toneMark(options.mark, options.tone ?? 'info');
+	const chip = options.markHtml !== undefined
+		? `<span class="tone-mark tone-mark--${options.tone ?? 'info'}">${options.markHtml}</span>`
+		: options.mark === undefined ? '' : toneMark(options.mark, options.tone ?? 'info');
 	const facts = (options.meta ?? []).filter((fact): fact is string => fact !== undefined && fact.length > 0);
 	const meta = facts.length === 0 ? '' : `<span class="az-entry__meta">${facts.map(escapeHtml).join(' · ')}</span>`;
 	const status = options.status === undefined || options.status === '' ? '' : `<span class="az-entry__status">${escapeHtml(options.status)}</span>`;

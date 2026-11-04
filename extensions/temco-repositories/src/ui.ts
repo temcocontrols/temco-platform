@@ -18,7 +18,7 @@ interface UiApi {
 	pageColumn(): vscode.ViewColumn;
 	fileColumn(): vscode.ViewColumn;
 	rowSlug(target: unknown): string | undefined;
-	page(body: string, options?: { title?: string; script?: string; extraCss?: string }): string;
+	page(body: string, options?: { title?: string; script?: string; extraCss?: string; resources?: string }): string;
 	icon(name: string, cls?: string): string;
 	hero(options: HeroOptions): string;
 	section(options: { title: string; desc?: string; actions?: string }): string;
@@ -81,6 +81,8 @@ interface HeroOptions {
 /** One row of a page. */
 interface EntryOptions {
 	mark?: string;
+	/** Raw markup for the mark, instead of a sprite glyph — a file icon theme's own icon. */
+	markHtml?: string;
 	tone?: Tone;
 	title: string;
 	/** Words beside the title: a state that belongs to the name rather than to the end of the row. */

@@ -20,6 +20,7 @@ import { execFile } from 'child_process';
 import { existsSync } from 'fs';
 import * as vscode from 'vscode';
 import { Catalog, Selection, SourceRow } from './store';
+import { FileIconTheme, loadFileIconTheme } from './fileIcons';
 import { button, commandScript, entries, entry, escapeHtml, hero, n, notice, page, pageColumn, part, remember, runCommand } from './ui';
 
 export const DASHBOARD_VIEW_TYPE = 'temcoRepositories.dashboard';
@@ -41,6 +42,8 @@ interface Clone {
 	name: string;
 	branch?: string;
 	path?: string;
+	/** Where the repository lives on the web, when its clone URL says so. */
+	web?: string;
 	cloned: boolean;
 	last?: Commit;
 	commits: Commit[];
@@ -68,6 +71,25 @@ function git(cwd: string, args: readonly string[]): Promise<string> {
 			resolve(error ? '' : stdout.toString());
 		});
 	});
+}
+
+/**
+ * Where a repository lives on the web, from the URL it is cloned from.
+ *
+ * The clone URL is the only address the catalog keeps, and it arrives in three shapes — `https://host/owner/repo.git`,
+ * `https://host/owner/repo`, and the `git@host:owner/repo.git` form SSH gives — so the same page link is derived from
+ * all of them, and nothing is invented when the shape is none of those.
+ */
+function webUrlOf(remoteUrl: string | undefined): string | undefined {
+	if (remoteUrl === undefined || remoteUrl.trim().length === 0) {
+		return undefined;
+	}
+	const trimmed = remoteUrl.trim().replace(/\.git$/i, '');
+	const scp = /^git@([^:]+):(.+)$/.exec(trimmed);
+	if (scp !== null) {
+		return `https://${scp[1]}/${scp[2]}`;
+	}
+	return /^https?:\/\//i.test(trimmed) ? trimmed : undefined;
 }
 
 /** `%h|%s|%an|%ad` — the four facts a row shows, in one line git can print. */
@@ -168,6 +190,7 @@ async function clones(context: vscode.ExtensionContext, project: string | undefi
 					name: source.name,
 					branch: detail?.branch,
 					path: clone,
+					web: webUrlOf(detail?.remoteUrl),
 					cloned: exists,
 					last: commits[0],
 					commits,
@@ -257,10 +280,17 @@ export class DashboardPage {
 		if (this.panel !== panel) {
 			return;
 		}
-		panel.webview.html = page(body(groups, total, this.selection.project(), canDraft()), {
+		// The row's mark is the user's own file icon theme: a repository is a folder, and it should look like one.
+		const theme = await loadFileIconTheme(panel.webview);
+		panel.webview.options = {
+			enableScripts: true,
+			localResourceRoots: theme === undefined ? [] : [vscode.Uri.file(theme.folder)]
+		};
+		panel.webview.html = page(body(groups, total, this.selection.project(), canDraft(), theme), {
 			title: 'Repositories — Dashboard',
 			script: commandScript,
-			extraCss: COMMITS_CSS
+			extraCss: COMMITS_CSS + (theme?.css ?? ''),
+			resources: panel.webview.cspSource
 		});
 	}
 
@@ -285,9 +315,12 @@ export class DashboardPage {
 const COMMITS_CSS = `
 .commits { margin: 0 0 var(--sp-2) 34px; }
 .commits > summary { cursor: pointer; color: var(--az-blue); font-size: 12px; line-height: 18px; }
+.commits__all { float: right; color: var(--az-blue); text-decoration: none; }
+.commits__all:hover, .commits__row:hover .commits__subject { text-decoration: underline; }
 .commits__list { margin: var(--sp-2) 0 0; padding: 0; list-style: none; }
-.commits__item { display: flex; gap: var(--sp-3); align-items: baseline; padding: 1px 0; font-size: 12px; line-height: 17px; }
+.commits__item { padding: 1px 0; font-size: 12px; line-height: 17px; }
 .commits__item--seen { opacity: .55; }
+.commits__row { display: flex; gap: var(--sp-3); align-items: baseline; color: inherit; text-decoration: none; }
 .commits__hash { font-family: var(--font-mono); color: var(--fg-subtle); }
 .commits__subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 .commits__date { color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
@@ -324,7 +357,7 @@ function citedPhrase(clone: Clone): string {
  * The meta carries the evidence — the branch, the folder, the last commit and the pages. The acts are the ones the
  * reader would take next, and they are words, not boxes: a row already says what it is.
  */
-function cloneRow(clone: Clone, canDraft: boolean): string {
+function cloneRow(clone: Clone, canDraft: boolean, theme: FileIconTheme | undefined): string {
 	const fresh = clone.fresh.length;
 	const last = clone.last;
 	// "Not cloned" is a state, not a fault: the copy is optional and reading works without it. The acts therefore say
@@ -336,8 +369,13 @@ function cloneRow(clone: Clone, canDraft: boolean): string {
 			: fresh === 0
 				? 'nothing new'
 				: `${n(fresh, 'file', 'files')} since the last read`;
+	// A repository is a folder on this machine, so the theme's own folder glyph is what marks it — the same icon the
+	// Explorer would draw beside that path. A theme that defines no folder icon (the built-in one does not) gets the
+	// page's folder glyph, which is the same idea in the kit's vocabulary.
+	const glyph = theme?.classFor(clone.path ?? clone.name);
 	const row = entry({
-		mark: 'repo',
+		markHtml: glyph === undefined ? undefined : `<span class="${glyph}" aria-hidden="true"></span>`,
+		mark: 'folder',
 		tone: !clone.cloned ? 'info' : fresh === 0 ? 'ok' : 'info',
 		title: clone.name,
 		status: state,
@@ -360,22 +398,42 @@ function cloneRow(clone: Clone, canDraft: boolean): string {
 	return `${row}${commitFold(clone)}`;
 }
 
-/** The commits the page read, folded under the row: native `details`, so it opens in place and closes again. */
+/**
+ * The commits the page read, folded under the row: native `details`, so it opens in place and closes again.
+ *
+ * Every line is a way into GitHub — the fold's own link goes to the branch's commit list, and each commit to its page
+ * there — because the one thing a list of commits makes a person want is the change itself. The links are ordinary
+ * anchors: a webview opens an `http(s)` link in the browser, so the page needs no script of its own for them.
+ */
 function commitFold(clone: Clone): string {
 	if (clone.commits.length === 0) {
 		return '';
 	}
-	const items = clone.commits.map((commit) => `<li class="commits__item${commit.seen ? ' commits__item--seen' : ''}">`
-		+ `<span class="commits__hash">${escapeHtml(commit.short)}</span>`
-		+ `<span class="commits__subject">${escapeHtml(commit.subject)}</span>`
-		+ `<span class="commits__date">${escapeHtml(commit.date)}</span>`
-		+ `<span class="commits__mark">${commit.seen ? 'seen' : 'new'}</span></li>`).join('');
-	return `<details class="commits"><summary>Show the ${n(clone.commits.length, 'commit', 'commits')} it read`
-		+ `${clone.read === undefined ? '' : `, last read ${escapeHtml(clone.read)}`}</summary>`
+	const web = clone.web;
+	const listHref = web === undefined
+		? undefined
+		: `${web}/commits${clone.branch === undefined ? '' : `/${encodeURIComponent(clone.branch)}`}`;
+	const items = clone.commits.map((commit) => {
+		const href = web === undefined ? undefined : `${web}/commit/${encodeURIComponent(commit.short)}`;
+		const body = `<span class="commits__hash">${escapeHtml(commit.short)}</span>`
+			+ `<span class="commits__subject">${escapeHtml(commit.subject)}</span>`
+			+ `<span class="commits__date">${escapeHtml(commit.date)}</span>`
+			+ `<span class="commits__mark">${commit.seen ? 'seen' : 'new'}</span>`;
+		return `<li class="commits__item${commit.seen ? ' commits__item--seen' : ''}">`
+			+ (href === undefined
+				? body
+				: `<a class="commits__row" href="${escapeHtml(href)}" title="Open ${escapeHtml(commit.short)} on GitHub">${body}</a>`)
+			+ '</li>';
+	}).join('');
+	const open = listHref === undefined
+		? ''
+		: `<a class="commits__all" href="${escapeHtml(listHref)}" title="Open the commits on GitHub">On GitHub</a>`;
+	return `<details class="commits"><summary><span class="commits__text">Show the ${n(clone.commits.length, 'commit', 'commits')} it read`
+		+ `${clone.read === undefined ? '' : `, last read ${escapeHtml(clone.read)}`}</span>${open}</summary>`
 		+ `<ul class="commits__list">${items}</ul></details>`;
 }
 
-function body(groups: readonly Group[], total: number, project: string | undefined, canDraft: boolean): string {
+function body(groups: readonly Group[], total: number, project: string | undefined, canDraft: boolean, theme: FileIconTheme | undefined): string {
 	const all = groups.flatMap((group) => group.clones);
 	const fresh = all.reduce((sum, clone) => sum + clone.fresh.length, 0);
 	const affected = all.reduce((sum, clone) => sum + clone.docs.length, 0);
@@ -417,7 +475,7 @@ ${notice({
 		count: n(group.clones.length, 'clone', 'clones'),
 		note: group.note
 	})}
-${entries(group.clones.map((clone) => cloneRow(clone, canDraft)).join(''))}</div>`).join('');
+${entries(group.clones.map((clone) => cloneRow(clone, canDraft, theme)).join(''))}</div>`).join('');
 
 	return `${head}${sections}
 <p class="az-note">Cloned copies on this machine · a commit before the last read is dimmed, not dropped${project === undefined ? '' : ` · project ${escapeHtml(project)}`}.</p>`;
