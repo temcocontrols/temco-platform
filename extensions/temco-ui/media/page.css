@@ -4415,6 +4415,28 @@ body {
 	white-space: nowrap;
 }
 
+/* A title that is a way in: a link's colour and underline-on-hover, but a real button underneath. */
+.az-entry__title--link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--az-blue);
+	font: inherit;
+	font-size: 13px;
+	line-height: 18px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.az-entry__title--link:hover {
+	text-decoration: underline;
+}
+
+.az-entry__title--link:focus-visible {
+	outline: 1px solid var(--focus);
+	outline-offset: 1px;
+}
+
 .az-entry__meta {
 	display: block;
 	margin-top: 1px;

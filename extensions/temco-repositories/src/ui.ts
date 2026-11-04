@@ -72,6 +72,8 @@ interface HeroOptions {
 	/** The description takes the full width instead of a reading measure. */
 	descWide?: boolean;
 	actions?: readonly { label: string; command: string; args?: unknown; mark?: string; kind?: 'primary' | 'link' }[];
+	/** Pre-rendered controls instead of `actions`, for a page whose acts are its own messages rather than commands. */
+	actionsHtml?: string;
 	/** The figures the page opens on, drawn in the band's own row beside the ways in. */
 	stats?: readonly { value: string; label: string }[];
 	/** One line of context that belongs to the header. */
@@ -87,6 +89,8 @@ interface EntryOptions {
 	title: string;
 	/** Words beside the title: a state that belongs to the name rather than to the end of the row. */
 	status?: string;
+	/** The title as a way in: a command run when it is pressed, drawn as a link rather than as a button. */
+	titleCommand?: { command: string; args?: unknown };
 	meta?: readonly (string | undefined)[];
 	state?: string;
 	actions?: string;

@@ -13,7 +13,7 @@ import { sourceTree, CodeFile, RepositorySource } from './repository';
 import { Catalog, RepositoryCacheRow, Selection, slugOf } from './store';
 import { FileIconTheme, loadFileIconTheme } from './fileIcons';
 import { WorkAct, WorkReporter, WorkState } from './workReporter';
-import { page, pageColumn, remember } from './ui';
+import { commandScript, entry, hero, page, pageColumn, remember } from './ui';
 import { cloneRoot, cloneSize, hasClone, projectFor } from './workarea';
 
 export const REPOSITORY_DETAIL_VIEW_TYPE = 'temcoRepositories.repositoryDetail';
@@ -97,10 +97,39 @@ export class RepositoryDetailPage {
    * The act is not run from the dashboard: a clone explains itself in lines, and those lines belong on the page about
    * the repository. The page asks for the work when its script is ready (`ready`), so nothing is posted into a webview
    * that is not listening yet.
+   *
+   * The name a caller has may be the row's **name** (`Solar-Powered-Lora-Sensor`) or its **slug**
+   * (`solar-powered-lora-sensor`) — a list keys sources by slug and lists repositories by name. Both resolve to the
+   * repository a person means before the page opens.
    */
-  openAndRun(name: string, act: WorkAct, organisation?: string): void {
+  async openAndRun(nameOrSlug: string, act: WorkAct, organisation?: string): Promise<void> {
+    const name = await this.resolveName(nameOrSlug);
     this.pending = act;
     this.open(name, organisation);
+  }
+
+  /** A repository's name, whichever of its two keys a command was handed. */
+  private async resolveName(nameOrSlug: string): Promise<string> {
+    let catalog: Catalog | undefined;
+    try {
+      catalog = await Catalog.open(this.context);
+      for (const row of catalog.sources()) {
+        if (row.slug === slugOf(nameOrSlug)) {
+          return row.name;
+        }
+      }
+      for (const org of catalog.organisations()) {
+        const found = catalog.repositoriesOf(org.slug).find((repository) => repository.name === nameOrSlug);
+        if (found !== undefined) {
+          return found.name;
+        }
+      }
+    } catch {
+      // No catalog: the name is used as it came.
+    } finally {
+    	catalog?.close();
+    }
+    return nameOrSlug;
   }
 
   open(name: string, organisation?: string, restored?: vscode.WebviewPanel): void {
@@ -145,8 +174,49 @@ export class RepositoryDetailPage {
       enableScripts: true,
       localResourceRoots: this.theme === undefined ? [] : [vscode.Uri.file(this.theme.folder)],
     };
-    panel.webview.html = html(this.name, this.theme, panel.webview.cspSource, this.work.lastFor(slugOf(this.name)));
+    panel.webview.html = html(
+      this.name,
+      this.theme,
+      panel.webview.cspSource,
+      await this.facts(),
+      this.work.lastFor(slugOf(this.name))
+    );
     await this.send();
+  }
+
+  /** What the header says before the page has heard from the module: the figures, the org and the description. */
+  private async facts(): Promise<PageFacts> {
+    let catalog: Catalog | undefined;
+    try {
+      catalog = await Catalog.open(this.context);
+      const organisations = catalog.organisations();
+      const org = organisations.find((candidate) => candidate.slug === this.organisation)
+        ?? organisations.find((candidate) => catalog?.repositoriesOf(candidate.slug).some((row) => row.name === this.name));
+      const row = org === undefined ? undefined : catalog.repositoriesOf(org.slug).find((entry) => entry.name === this.name);
+      const source = catalog.source(slugOf(this.name));
+      const copy = await hasClone(this.name);
+      const size = copy ? await cloneSize(this.name) : undefined;
+      const cited = this.selection.project() === undefined
+        ? false
+        : catalog.documentSources(this.selection.project() as string).some((entry) => entry.name === this.name);
+      const stats = [
+        { value: copy ? 'cloned' : '—', label: copy ? (size ? `${size} on disk` : 'on disk') : 'no local copy' },
+        { value: cited ? 'cited' : source === undefined ? 'not started' : 'recorded', label: 'in the project' },
+      ];
+      if (row?.language !== undefined) {
+        stats.push({ value: row.language, label: 'language' });
+      }
+      return {
+        organisation: org?.slug,
+        description: row?.description,
+        localCopy: copy,
+        stats,
+      };
+    } catch {
+      return { localCopy: false, stats: [] };
+    } finally {
+      catalog?.close();
+    }
   }
 
   /** The row, the source and the local copy — one message, so the page never draws half a repository. */
@@ -186,8 +256,14 @@ export class RepositoryDetailPage {
     await panel.webview.postMessage({ type: 'state', ...state });
   }
 
-  /** The files inside the repository, grouped: documentation first, then classes and source. */
-  private async sendFiles(ticked: readonly string[]): Promise<void> {
+  /**
+   * The files inside the repository — drawn here, with the kit's own row.
+   *
+   * A file is a row like a clone on the dashboard: the theme's glyph, the path, the size, and the way in. The markup is
+   * made here rather than in the page so there is one entry vocabulary, and the click is a command the page's own
+   * script posts, so the page never has to know which copy a file would come from.
+   */
+  private async sendFiles(): Promise<void> {
     const panel = this.panel;
     if (!panel) {
       return;
@@ -223,16 +299,26 @@ export class RepositoryDetailPage {
       await panel.webview.postMessage({ type: 'files', error: listed.error });
       return;
     }
-    const files = listed.files.map((file: CodeFile) => ({
-      path: file.path,
-      size: file.size,
-      category: isDocumentation(file.path) ? 'docs' : 'code',
-      // The theme's own glyph when it has one, and the page's sprite when it does not: the row says what the file is
-      // either way.
-      glyph: this.theme?.classFor(file.path),
-      ticked: ticked.includes(file.path),
-    }));
-    await panel.webview.postMessage({ type: 'files', files, note: listed.note });
+    const rows = listed.files.map((file: CodeFile) => {
+      const mark = this.theme?.classFor(file.path);
+      return entry({
+        markHtml: mark === undefined ? undefined : `<span class="${mark}" aria-hidden="true"></span>`,
+        mark: isDocumentation(file.path) ? 'document' : 'code',
+        title: file.path,
+        titleCommand: {
+          command: 'temcoRepositories.openRepositoryFile',
+          args: [this.name, file.path],
+        },
+        meta: [`${Math.max(1, Math.round(file.size / 1024))} KB`],
+      });
+    }).join('');
+    const copy = await hasClone(this.name);
+    const note = listed.files.length === 0
+      ? 'This repository has no file to show.'
+      : `${listed.files.length} ${listed.files.length === 1 ? 'file' : 'files'} · ${copy
+        ? 'read from the clone on this machine'
+        : 'read over the GitHub API — cloning makes it faster'}${listed.note === undefined ? '' : ` · ${listed.note}`}`;
+    await panel.webview.postMessage({ type: 'files', rows, note });
   }
 
   private async receive(message: DetailMessage): Promise<void> {
@@ -253,7 +339,7 @@ export class RepositoryDetailPage {
         await this.send();
         return;
       case 'files':
-        await this.sendFiles(message.files ?? []);
+        await this.sendFiles();
         return;
       case 'open':
         if (message.url !== undefined) {
@@ -332,7 +418,7 @@ export class RepositoryDetailPage {
     }
     this.refresh();
     await this.send();
-    await this.sendFiles([]);
+    await this.sendFiles();
   }
 
   /** The row's own facts, as the projects module needs them to open pinned to this repository. */
@@ -418,126 +504,107 @@ export class RepositoryDetailPage {
   }
 }
 
-function html(name: string, theme: FileIconTheme | undefined, resources: string, last: WorkState | undefined): string {
+function html(
+  name: string,
+  theme: FileIconTheme | undefined,
+  resources: string,
+  facts: PageFacts,
+  last: WorkState | undefined
+): string {
   const style = `
-    /* The page is a stack of bands on the editor's own surface: no cards, one hairline where a band ends. */
-    .repo { max-width: 1080px; }
+    /* This page has one job: be the place a clone, a pull and a repository all land on. Everything is flat — a hairline
+       where a part ends, and nothing boxed, nothing tinted — so the header carries the page and the content carries the
+       answer. */
+    .repo { max-width: 1120px; }
 
-    /* The header: where this is, what it is called, and the one line of state. */
-    .head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: start;
-      padding: 0 0 14px; border-bottom: 1px solid var(--border); }
-    .head__eyebrow { grid-column: 1 / -1; margin: 0; color: var(--fg-muted); font-size: 11px;
-      letter-spacing: .07em; text-transform: uppercase; }
-    .head__title { margin: 0; color: var(--fg-strong); font-size: 22px; line-height: 28px; font-weight: 600;
-      overflow-wrap: anywhere; }
-    .head__sub { grid-column: 1; margin: 2px 0 0; color: var(--fg-muted); font-size: 13px; line-height: 18px; }
-    .head__actions { grid-column: 2; grid-row: 2 / span 2; display: flex; gap: 8px; flex-wrap: wrap;
-      justify-content: flex-end; align-items: flex-start; }
+    /* The acts sit under the header, on one line, in the order a person reaches for them. */
+    .acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 4px 0 0; }
+    .acts__spacer { flex: 1 1 auto; }
 
-    /* The state strip: what the platform holds of it, and what just happened. Fluent's quiet message bar. */
-    .strip { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 8px 12px;
-      border: 1px solid var(--border); border-radius: 4px; background: var(--bg-inset);
-      font-size: 12px; line-height: 16px; color: var(--fg); }
-    .strip--ok { border-color: color-mix(in srgb, var(--ok) 55%, transparent); }
-    .strip--err { border-color: color-mix(in srgb, var(--err) 55%, transparent); }
-    .strip__mark { flex: none; font-weight: 600; color: var(--fg-muted); }
-    .strip--ok .strip__mark { color: var(--ok); }
-    .strip--err .strip__mark { color: var(--err); }
-    .strip__text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-    .strip[hidden] { display: none; }
+    /* The state of the act: a line of text with a coloured word in front, not a bar. */
+    .state { display: flex; gap: 8px; align-items: baseline; margin: 14px 0 0; font-size: 12px;
+      line-height: 18px; color: var(--fg); }
+    .state[hidden] { display: none; }
+    .state__mark { flex: none; font-weight: 600; color: var(--fg-muted); }
+    .state--ok .state__mark { color: var(--ok); }
+    .state--err .state__mark { color: var(--err); }
+    .state__text { min-width: 0; overflow-wrap: anywhere; }
 
-    /* The facts: a label column and a value column, the way a settings page reads. */
-    .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 16px; margin: 14px 0 0;
+    /* What the platform holds of it, as one quiet line: label in muted, value in ink, separated by middots. */
+    .meta { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 12px 0 0; padding: 0;
       font-size: 12px; line-height: 18px; }
-    .facts dt { color: var(--fg-muted); }
-    .facts dd { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
-    .facts dd.mono { font-family: var(--font-mono); font-size: 11px; }
+    .meta__pair { display: flex; gap: 6px; min-width: 0; }
+    .meta__label { color: var(--fg-muted); }
+    .meta__value { color: var(--fg); overflow-wrap: anywhere; }
+    .meta__value--mono { font-family: var(--font-mono); font-size: 11px; }
 
-    /* The console: what git said, in the editor's own monospace, on the page rather than in another tab. */
-    .console { margin: 14px 0 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-    .console[hidden] { display: none; }
-    .console__bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-      background: var(--bg-inset); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--fg-muted); }
-    .console__title { flex: 1 1 auto; }
-    .console__log { margin: 0; padding: 8px 10px; max-height: 300px; overflow: auto;
-      font-family: var(--font-mono); font-size: 11px; line-height: 16px;
-      color: var(--fg); background: transparent; white-space: pre-wrap; overflow-wrap: anywhere; }
+    /* git's own words: monospace on the page's surface, with one hairline above it and nothing around it. */
+    .log { margin: 12px 0 0; padding: 10px 0 0; max-height: 260px; overflow: auto;
+      border-top: 1px solid var(--border); background: none; color: var(--fg-muted);
+      font-family: var(--font-mono); font-size: 11px; line-height: 17px;
+      white-space: pre-wrap; overflow-wrap: anywhere; }
+    .log[hidden] { display: none; }
+    .log__hide { margin: 4px 0 0; }
 
-    /* The list: one row per file, pressable, with the theme's own glyph. */
-    .files { margin: 6px 0 0; }
-    .file { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 0 8px; align-items: center;
-            padding: 5px 6px; border-bottom: 1px solid var(--border); cursor: pointer;
-            background: none; border-left: 0; border-right: 0; border-top: 0; width: 100%; text-align: left;
-            font: inherit; color: inherit; border-radius: 2px; }
-    .file:last-child { border-bottom: 0; }
-    .file:hover { background: var(--bg-hover); }
-    .file:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
-    .file__glyph { color: var(--fg-subtle); display: inline-flex; justify-content: center; }
-    .file__path { color: var(--fg); font-size: 12px; overflow-wrap: anywhere; }
-    .file__meta { color: var(--fg-subtle); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    /* The head of a part: the kit's section, with the count on the right. */
+    .part { display: flex; align-items: flex-end; gap: 16px; margin: 28px 0 2px; }
+    .part__text { flex: 1 1 auto; min-width: 0; }
+    .part__note { margin: 3px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 17px; }
 
-    /* The warning is a tinted surface, not a bordered box: it has to be recognisable across the room. */
-    .warn { border-radius: 4px; padding: 10px 12px; margin: 12px 0;
-            background: color-mix(in srgb, var(--warn) 18%, var(--bg-inset)); color: var(--fg); }
-    .warn p { margin: 0; }
-    .warn .do { display: flex; gap: 6px; margin: 8px 0 0; }
-    .empty { color: var(--fg-muted); padding: 10px 0; }
-
-    /* The foot is the one decision the page exists for, so it stays in reach of the list it is about. */
-    .foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 16px 0 0;
-            padding-top: 12px; border-top: 1px solid var(--border); }
+    /* The foot: the one decision this page exists for. */
+    .foot { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 26px 0 0;
+      padding-top: 14px; border-top: 1px solid var(--border); }
     .foot__summary { color: var(--fg-muted); font-size: 12px; flex: 1 1 16em; }
-
-    @media (max-width: 720px) {
-      .head { grid-template-columns: minmax(0, 1fr); }
-      .head__actions { grid-column: 1; grid-row: auto; justify-content: flex-start; }
-    }
   `;
+
+  const acts = `
+    <button type="button" class="az-btn az-btn--primary" id="fetch"${last !== undefined || facts.localCopy ? '' : ''} hidden>${glyph('download')}<span>Clone the code</span></button>
+    <button type="button" class="az-btn az-btn--primary" id="pull" hidden>${glyph('sync')}<span>Pull the latest</span></button>
+    <button type="button" class="az-btn" id="start" hidden>${glyph('plus')}<span>Add to the project</span></button>
+    <span class="acts__spacer"></span>
+    <button type="button" class="az-btn az-btn--link" id="open-github">${glyph('globe')}<span>Open on GitHub</span></button>
+    <button type="button" class="az-btn az-btn--link" id="copy-url">${glyph('link')}<span>Copy the clone URL</span></button>
+    <button type="button" class="az-btn az-btn--link" id="refresh">${glyph('refresh')}<span>Refresh</span></button>
+    <button type="button" class="az-btn az-btn--link" id="remove-copy" hidden>${glyph('close')}<span>Remove the clone</span></button>
+  `;
+
+  const head = hero({
+    eyebrow: facts.organisation === undefined ? 'Repositories' : `${facts.organisation} · repositories`,
+    mark: 'repo',
+    title: name,
+    desc: facts.description ?? 'No description on GitHub.',
+    descWide: true,
+    actionsHtml: acts,
+    stats: facts.stats,
+  });
 
   const body = `
   <div class="repo">
-    <header class="head">
-      <p class="head__eyebrow" id="eyebrow">Repository</p>
-      <h1 class="head__title" id="title">${name}</h1>
-      <div class="head__actions">
-        <button type="button" class="az-btn az-btn--primary" id="fetch">${glyph('download')}<span>Clone the code</span></button>
-        <button type="button" class="az-btn az-btn--primary" id="pull" hidden>${glyph('upload')}<span>Pull the latest</span></button>
-        <button type="button" class="az-btn" id="start" hidden>${glyph('plus')}<span>Start — add it to the project</span></button>
-        <button type="button" class="az-btn" id="open-github">${glyph('globe')}<span>Open on GitHub</span></button>
-        <button type="button" class="az-btn" id="copy-url">${glyph('link')}<span>Copy the clone URL</span></button>
-        <button type="button" class="az-btn" id="reload">${glyph('refresh')}<span>Refresh</span></button>
-        <button type="button" class="az-btn" id="remove-copy" hidden>${glyph('close')}<span>Remove the clone</span></button>
-      </div>
-      <p class="head__sub" id="lede">Reading what the platform holds of it…</p>
-    </header>
+${head}
+    <p class="state" id="state" role="status" hidden>
+      <span class="state__mark" id="state-mark"></span>
+      <span class="state__text" id="state-text"></span>
+    </p>
 
-    <div class="strip" id="strip" role="status" hidden>
-      <span class="strip__mark" id="strip-mark"></span>
-      <span class="strip__text" id="strip-text"></span>
-    </div>
-
-    <dl class="facts" id="facts"></dl>
+    <div class="meta" id="meta"></div>
     <div id="error"></div>
 
-    <section class="console" id="console" hidden>
-      <div class="console__bar">
-        <span class="console__title" id="console-title">Git output</span>
-        <button type="button" class="az-btn az-btn--sm az-btn--link" id="console-hide">Hide</button>
-      </div>
-      <pre class="console__log" id="console-log" aria-live="polite"></pre>
-    </section>
+    <pre class="log" id="log" aria-live="polite" hidden></pre>
+    <div class="log__hide" id="log-hide" hidden>
+      <button type="button" class="az-btn az-btn--sm az-btn--link" id="console-hide">Hide the output</button>
+    </div>
 
-    <section class="az-section">
-      <div class="az-section__text">
+    <div class="part">
+      <div class="part__text">
         <h2 class="az-section__title">What is inside it</h2>
-        <p class="az-section__desc" id="files-note">Reading the file list…</p>
+        <p class="part__note" id="files-note">Reading the file list…</p>
       </div>
-    </section>
+    </div>
     <div id="files-error"></div>
-    <div class="files" id="files"></div>
+    <div class="az-entries" id="files"></div>
 
     <div class="foot">
-      <span class="foot__summary">One row per file: open it, or start a project from the repository.</span>
+      <span class="foot__summary">Open a file, or start a project from this repository.</span>
       <button type="button" class="az-btn az-btn--primary" id="project">${glyph('plus')}<span id="project-label">Create a project from this repository</span></button>
     </div>
   </div>
@@ -547,9 +614,17 @@ function html(name: string, theme: FileIconTheme | undefined, resources: string,
     title: name,
     extraCss: style + (theme?.css ?? ''),
     resources,
-    script: CLIENT,
+    script: commandScript + CLIENT,
     initialWork: last,
   });
+}
+
+/** What the header can say before the page has spoken to the module: the figures and the one line of context. */
+interface PageFacts {
+  organisation?: string;
+  description?: string;
+  localCopy: boolean;
+  stats: { value: string; label: string }[];
 }
 
 /** One glyph from the page sprite, at the size the surrounding control asks for. */
@@ -557,14 +632,19 @@ function glyph(name: string): string {
   return `<svg viewBox="0 0 24 24" class="icon" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
 }
 
+/**
+ * The page's own behaviour.
+ *
+ * Two things it deliberately does not do: it never builds a row of the file list (the module renders those with the
+ * kit's own `entry`, so a file and a clone read the same), and it never decides what a command means (the kit's click
+ * handler posts it, and the module runs it).
+ */
 const CLIENT = `
 const vscode = window.__temcoApi || (window.__temcoApi = acquireVsCodeApi());
 const $ = (id) => document.getElementById(id);
 let state = {};
-let files = [];
-let note = '';
 
-$('reload').addEventListener('click', () => vscode.postMessage({ type: 'state' }));
+$('refresh').addEventListener('click', () => vscode.postMessage({ type: 'state' }));
 $('open-github').addEventListener('click', () => {
   if (state.row && state.row.webUrl) { vscode.postMessage({ type: 'open', url: state.row.webUrl }); }
 });
@@ -576,11 +656,9 @@ $('pull').addEventListener('click', () => vscode.postMessage({ type: 'pull' }));
 $('remove-copy').addEventListener('click', () => vscode.postMessage({ type: 'removeClone' }));
 $('start').addEventListener('click', () => vscode.postMessage({ type: 'start' }));
 $('project').addEventListener('click', () => vscode.postMessage({ type: 'project' }));
-$('console-hide').addEventListener('click', () => { $('console').hidden = true; });
+$('console-hide').addEventListener('click', () => hideLog());
 
-// The last thing an act reported, when the tab was drawn: a page that was closed mid-clone says how it ended.
 drawWork(window.__temcoInitial);
-// The page is listening: an act that came with it (a dashboard row's Clone it) runs now.
 vscode.postMessage({ type: 'ready' });
 
 window.addEventListener('message', (event) => {
@@ -591,11 +669,9 @@ window.addEventListener('message', (event) => {
     state = message;
     if (message.error) { $('error').replaceChildren(banner(message.error)); return; }
     $('error').replaceChildren();
-    if (message.row) { $('title').textContent = message.row.name; }
-    drawFacts();
+    drawMeta();
     drawActions();
-    // The file list is asked for again after every act: a fetched copy changes where the files come from.
-    vscode.postMessage({ type: 'files', files: [] });
+    vscode.postMessage({ type: 'files' });
     return;
   }
   if (message.type !== 'files') { return; }
@@ -606,82 +682,35 @@ window.addEventListener('message', (event) => {
     return;
   }
   $('files-error').replaceChildren();
-  files = message.files || [];
-  note = message.note || '';
-  $('files-note').textContent = (state.localCopy
-    ? 'Read from the clone in this machine\\'s working area. Press a file to open it.'
-    : 'Read over the GitHub API, because there is no clone yet. Press a file to open it there; cloning makes this faster and gives the history behind each file.')
-    + (note ? ' ' + note + '.' : '');
-  draw();
+  // The rows arrive drawn: the same entry the dashboard uses, so a file here and a clone there are one vocabulary.
+  $('files').innerHTML = message.rows || '';
+  $('files-note').textContent = message.note || '';
 });
 
-/** What the platform holds of this repository: the rows of the fact list, and the one sentence under the title. */
-function drawFacts() {
-  const rows = [];
-  if (state.row) {
-    rows.push(['Language', state.row.language || 'not reported']);
-    rows.push(['Visibility', state.row.isPrivate ? 'private' : 'public']);
-    if (state.row.pushedAt) { rows.push(['Last push', shortDate(state.row.pushedAt)]); }
-    if (state.row.cloneUrl) { rows.push(['Clone URL', state.row.cloneUrl, true]); }
-  }
-  rows.push(['Source', state.cited
-    ? 'cited by the project being worked on'
-    : state.isSource ? 'recorded, not cited by this project' : 'not started']);
-  rows.push(['Local copy', state.localCopy
-    ? 'cloned' + (state.copySize ? ' · ' + state.copySize : '')
-    : 'none — Clone reads it into ' + (state.where || 'the working area')]);
-  if (state.branch) { rows.push(['Branch read', state.branch]); }
-
-  const list = document.createElement('dl');
-  list.className = 'facts';
-  for (const [label, value, mono] of rows) {
-    const term = document.createElement('dt');
-    term.textContent = label;
-    const detail = document.createElement('dd');
-    if (mono) { detail.className = 'mono'; }
+/** The facts, as one quiet line: what the platform holds of it, and where the copy is. */
+function drawMeta() {
+  const pairs = [];
+  pairs.push(['Copy', state.localCopy ? 'cloned' + (state.copySize ? ' · ' + state.copySize : '') : 'not cloned yet']);
+  pairs.push(['Folder', state.localCopy && state.path ? state.path : (state.where || 'not chosen'), true]);
+  if (state.branch) { pairs.push(['Branch', state.branch]); }
+  pairs.push(['Source', state.cited ? 'cited by the project' : state.isSource ? 'recorded, not cited' : 'not started']);
+  const box = $('meta');
+  box.replaceChildren();
+  for (const [label, value, mono] of pairs) {
+    const pair = document.createElement('span');
+    pair.className = 'meta__pair';
+    const name = document.createElement('span');
+    name.className = 'meta__label';
+    name.textContent = label;
+    const detail = document.createElement('span');
+    detail.className = 'meta__value' + (mono ? ' meta__value--mono' : '');
     detail.textContent = value;
-    list.append(term, detail);
-  }
-  $('facts').replaceChildren(...list.childNodes);
-
-  $('eyebrow').textContent = state.organisation ? 'Repository · ' + state.organisation : 'Repository';
-  $('lede').textContent = (state.row && state.row.description ? state.row.description : 'No description.')
-    + (state.project ? ' · project ' + state.project : ' · no project is being worked on');
-}
-
-/**
- * The state strip, and the console that carries git's own lines.
- *
- * One act at a time: opening the console clears it, so the lines on screen are always the lines of the run being
- * watched, never two runs interleaved.
- */
-function drawWork(work) {
-  const strip = $('strip');
-  if (!work) { strip.hidden = true; return; }
-  strip.hidden = false;
-  strip.className = 'strip' + (work.state === 'ok' ? ' strip--ok' : work.state === 'err' ? ' strip--err' : '');
-  $('strip-mark').textContent = work.state === 'ok' ? 'Done' : work.state === 'err' ? 'Failed' : (work.act === 'clone' ? 'Cloning' : 'Pulling');
-  $('strip-text').textContent = work.text;
-  if (work.state === 'running') {
-    $('console').hidden = false;
-    $('console-title').textContent = work.act === 'clone' ? 'Cloning ' + work.name : 'Pulling ' + work.name;
-    $('console-log').textContent = '';
+    pair.append(name, detail);
+    box.append(pair);
   }
 }
 
-function logLine(text) {
-  const console_ = $('console');
-  if (console_.hidden) {
-    console_.hidden = false;
-    $('console-log').textContent = '';
-  }
-  const log = $('console-log');
-  const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
-  log.append(document.createTextNode((log.textContent ? '\\n' : '') + text));
-  if (atEnd) { log.scrollTop = log.scrollHeight; }
-}
-
-/** The acts the state allows: fetch or pull, start when it is not cited, and never both of a pair. */
+/** The acts the facts allow: clone or pull, and start only while the project does not cite it. */
 function drawActions() {
   $('fetch').hidden = Boolean(state.localCopy);
   $('pull').hidden = !state.localCopy;
@@ -689,73 +718,33 @@ function drawActions() {
   $('start').hidden = Boolean(state.cited);
 }
 
-function draw() {
-  if (files.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = 'This repository has no file to show.';
-    $('files').replaceChildren(empty);
-    return;
-  }
-  $('files').replaceChildren(...files.map((file) => {
-    // A row is a way in, like a row in the Explorer: press it and the file opens.
-    const line = document.createElement('button');
-    line.type = 'button';
-    line.className = 'file';
-    line.title = 'Open ' + file.path;
-    line.addEventListener('click', () => vscode.postMessage({ type: 'openFile', path: file.path }));
-    // The glyph says what kind of file it is before the path is read: the theme's icon where there is one, the page's
-    // own sprite otherwise.
-    const mark = document.createElement('span');
-    mark.className = 'file__glyph';
-    mark.innerHTML = file.glyph
-      ? '<span class="' + file.glyph + '" aria-hidden="true"></span>'
-      : '<svg viewBox="0 0 24 24" class="icon icon--sm" aria-hidden="true"><use href="#i-'
-        + fileGlyph(file.path) + '"></use></svg>';
-    const path = document.createElement('span');
-    path.className = 'file__path';
-    path.textContent = file.path;
-    const size = document.createElement('span');
-    size.className = 'file__meta';
-    size.textContent = (file.category === 'docs' ? 'doc · ' : '') + kilo(file.size);
-    line.append(mark, path, size);
-    return line;
-  }));
+/**
+ * The state of the act, and git's lines under it.
+ *
+ * A run that starts clears the output and opens it; the verdict keeps it, so the end of a clone is readable after the
+ * notification has gone.
+ */
+function drawWork(work) {
+  const line = $('state');
+  if (!work) { line.hidden = true; return; }
+  line.hidden = false;
+  line.className = 'state' + (work.state === 'ok' ? ' state--ok' : work.state === 'err' ? ' state--err' : '');
+  $('state-mark').textContent = work.state === 'ok' ? 'Done' : work.state === 'err' ? 'Failed'
+    : (work.act === 'clone' ? 'Cloning' : 'Pulling') + '…';
+  $('state-text').textContent = work.text;
+  if (work.state === 'running') { $('log').textContent = ''; showLog(); }
 }
 
-/**
- * The sprite glyph a file kind gets — the page's counterpart of the panel's codicon map.
- *
- * A page draws from the sprite it ships with, so the vocabulary is the sprite's: a page, code, a package, a database,
- * a shell, a setting, an image, a document. The name is asked first, then the extension, because package.json is a
- * package before it is JSON.
- */
-function fileGlyph(path) {
-  const name = (path.split('/').pop() || path).toLowerCase();
-  const byName = {
-    'package.json': 'package', 'package-lock.json': 'key', 'yarn.lock': 'key', 'pnpm-lock.yaml': 'key',
-    'dockerfile': 'server', 'docker-compose.yml': 'server', 'license': 'book', 'license.md': 'book',
-    '.gitignore': 'branch', '.gitattributes': 'branch', '.editorconfig': 'gear'
-  };
-  const byExtension = {
-    md: 'document', markdown: 'document', mdx: 'document', txt: 'document',
-    json: 'layers', jsonc: 'layers', json5: 'layers',
-    yml: 'gear', yaml: 'gear', toml: 'gear', ini: 'gear', conf: 'gear', env: 'gear',
-    ts: 'code', mts: 'code', cts: 'code', tsx: 'code', js: 'code', mjs: 'code', cjs: 'code', jsx: 'code',
-    html: 'code', htm: 'code', vue: 'code', svelte: 'code',
-    css: 'palette', scss: 'palette', sass: 'palette', less: 'palette',
-    py: 'code', rb: 'code', go: 'code', rs: 'code', java: 'code', kt: 'code', cs: 'code',
-    c: 'code', h: 'code', cc: 'code', cpp: 'code', hpp: 'code',
-    sql: 'database',
-    sh: 'terminal', bash: 'terminal', zsh: 'terminal', ps1: 'terminal', bat: 'terminal', cmd: 'terminal',
-    png: 'chart', jpg: 'chart', jpeg: 'chart', gif: 'chart', svg: 'chart', webp: 'chart', ico: 'chart',
-    pdf: 'book', csv: 'list', tsv: 'list', lock: 'key'
-  };
-  if (byName[name]) { return byName[name]; }
-  const extension = name.indexOf('.') >= 0 ? name.split('.').pop() : '';
-  if (byExtension[extension]) { return byExtension[extension]; }
-  return /\.(md|markdown)$/.test(name) || /(^|\/)docs\//.test(path) ? 'document' : 'code';
+function logLine(text) {
+  const log = $('log');
+  const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
+  showLog();
+  log.append(document.createTextNode((log.textContent ? '\\n' : '') + text));
+  if (atEnd) { log.scrollTop = log.scrollHeight; }
 }
+
+function showLog() { $('log').hidden = false; $('log-hide').hidden = false; }
+function hideLog() { $('log').hidden = true; $('log-hide').hidden = true; }
 
 function banner(text) {
   const box = document.createElement('div');
@@ -773,18 +762,9 @@ function banner(text) {
   again.type = 'button';
   again.className = 'az-btn az-btn--sm';
   again.textContent = 'Try again';
-  again.addEventListener('click', () => vscode.postMessage({ type: 'files', files: [] }));
+  again.addEventListener('click', () => vscode.postMessage({ type: 'files' }));
   do_.append(token, again);
   box.append(said, do_);
   return box;
-}
-
-function kilo(bytes) {
-  return bytes >= 1024 ? (bytes / 1024).toFixed(1) + ' KB' : bytes + ' B';
-}
-
-function shortDate(stamp) {
-  const date = new Date(stamp);
-  return isNaN(date.getTime()) ? stamp : date.toLocaleDateString();
 }
 `;

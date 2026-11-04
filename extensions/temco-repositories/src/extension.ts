@@ -119,12 +119,12 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 		// clone or the pull runs there with its output in front of the person.
 		vscode.commands.registerCommand('temcoRepositories.repositoryClone', (name?: unknown) => {
 			if (typeof name === 'string' && name.length > 0) {
-				detail.openAndRun(name, 'clone');
+				void detail.openAndRun(name, 'clone');
 			}
 		}),
 		vscode.commands.registerCommand('temcoRepositories.repositoryPull', (name?: unknown) => {
 			if (typeof name === 'string' && name.length > 0) {
-				detail.openAndRun(name, 'pull');
+				void detail.openAndRun(name, 'pull');
 			}
 		})
 	);

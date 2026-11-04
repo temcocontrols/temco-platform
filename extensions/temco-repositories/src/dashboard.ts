@@ -382,6 +382,9 @@ function cloneRow(clone: Clone, canDraft: boolean, theme: FileIconTheme | undefi
 		mark: 'folder',
 		tone: !clone.cloned ? 'info' : fresh === 0 ? 'ok' : 'info',
 		title: clone.name,
+		// The name is the way in: a row is a repository, and the repository has a page. The commands take the row's
+		// **name**, not its slug — the page resolves a repository by the name the organisation listed it under.
+		titleCommand: { command: 'temcoRepositories.repository', args: [clone.name] },
 		status: state,
 		meta: [
 			clone.branch,
@@ -393,8 +396,8 @@ function cloneRow(clone: Clone, canDraft: boolean, theme: FileIconTheme | undefi
 		// One act per state, not two that look alike — and both of them happen on the repository's own page, where the
 		// command and its output are read together. A clone is not something to start blind from a list.
 		actions: (clone.cloned
-			? button('Pull', 'temcoRepositories.repositoryPull', { kind: 'link', args: [clone.slug] })
-			: button('Clone it', 'temcoRepositories.repositoryClone', { kind: 'link', args: [clone.slug] }))
+			? button('Pull', 'temcoRepositories.repositoryPull', { kind: 'link', args: [clone.name] })
+			: button('Clone it', 'temcoRepositories.repositoryClone', { kind: 'link', args: [clone.name] }))
 			+ (canDraft && clone.docs.length > 0 ? button('Draft', 'temcoAi.stale', { kind: 'link' }) : '')
 	});
 	return `${row}${commitFold(clone)}`;
