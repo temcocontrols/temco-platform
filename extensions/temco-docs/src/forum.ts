@@ -645,31 +645,63 @@ const FORUM_CSS = `
 .forum-say { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .forum-say__text { white-space: pre-wrap; line-height: 1.55; }
 .forum-say__when { color: var(--fg-subtle); font-size: var(--fs-xs); }
+
+/* One person, as initials: the same name keeps the same tint everywhere on the page, so a conversation reads by
+   colour before it is read by name. Six hues, mixed from the theme's own charts, and the initials in the hue itself. */
 .people { display: inline-flex; gap: 3px; flex-wrap: wrap; }
 .person { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
   background: var(--bg-inset); color: var(--fg-muted); font-size: 10px; font-weight: 600; }
-.post { border-top: 1px solid var(--border); padding: 12px 0; }
-.post:first-of-type { border-top: 0; padding-top: 0; }
-.post__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.post__who { font-weight: 600; }
-.post__when { color: var(--fg-subtle); font-size: var(--fs-xs); white-space: nowrap; }
-.post__text { margin-top: 6px; line-height: 1.55; white-space: pre-wrap; }
-/* A topic row: the title leads, the two numbers that decide whether to open it sit at the row's right-hand end. */
-.forum-topics { gap: var(--sp-1); }
-.forum-topics > .forum-topic { padding: var(--sp-3); }
-.forum-topics > .forum-topic:hover { border-color: transparent; box-shadow: none; background: var(--bg-hover); }
-.forum-topics > .forum-topic:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--az-blue); }
+.person--more { background: transparent; border: 1px solid var(--hairline); }
+.person--0 { background: color-mix(in srgb, var(--az-blue) 18%, transparent); color: var(--az-blue); }
+.person--1 { background: color-mix(in srgb, var(--purple) 20%, transparent); color: var(--purple); }
+.person--2 { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.person--3 { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.person--4 { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err); }
+.person--5 { background: color-mix(in srgb, var(--info) 18%, transparent); color: var(--info); }
+
+/* A post: the person's initials anchor it, their name and the moment sit on one line, and the words get the width.
+   No box around it — a hairline between posts is the whole separation, because a thread is one document said by
+   several people. */
+.post { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 3px 12px; align-items: start;
+  padding: 14px 10px 15px; border-top: 1px solid var(--border); }
+.post:first-of-type { border-top: 0; padding-top: 4px; }
+.post:hover { background: color-mix(in srgb, var(--az-blue) 4%, transparent); }
+.post__avatar { grid-column: 1; grid-row: 1 / span 2; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%; font-size: 11px; font-weight: 600; letter-spacing: .02em;
+  user-select: none; }
+.post__avatar--0 { background: color-mix(in srgb, var(--az-blue) 18%, transparent); color: var(--az-blue); }
+.post__avatar--1 { background: color-mix(in srgb, var(--purple) 20%, transparent); color: var(--purple); }
+.post__avatar--2 { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.post__avatar--3 { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.post__avatar--4 { background: color-mix(in srgb, var(--err) 16%, transparent); color: var(--err); }
+.post__avatar--5 { background: color-mix(in srgb, var(--info) 18%, transparent); color: var(--info); }
+.post__head { grid-column: 2; grid-row: 1; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.post__who { font-weight: 600; color: var(--ink-1); }
+.post__when { color: var(--fg-subtle); font-size: var(--fs-xs); white-space: nowrap; margin-left: auto; }
+.post__text { grid-column: 2; grid-row: 2; margin-top: 4px; color: var(--fg); line-height: 1.62;
+  white-space: pre-wrap; overflow-wrap: anywhere; max-width: 88ch; }
+
+/* A topic row: a hairline list, not a stack of cards — the title leads, the counts sit at the row's right-hand end, and
+   the row answers the mouse with the page's own accent instead of the theme's flat grey. */
+.forum-topics { gap: 0; }
+.forum-topics > .forum-topic { padding: 12px 12px; border: 0; border-bottom: 1px solid var(--border);
+  border-radius: 0; background: none; align-items: start; }
+.forum-topics > .forum-topic:last-child { border-bottom: 0; }
+.forum-topics > .forum-topic:hover { background: color-mix(in srgb, var(--az-blue) 7%, transparent);
+  box-shadow: inset 2px 0 0 var(--az-blue); }
+.forum-topics > .forum-topic:focus-visible { outline: 1px solid var(--az-blue); outline-offset: -1px; box-shadow: none; }
 .forum-topics > .forum-topic .az-entry__title { font-weight: 600; color: var(--ink-1); }
 .forum-topics > .forum-topic .az-entry__headline { gap: var(--sp-2); flex-wrap: wrap; }
-.forum-topics > .forum-topic .az-entry__meta { font-family: inherit; font-size: 12px; }
-.forum-topic__aside { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.forum-topics > .forum-topic .az-entry__meta { font-family: inherit; font-size: 12px; color: var(--fg-muted); }
+.forum-topic__aside { display: inline-flex; align-items: center; gap: var(--sp-3); padding-left: var(--sp-3);
+  border-left: 1px solid var(--hairline); }
 .forum-topic__counts { display: inline-flex; align-items: baseline; gap: var(--sp-4); }
 .forum-topic__count { display: inline-flex; align-items: baseline; gap: 4px; }
 .forum-topic__count b { color: var(--ink-1); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .forum-topic__count i { color: var(--fg-subtle); font-size: 11px; font-style: normal; }
-.person--more { background: transparent; border: 1px solid var(--hairline); }
 @media (max-width: 760px) {
   .forum-topic__aside .people { display: none; }
+  .forum-topic__aside { border-left: 0; padding-left: 0; }
 }
 `;
 
@@ -677,18 +709,21 @@ const FORUM_CSS = `
 function topicRow(topic: ForumTopicRow, categories: readonly ForumCategoryRow[]): string {
 	const category = categories.find((candidate) => candidate.id === topic.categoryId);
 	const waiting = topic.replies === 0 && !topic.closed && ageDays(topic.lastPostedAt ?? topic.createdAt) >= AGING_DAYS;
-	const people = topic.posters.length === 0
-		? ''
-		: `<span class="people">${topic.posters
-			.slice(0, 3)
-			.map((poster) => `<span class="person" title="${esc(poster.name ?? poster.username)}">${esc(initials(poster.name ?? poster.username))}</span>`)
-			.join('')}${topic.posters.length > 3 ? `<span class="person person--more">+${topic.posters.length - 3}</span>` : ''}</span>`;
 	const marks = [
 		topic.pinned ? `<span class="az-state">pinned</span>` : '',
 		waiting ? `<span class="az-state az-state--warn">no reply yet</span>` : '',
 		topic.closed ? `<span class="az-state">closed</span>` : ''
 	].join('');
 	const args = esc(JSON.stringify({ id: topic.id, slug: topic.slug, title: topic.title }));
+	const people = topic.posters.length === 0
+		? ''
+		: `<span class="people">${topic.posters
+			.slice(0, 3)
+			.map((poster) => {
+				const name = poster.name ?? poster.username;
+				return `<span class="person person--${toneOf(name)}" title="${esc(name)}">${esc(initials(name))}</span>`;
+			})
+			.join('')}${topic.posters.length > 3 ? `<span class="person person--more">+${topic.posters.length - 3}</span>` : ''}</span>`;
 	return `<div class="az-entry az-entry--action forum-topic" data-command="temcoDocs.forumTopic" data-args="${args}">
 	<span class="az-entry__icon">${toneMark(topic.pinned ? 'book' : 'users', waiting ? 'warn' : topic.pinned ? 'accent' : undefined)}</span>
 	<div class="az-entry__main">
@@ -781,11 +816,18 @@ export function topicBody(state: {
 	const history = state.posts.length === 0
 		? '<div class="az-card"><p class="az-card__desc">The conversation has not been read yet.</p></div>'
 		: state.posts
-			.map(
-				(post) => `<div class="post"><div class="post__head"><span class="post__who">${esc(post.name ?? post.username ?? 'someone')}</span>
+			.map((post, index) => {
+				const who = post.name ?? post.username ?? 'someone';
+				// The first post is the question itself, so it says so once rather than leaving the reader to work out
+				// who asked. Every post opens with initials, in the hue that name keeps across the page.
+				const marker = index === 0 ? '<span class="az-state">started the thread</span>' : '';
+				return `<article class="post">
+<span class="post__avatar post__avatar--${toneOf(who)}" aria-hidden="true">${esc(initials(who))}</span>
+<div class="post__head"><span class="post__who">${esc(who)}</span>${marker}
 <span class="post__when">#${post.postNumber} · ${esc(when(post.createdAt))}${post.replyTo === undefined ? '' : ` · replied to #${post.replyTo}`}</span></div>
-<div class="post__text">${esc(plainText(post.cooked ?? ''))}</div></div>`
-			)
+<div class="post__text">${esc(plainText(post.cooked ?? ''))}</div>
+</article>`;
+			})
 			.join('');
 
 	// The card is where a triager learns whether anything is owed: the thread's state, the thread in numbers, and the
@@ -884,6 +926,20 @@ function initials(name: string): string {
 		return '?';
 	}
 	return (parts.length === 1 ? parts[0].slice(0, 2) : `${parts[0][0]}${parts[1][0]}`).toUpperCase();
+}
+
+/**
+ * The hue a person keeps: stable for a name, so the same voice is the same colour in the list and in the thread.
+ *
+ * Six tones is the whole palette (see `FORUM_CSS`), which is enough to tell two people apart in a conversation and few
+ * enough that no two neighbours in a thread ever land on a colour that reads as a warning by accident.
+ */
+function toneOf(name: string): number {
+	let hash = 0;
+	for (const character of name) {
+		hash = (hash * 31 + (character.codePointAt(0) ?? 0)) % 100003;
+	}
+	return hash % 6;
 }
 
 function escapeRegExp(text: string): string {

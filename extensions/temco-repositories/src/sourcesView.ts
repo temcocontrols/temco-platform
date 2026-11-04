@@ -32,34 +32,6 @@ function resourceOf(base: vscode.Uri, path: string): vscode.Uri {
 	return vscode.Uri.joinPath(base, ...path.split('/'));
 }
 
-/**
- * The mark a repository carries: a glyph for the kind of code, and the colour GitHub gives that language.
- *
- * A tree row has one icon and one word, so the icon does the work the dashboard's left column did. Languages without
- * a glyph of their own fall back to `repo`, which is honest about what is known and quiet about what is not.
- */
-function languageMark(language: string | undefined): vscode.ThemeIcon {
-	const key = (language ?? '').trim().toLowerCase();
-	const marks: { [name: string]: [string, string] } = {
-		'c': ['symbol-struct', 'charts.blue'],
-		'c++': ['symbol-class', 'charts.red'],
-		'c#': ['symbol-class', 'charts.green'],
-		'typescript': ['file-code', 'charts.blue'],
-		'javascript': ['file-code', 'charts.yellow'],
-		'python': ['file-code', 'charts.blue'],
-		'java': ['symbol-class', 'charts.orange'],
-		'rust': ['settings-gear', 'charts.orange'],
-		'go': ['symbol-method', 'charts.blue'],
-		'html': ['code', 'charts.orange'],
-		'css': ['symbol-color', 'charts.blue'],
-		'powershell': ['terminal', 'charts.blue'],
-		'shell': ['terminal', 'charts.green'],
-		'vue': ['code', 'charts.green'],
-	};
-	const mark = marks[key];
-	return mark === undefined ? new vscode.ThemeIcon('repo') : new vscode.ThemeIcon(mark[0], new vscode.ThemeColor(mark[1]));
-}
-
 /** One row of the tree, kept as data so a child can be found from its parent. */
 type Node =
 	| { kind: 'organisation'; row: OrganisationRow }
@@ -113,7 +85,11 @@ function item(node: Node): NodeItem {
 			const repository = new NodeItem(node, vscode.TreeItemCollapsibleState.Collapsed);
 			repository.label = node.row.name;
 			repository.id = `repo:${node.row.fullName}`;
-			repository.iconPath = languageMark(node.row.language);
+			// A repository *is* a folder — that is what it is on this machine and in the Explorer — so it carries a
+			// folder, drawn by the same icon theme as the files below it. No language here: the row is a project, and
+			// the language is a fact its tooltip and its own page already state.
+			repository.resourceUri = vscode.Uri.parse(`${VIRTUAL_SCHEME}:/${node.row.fullName}`);
+			repository.iconPath = new vscode.ThemeIcon('folder');
 			repository.contextValue = node.source === undefined ? 'temcoRepository' : 'temcoSource';
 			// The only word a row carries: whether this project already cites it. Everything else is the tooltip's.
 			repository.description = node.source === undefined ? '' : 'source';

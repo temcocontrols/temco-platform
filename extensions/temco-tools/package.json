@@ -107,6 +107,16 @@
         "icon": "$(download)"
       },
       {
+        "command": "temcoTools.sql.copySql",
+        "title": "Copy the Statement",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "temcoTools.sql.copyResult",
+        "title": "Copy the Rows as Text",
+        "icon": "$(table)"
+      },
+      {
         "command": "temcoTools.sql.recall",
         "title": "Load a Statement Back into the Editor"
       },

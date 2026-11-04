@@ -19,7 +19,7 @@
 
 import * as vscode from 'vscode';
 import { Catalog, SqlResult, TableFact } from './store';
-import { PageMessage, button as kitButton, commandScript, entries, entry, esc, figures, head, icon, n, notice, page, pageColumn, part } from './ui';
+import { PageMessage, button as kitButton, commandScript, entries, entry, esc, figures, hero, icon, n, notice, page, pageColumn, part } from './ui';
 
 /** One surface of the SQL container: the row, the command, and the page it draws. */
 export interface SqlPage {
@@ -42,7 +42,7 @@ export interface SqlPage {
 export const SQL_PAGES: SqlPage[] = [
 	{ id: 'query', label: 'Query Editor', note: 'ask a question in SQL', mark: 'code', command: 'temcoTools.sql.query', viewType: 'temcoTools.sql.query', group: 'rows' },
 	{ id: 'data', label: 'Data', note: 'the rows themselves, table by table', mark: 'list', command: 'temcoTools.sql.data', viewType: 'temcoTools.sql.data', group: 'rows' },
-	{ id: 'reports', label: 'Presets', note: 'statements that answer a question worth asking', mark: 'graph', command: 'temcoTools.sql.reports', viewType: 'temcoTools.sql.reports', group: 'rows' },
+	{ id: 'reports', label: 'Presets', note: 'statements that answer a question worth asking', mark: 'chart', command: 'temcoTools.sql.reports', viewType: 'temcoTools.sql.reports', group: 'rows' },
 	{ id: 'saved', label: 'Saved Queries', note: 'the questions worth asking more than once', mark: 'book', command: 'temcoTools.sql.saved', viewType: 'temcoTools.sql.saved', group: 'rows' },
 	{ id: 'history', label: 'History', note: 'what was run in this window, newest first', mark: 'clock', command: 'temcoTools.sql.history', viewType: 'temcoTools.sql.history', group: 'rows' },
 	{ id: 'schema', label: 'Schema', note: 'the tables the file actually has', mark: 'list', command: 'temcoTools.sql.schema', viewType: 'temcoTools.sql.schema', group: 'file' },
@@ -130,8 +130,10 @@ interface StudioState {
 
 // The vocabulary is the application's (`ui.ts`, on `temco-ui`'s kit), plus the four primitives a query surface
 // needs and a page of prose does not: a grid of rows, a toolbar over a statement, the editor itself, and the one line
-// that says what the last run did. Those live in the kit's stylesheet as `az-grid`, `az-toolbar`, `az-editor` and
-// `az-message` — the Data page and the Query Editor draw the same table, so they use the same rules.
+// that says what the last run did. Those live in the kit's stylesheet as `az-grid`, `az-toolbar` and
+// `az-message` — the Data page and the Query Editor draw the same table, so they use the same rules. The statement's
+// own code surface is this page's (`.qz-code`), because a coloured layer under a transparent textarea is not a control
+// the rest of the application has.
 
 /** A row of the studio's tables and lists, under the name this file reads it by. */
 const row = entry;
@@ -152,14 +154,16 @@ const button = (
 	return options.title === undefined ? danger : danger.replace('<button type="button"', `<button type="button" title="${esc(options.title)}"`);
 };
 
-/** The page's title block, with the studio named above it. */
-const pageHead = (options: { title: string; mark: string; desc: string; actions: string }): string =>
-	head({
-		studio: 'SQL',
+/** The page's title block. The studio's name is not repeated above it: the tab, the panel and the title already say it. */
+const pageHead = (options: { title: string; mark: string; desc: string; actions?: string }): string =>
+	hero({
 		title: options.title,
 		mark: options.mark,
 		desc: options.desc,
-		actions: actionsOf(options.actions)
+		// The sentence under the title is one line of why, not a paragraph to read: it takes the column's whole width
+		// rather than stopping at a comfortable measure and leaving the right half of the header empty.
+		descWide: true,
+		actions: options.actions === undefined ? undefined : actionsOf(options.actions)
 	});
 
 /**
@@ -260,11 +264,93 @@ const EDITOR_SCRIPT = `
 		});
 	});
 	const editor = document.getElementById('sql-editor');
+	const view = document.getElementById('sql-view');
+	const box = document.getElementById('sql-code');
 	const writes = document.getElementById('sql-writes');
+	const writesBar = document.getElementById('sql-writes-bar');
 	const runButton = document.getElementById('sql-run');
-	if (!editor || !runButton) {
+	if (!editor || !runButton || !view || !box) {
 		return;
 	}
+	// A ticked permission is a state of the page, not only of the box: the bar takes the warning tint, so nobody runs a
+	// writing statement over a database they meant to keep.
+	if (writes && writesBar) {
+		const paint = () => writesBar.classList.toggle('is-on', writes.checked);
+		writes.addEventListener('change', paint);
+		paint();
+	}
+
+	// ---- the coloured layer under the input
+	//
+	// A textarea cannot colour its own text, so it is left transparent and laid over a layer that can: the same words,
+	// the same font, the same padding, coloured by one pass of a small tokenizer. Everything an editor is expected to do
+	// — the caret, selection, undo, IME, the platform's own shortcuts — is still the textarea's, because it *is* a
+	// textarea; only the colours are drawn beside it.
+	const KEYWORDS = new Set(('select from where and or not null is in like between group by order having limit offset '
+		+ 'join left right full outer inner cross on as insert into values update set delete create table index view '
+		+ 'drop alter add column primary key foreign references unique check default case when then else end union all '
+		+ 'distinct exists asc desc if begin commit rollback transaction vacuum pragma explain with recursive attach '
+		+ 'database true false').split(' '));
+	const FUNCTIONS = new Set(('count sum avg min max abs round length lower upper substr trim coalesce ifnull nullif '
+		+ 'typeof date time datetime julianday strftime total group_concat row_number').split(' '));
+	const TOKEN = /(--[^\\n]*)|(\\/\\*[\\s\\S]*?\\*\\/)|('(?:[^']|'')*')|("(?:[^"]|"")*")|(\\d+(?:\\.\\d+)?)|([A-Za-z_][A-Za-z0-9_]*)|([(),.;*+\\-\\/=<>!|%^&~\\[\\]]+)/g;
+	const escape = (text) => text.replace(/[&<>]/g, (character) => character === '&' ? '&amp;' : character === '<' ? '&lt;' : '&gt;');
+	const span = (cls, text) => '<span class="' + cls + '">' + escape(text) + '</span>';
+
+	function paint() {
+		const text = editor.value;
+		let html = '';
+		let drawn = 0;
+		TOKEN.lastIndex = 0;
+		let found;
+		while ((found = TOKEN.exec(text)) !== null) {
+			if (found.index > drawn) {
+				const plain = text.slice(drawn, found.index);
+				html += escape(plain);
+			}
+			if (found[1] !== undefined || found[2] !== undefined) {
+				html += span('t-com', found[0]);
+			} else if (found[3] !== undefined || found[4] !== undefined) {
+				html += span('t-str', found[0]);
+			} else if (found[5] !== undefined) {
+				html += span('t-num', found[0]);
+			} else if (found[6] !== undefined) {
+				const word = found[0].toLowerCase();
+				html += KEYWORDS.has(word) ? span('t-kw', found[0]) : FUNCTIONS.has(word) ? span('t-fn', found[0]) : escape(found[0]);
+			} else {
+				html += span('t-op', found[0]);
+			}
+			drawn = found.index + found[0].length;
+		}
+		html += escape(text.slice(drawn));
+		// Nothing typed yet says what a statement looks like; and a trailing newline needs one character after it or the
+		// empty last line has no height and the caret sits on the line above.
+		view.innerHTML = text.length === 0 ? '<span class="t-hint">SELECT * FROM sources LIMIT 50;</span>' : html + '\\n ';
+		// Only now does the page hand the words over to the coloured layer: until this class is on the box, the textarea
+		// shows its own text, so a script that fails leaves a readable field rather than a blank one.
+		box.classList.add('is-live');
+		sync();
+	}
+
+	function sync() {
+		view.scrollTop = editor.scrollTop;
+		view.scrollLeft = editor.scrollLeft;
+	}
+
+	editor.addEventListener('input', paint);
+	editor.addEventListener('scroll', sync);
+	editor.addEventListener('blur', () => view.classList.remove('has-focus'));
+	editor.addEventListener('focus', () => view.classList.add('has-focus'));
+	// Tab indents instead of leaving the field; the browser keeps the undo entry.
+	editor.addEventListener('keydown', (event) => {
+		if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey) {
+			event.preventDefault();
+			if (document.execCommand) {
+				document.execCommand('insertText', false, '  ');
+			}
+		}
+	});
+
 	const run = () => api.postMessage({ type: 'sql', sql: editor.value, write: !!(writes && writes.checked) });
 	runButton.addEventListener('click', run);
 	editor.addEventListener('keydown', (event) => {
@@ -273,8 +359,10 @@ const EDITOR_SCRIPT = `
 			run();
 		}
 	});
+	paint();
 	editor.focus();
 	editor.setSelectionRange(editor.value.length, editor.value.length);
+	sync();
 })();
 `;
 
@@ -286,13 +374,69 @@ const EDITOR_SCRIPT = `
  * page by the kit.
  */
 const QUERY_CSS = `
-/* The grid, the editor, the toolbar and the message line are the kit's own (az-grid, az-editor, az-toolbar,
-   az-message). Only what is this page's remains here: the result bar above the grid, and the height the grid is
-   allowed before it scrolls inside the page. */
-.sql-result-head { display: flex; align-items: center; gap: 10px; margin: 20px 0 8px; }
-.sql-result-head__title { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); }
-.sql-result-head__facts { color: var(--fg-subtle); font-size: 12px; }
-.sql-result-head__actions { margin-left: auto; display: flex; gap: 6px; }
+/* The query window is a column of four bands, and every band says one thing: what will run (the bar), what it is
+   allowed to do (the permission, full width), what you are writing (the editor), and what came back (the result).
+   Flat throughout — hairlines and spacing, no cards — because the editor is the only object on the page. */
+
+/* 1. The bar: Run leads, the doors to a stored statement follow, and what it will run against sits at the end. */
+.qz-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 18px 0 0; }
+.qz-bar__btn { flex: 0 0 auto; white-space: nowrap; }
+/* A hairline between the act and the doors, so Run is not read as the first of four equals. */
+.qz-bar__x { width: 1px; align-self: stretch; margin: 0 6px; background: var(--border); }
+.qz-bar .az-btn { flex: 0 0 auto; white-space: nowrap; }
+.qz-bar__facts { margin-left: auto; color: var(--fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* 2. The permission, full width: a decision the page makes you look at, and square like the editor it governs. */
+.qz-writes { display: flex; align-items: center; gap: 10px; width: 100%; margin: 12px 0 0; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: 0; background: none; font-size: 12px; line-height: 17px;
+  cursor: pointer; transition: background-color 90ms ease-out, border-color 90ms ease-out; }
+.qz-writes:hover { background: color-mix(in srgb, var(--az-blue) 5%, transparent); }
+.qz-writes.is-on { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.qz-writes input { flex: 0 0 auto; margin: 0; }
+.qz-writes__label { font-weight: 600; color: var(--fg); white-space: nowrap; }
+.qz-writes__note { color: var(--fg-muted); min-width: 0; }
+
+/* 3. The statement: a small code editor, not a pill. A textarea is laid transparently over a coloured layer that shows
+   the same words, so the caret, the selection, undo and the platform's shortcuts all stay the browser's, and only the
+   colours are drawn beside them. Square corners, the whole width, and a short default height. No gutter: the box is for
+   one statement, and a column of numbers beside five lines is furniture. */
+.qz-code { display: grid; grid-template-columns: minmax(0, 1fr); margin: 12px 0 0;
+  border: 1px solid var(--border); border-radius: 0; background: var(--editor-bg); }
+.qz-code:focus-within { border-color: var(--az-blue); }
+.qz-code__field { position: relative; min-width: 0; }
+/* The two layers must agree on every metric that moves text, or the caret drifts away from its word. */
+.qz-code__view,
+.qz-code__input { margin: 0; padding: 12px 14px; border: 0; box-sizing: border-box;
+  font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: 13px; line-height: 20px;
+  letter-spacing: normal; tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+.qz-code__view { height: 154px; overflow: hidden; color: var(--fg); pointer-events: none; }
+.qz-code__input { position: absolute; inset: 0; width: 100%; height: 154px; resize: none; outline: none;
+  background: transparent; color: var(--fg); caret-color: var(--fg); }
+.qz-code__input::selection { background: var(--vscode-editor-selectionBackground, color-mix(in srgb, var(--az-blue) 30%, transparent)); }
+/* The colours only take over once the highlighter has actually drawn something — the script marks the box as live.
+   Before that, or if a script ever fails, the page is an ordinary readable textarea instead of an empty box. */
+.qz-code:not(.is-live) .qz-code__view { display: none; }
+.qz-code.is-live .qz-code__input { color: transparent; }
+/* The colours: the theme's own token colours where it has them, then a colour that is guaranteed defined, so a keyword
+   can never end up the same colour as the words around it. */
+.t-kw { color: var(--vscode-symbolIcon-keywordForeground, var(--az-blue, #0078d4)); }
+.t-fn { color: var(--vscode-symbolIcon-functionForeground, var(--purple, #8250df)); }
+.t-str { color: var(--vscode-debugTokenExpression-string, var(--vscode-charts-orange, #ce9178)); }
+.t-num { color: var(--vscode-debugTokenExpression-number, var(--vscode-charts-green, #098658)); }
+.t-com { color: var(--vscode-descriptionForeground, var(--fg-muted)); font-style: italic; }
+.t-op { color: var(--vscode-editorBracketHighlight-foreground3, var(--fg-muted)); }
+.t-hint { color: var(--fg-subtle); }
+@media (max-width: 700px) {
+  .qz-code { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* 4. The result: what came back on the left, every act that can be taken on it, in words, at the other end. */
+.qz-result { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 24px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); }
+.qz-result__title { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); }
+.qz-result__facts { color: var(--fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
+.qz-result__actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.qz-result__actions .az-btn { flex: 0 0 auto; white-space: nowrap; }
 .az-grid { max-height: 420px; }
 `;
 
@@ -316,25 +460,41 @@ function queryBody(state: StudioState, schemaVersion: number, file: string): str
 
 	const results = last === undefined
 		? ''
-		: `<div class="sql-result-head">
-	<span class="sql-result-head__title">Results</span>
-	<span class="sql-result-head__facts">${n(last.result.rows.length > 0 ? last.result.rows.length : last.result.columns.length, last.result.rows.length > 0 ? 'row' : 'column', last.result.rows.length > 0 ? 'rows' : 'columns')}${last.result.truncated ? ' (truncated)' : ''}</span>
-	<div class="sql-result-head__actions">${button('Save This', 'temcoTools.sql.saveQuery', { small: true, kind: 'ghost' })}${button('Export CSV', 'temcoTools.sql.export', { small: true, kind: 'ghost', mark: 'download' })}</div>
+		: `<div class="qz-result">
+	<span class="qz-result__title">Results</span>
+	<span class="qz-result__facts">${n(last.result.rows.length > 0 ? last.result.rows.length : last.result.columns.length, last.result.rows.length > 0 ? 'row' : 'column', last.result.rows.length > 0 ? 'rows' : 'columns')}${last.result.truncated ? ' · truncated' : ''} · ${last.result.ms} ms</span>
+	<div class="qz-result__actions">${button('Run again', 'temcoTools.sql.run', { small: true, kind: 'ghost', mark: 'play' })
+		+ button('Copy SQL', 'temcoTools.sql.copySql', { small: true, kind: 'ghost', mark: 'code' })
+		+ button('Copy rows', 'temcoTools.sql.copyResult', { small: true, kind: 'ghost', mark: 'output' })
+		+ button('Save This', 'temcoTools.sql.saveQuery', { small: true, kind: 'ghost', mark: 'book' })
+		+ button('Export CSV', 'temcoTools.sql.export', { small: true, kind: 'ghost', mark: 'download' })}</div>
 </div>
 ${resultTable(last.result)}`;
 
 	return `${pageHead({
 		title: 'Query Editor',
 		mark: 'code',
-		desc: 'One statement against the platform database. Ctrl+Enter runs it; reading is unrestricted and writing needs the checkbox.',
-		actions: button('Presets', 'temcoTools.sql.reports', { mark: 'graph' }) + button('History', 'temcoTools.sql.history', { mark: 'clock' })
+		desc: 'One statement against the platform database. Ctrl+Enter runs it; reading is unrestricted and writing needs the box below.'
 	})}
-<div class="az-toolbar">
-	<button type="button" class="az-btn az-btn--primary" id="sql-run">${icon('play')}<span>Run</span></button>
-	<label class="az-check" style="font-size:12px"><input type="checkbox" id="sql-writes"${state.write ? ' checked' : ''} /><span>Allow writes</span></label>
-	<span class="az-toolbar__facts">SQLite · ${esc(name)} · schema ${schemaVersion} · ${n(state.history.length, 'statement', 'statements')} run this session</span>
+<div class="qz-bar">
+	<button type="button" class="az-btn az-btn--primary qz-bar__btn" id="sql-run">${icon('play')}<span>Run</span></button>
+	<span class="qz-bar__x"></span>${button('Presets', 'temcoTools.sql.reports', { small: true, kind: 'ghost', mark: 'chart' })
+		+ button('History', 'temcoTools.sql.history', { small: true, kind: 'ghost', mark: 'clock' })
+		+ button('Saved', 'temcoTools.sql.saved', { small: true, kind: 'ghost', mark: 'book' })}
+	<span class="qz-bar__facts">SQLite · ${esc(name)} · schema ${schemaVersion} · ${n(state.history.length, 'statement', 'statements')} run this session</span>
 </div>
-<textarea id="sql-editor" class="az-editor" spellcheck="false">${esc(state.editor)}</textarea>
+<label class="qz-writes${state.write ? ' is-on' : ''}" id="sql-writes-bar">
+	<input type="checkbox" id="sql-writes"${state.write ? ' checked' : ''} />
+	<span class="qz-writes__label">Allow writes</span>
+	<span class="qz-writes__note">Reading is always allowed. A statement that changes rows — INSERT, UPDATE, DELETE, DDL — only runs while this is ticked.</span>
+</label>
+<div class="qz-code" id="sql-code">
+	<div class="qz-code__field">
+		<pre class="qz-code__view" id="sql-view" aria-hidden="true"></pre>
+		<textarea id="sql-editor" class="qz-code__input" spellcheck="false" autocomplete="off" autocapitalize="off"
+			aria-label="SQL statement">${esc(state.editor)}</textarea>
+	</div>
+</div>
 ${message}
 ${results}`;
 }
@@ -428,7 +588,7 @@ function databaseBody(facts: DatabaseFacts): string {
 		title: 'Database',
 		mark: 'database',
 		desc: 'The one SQLite file the platform writes: this window’s memory of projects, sources, pages, drafts, builds and releases. Nothing else connects to it.',
-		actions: button('Integrity Check', 'temcoTools.sql.integrity', { kind: 'primary', mark: 'check' }) + button('Open the Folder', 'temcoTools.sql.openFolder', { mark: 'folder' }) + button('Copy Path', 'temcoTools.sql.copyPath', { mark: 'copy' })
+		actions: button('Integrity Check', 'temcoTools.sql.integrity', { kind: 'primary', mark: 'check' }) + button('Open the Folder', 'temcoTools.sql.openFolder', { mark: 'folder' }) + button('Copy Path', 'temcoTools.sql.copyPath', { mark: 'link' })
 	})}
 ${tiles([
 			{ value: facts.size, label: 'File on disk' },
@@ -504,7 +664,7 @@ function schemaBody(tables: TableFact[], stored: number, expected: number, selec
 			count: `${table.rows.toLocaleString('en-US')} rows · ${n(table.columns.length, 'column', 'columns')}`,
 			actions: button('Data', 'temcoTools.sql.browse', { small: true, kind: 'ghost', mark: 'list', args: [table.name] })
 				+ button('Query', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', mark: 'code', args: [table.name] })
-				+ button('Copy DDL', 'temcoTools.sql.copyDdl', { small: true, kind: 'ghost', mark: 'copy', args: [table.name] })
+				+ button('Copy DDL', 'temcoTools.sql.copyDdl', { small: true, kind: 'ghost', mark: 'code', args: [table.name] })
 		})}
 <div class="record-list">${table.columns.map(columnRow).join('')}</div>
 <p class="group-note">${table.indexes.length === 0 ? 'No index of its own — the primary key is the only way in.' : `Indexes: ${table.indexes.join(', ')}.`}</p>
@@ -553,11 +713,11 @@ ${saved.length === 0
 /** *Presets* — statements written against this schema, ready to load. */
 function presetsBody(): string {
 	const line = (preset: Preset): string =>
-		`${row({ mark: 'graph', title: preset.name, meta: [preset.note], actions: button('Load', 'temcoTools.sql.loadPreset', { small: true, kind: 'ghost', args: [preset.name] }) })}`;
+		`${row({ mark: 'chart', title: preset.name, meta: [preset.note], actions: button('Load', 'temcoTools.sql.loadPreset', { small: true, kind: 'ghost', args: [preset.name] }) })}`;
 
 	return `${pageHead({
 		title: 'Presets',
-		mark: 'graph',
+		mark: 'chart',
 		desc: 'Statements written against the schema this build has. Loading one puts it in the editor; a preset that returns nothing is telling you the schema moved.',
 		actions: button('Query Editor', 'temcoTools.sql.query', { kind: 'primary', mark: 'code' })
 	})}
@@ -977,6 +1137,36 @@ export function registerSql(context: vscode.ExtensionContext): { pages: SqlPages
 					`Temco SQL: the export failed — ${error instanceof Error ? error.message : String(error)}`
 				);
 			}
+		}),
+		// The statement as text, and the rows as tab-separated text: not every use of an answer is a file, and the
+		// clipboard is the shorter way into a spreadsheet or a commit message.
+		vscode.commands.registerCommand('temcoTools.sql.copySql', async () => {
+			const sql = pages.editor.trim();
+			if (sql.length === 0) {
+				void vscode.window.showWarningMessage('Temco SQL: the editor is empty, so there is no statement to copy.');
+				return;
+			}
+			await vscode.env.clipboard.writeText(sql);
+			vscode.window.setStatusBarMessage('Temco SQL: the statement is on the clipboard.', 4000);
+		}),
+		vscode.commands.registerCommand('temcoTools.sql.copyResult', async () => {
+			const last = pages.lastResult();
+			if (last === undefined) {
+				void vscode.window.showWarningMessage('Temco SQL: nothing has been run yet, so there are no rows to copy.');
+				return;
+			}
+			if (!last.result.readOnly || last.result.columns.length === 0) {
+				void vscode.window.showWarningMessage('Temco SQL: the last statement returned no table, so there is nothing to copy.');
+				return;
+			}
+			const line = (cells: readonly unknown[]): string =>
+				cells.map((value) => (value === null || value === undefined ? '' : String(value).replace(/[\t\r\n]+/g, ' '))).join('\t');
+			const text = [line(last.result.columns), ...last.result.rows.map(line)].join('\r\n');
+			await vscode.env.clipboard.writeText(text);
+			vscode.window.setStatusBarMessage(
+				`Temco SQL: ${n(last.result.rows.length, 'row', 'rows')} on the clipboard, tab-separated.`,
+				4000
+			);
 		}),
 		// ---- Data
 		vscode.commands.registerCommand('temcoTools.sql.browse', (table?: unknown) => pages.browse(String(table))),
