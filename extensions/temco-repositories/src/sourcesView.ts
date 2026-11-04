@@ -280,6 +280,8 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 	private readonly trees = new Map<string, TreeEntry | { error: string }>();
 	/** The folders that are open, so a row can show the open glyph the Explorer shows. */
 	private readonly open = new Set<string>();
+	/** Every item this provider has handed out, by id: `reveal` needs the element, not a second copy of it. */
+	private readonly made = new Map<string, vscode.TreeItem>();
 
 	constructor(private readonly context: vscode.ExtensionContext) { }
 
@@ -308,6 +310,34 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 			this.open.delete(id);
 		}
 		this.changed.fire(element);
+	}
+
+	/**
+	 * The row above a row.
+	 *
+	 * `TreeView.reveal` asks the provider for this to build the chain it has to open before it can select something deep
+	 * in the tree. Without it every element counts as a root, so a repository row can never be revealed — which is
+	 * exactly why "View it in the panel" did nothing.
+	 */
+	getParent(element: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem> {
+		return element instanceof NodeItem ? this.parentOf(element.node) : undefined;
+	}
+
+	private async parentOf(node: Node): Promise<vscode.TreeItem | undefined> {
+		if (node.kind === 'folder' || node.kind === 'file') {
+			const cut = node.path.lastIndexOf('/');
+			if (cut > 0) {
+				return this.make({ kind: 'folder', key: node.key, repository: node.repository, path: node.path.slice(0, cut) });
+			}
+			return (await this.locate(node.key.replace(/^repo:/, ''))).row;
+		}
+		if (node.kind === 'repository') {
+			return (await this.locate(node.row.fullName)).parent;
+		}
+		if (node.kind === 'source') {
+			return (await this.locate(node.row.slug)).parent;
+		}
+		return undefined;
 	}
 
 	getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -339,12 +369,13 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 						}),
 					];
 				}
-				return rows.map((row) =>
-					item({ kind: 'repository', row, source: sources.has(slugOf(row.name)) ? slugOf(row.name) : undefined })
+				const items = rows.map((row) =>
+					this.make({ kind: 'repository', row, source: sources.has(slugOf(row.name)) ? slugOf(row.name) : undefined })
 				);
+				return items;
 			}
 			if (parent.kind === 'other') {
-				return this.unclaimed(catalog).map((row) => item({ kind: 'source', row }));
+				return this.unclaimed(catalog).map((row) => this.make({ kind: 'source', row }));
 			}
 			if (parent.kind === 'repository') {
 				return this.repositoryChildren(catalog, parent.row);
@@ -372,6 +403,27 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 	}
 
 	/** The enterprises, then whatever is recorded but named by none of them. */
+	/**
+	 * One item, reused for the same node.
+	 *
+	 * `TreeView.reveal` resolves the element it is given, and the tree matches it against the elements it was handed —
+	 * so a provider that made a fresh object every time could never be revealed. Reusing by id is what makes a page's
+	 * "View it in the panel" able to select a row.
+	 */
+	private make(node: Node): NodeItem {
+		const created = item(node);
+		const id = created.id === undefined ? undefined : String(created.id);
+		if (id === undefined) {
+			return created;
+		}
+		const known = this.made.get(id);
+		if (known instanceof NodeItem) {
+			return known;
+		}
+		this.made.set(id, created);
+		return created;
+	}
+
 	private roots(catalog: Catalog): vscode.TreeItem[] {
 		const nodes: Node[] = catalog.organisations().map((row) => ({ kind: 'organisation', row }));
 		const other = this.unclaimed(catalog).length;
@@ -390,7 +442,7 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 				command: { command: 'temcoRepositories.page', title: 'Add a repository' },
 			});
 		}
-		return nodes.map(item);
+		return nodes.map((node) => this.make(node));
 	}
 
 	/**
@@ -455,6 +507,56 @@ class SourcesView implements vscode.TreeDataProvider<vscode.TreeItem> {
 		];
 	}
 
+	/**
+	 * The two rows a page's "View it in the panel" has to open: the enterprise that lists a repository, and the
+	 * repository's own row.
+	 *
+	 * Both are **built here**, not looked up among items the tree happens to have drawn: `reveal` matches the element it
+	 * is given against the elements the provider returns, and `make()` returns the same object for the same node — so a
+	 * row can be revealed even on the first click, before the tree has ever expanded anything.
+	 */
+	async locate(fullName: string): Promise<{ parent?: vscode.TreeItem; row?: vscode.TreeItem }> {
+		const wanted = slugOf(fullName);
+		let catalog: Catalog | undefined;
+		try {
+			catalog = await Catalog.open(this.context);
+			const sources = new Set(catalog.sources().map((row) => row.slug));
+			for (const organisation of catalog.organisations()) {
+				const rows = catalog.repositoriesOf(organisation.slug);
+				const row = rows.find((candidate) => candidate.fullName === fullName)
+					?? rows.find((candidate) => slugOf(candidate.name) === wanted);
+				if (row !== undefined) {
+					return {
+						parent: this.make({ kind: 'organisation', row: organisation }),
+						row: this.make({
+							kind: 'repository',
+							row,
+							source: sources.has(slugOf(row.name)) ? slugOf(row.name) : undefined,
+						}),
+					};
+				}
+			}
+			// A source no enterprise lists lives under "Other sources", when there are any.
+			const source = catalog.sources().find((row) => row.slug === wanted);
+			if (source !== undefined) {
+				const others = this.unclaimed(catalog);
+				return {
+					parent: others.length === 0 ? undefined : this.make({
+						kind: 'other',
+						label: 'Other sources',
+						note: `${others.length} recorded ${others.length === 1 ? 'source' : 'sources'} no enterprise lists`,
+					}),
+					row: this.make({ kind: 'source', row: source }),
+				};
+			}
+			return {};
+		} catch {
+			return {};
+		} finally {
+			catalog?.close();
+		}
+	}
+
 	/** What is recorded but named by no enterprise: a folder, an archive, or a repository nobody added. */
 	private unclaimed(catalog: Catalog): SourceRow[] {
 		const listed = new Set<string>();
@@ -481,7 +583,33 @@ export function registerSourcesView(context: vscode.ExtensionContext, changed: v
 		changed(() => view.refresh()),
 		// The Explorer's own distinction: a folder that is open says so in its glyph.
 		tree.onDidExpandElement((event) => view.setOpen(event.element, true)),
-		tree.onDidCollapseElement((event) => view.setOpen(event.element, false))
+		tree.onDidCollapseElement((event) => view.setOpen(event.element, false)),
+		// A page's "View it in the panel": focus the view, then select the repository's own row in it.
+		//
+		// `reveal` needs `getParent` (see below) and the row the provider itself would hand out, which `locate()` builds;
+		// without both it rejects and nothing moves — which is what "View it in the panel does nothing" was.
+		vscode.commands.registerCommand('temcoRepositories.revealInTree', async (fullName?: unknown) => {
+			if (typeof fullName !== 'string' || fullName.length === 0) {
+				return;
+			}
+			await vscode.commands.executeCommand(`${SOURCES_VIEW_ID}.focus`);
+			const { row } = await view.locate(fullName);
+			if (row === undefined) {
+				void vscode.window.showInformationMessage(
+					`Temco Repositories: ${fullName} is not in the panel yet — open the repositories page to add it.`
+				);
+				return;
+			}
+			try {
+				// Open the repository itself, so its top level is on screen. Its folders stay collapsed: one level is
+				// the answer to "where is it", and expanding everything would bury the row that was just selected.
+				await tree.reveal(row, { select: true, focus: true, expand: true });
+			} catch (error) {
+				void vscode.window.showWarningMessage(
+					`Temco Repositories: could not reveal ${fullName} — ${error instanceof Error ? error.message : String(error)}`
+				);
+			}
+		})
 	);
 	return tree;
 }

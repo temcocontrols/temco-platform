@@ -57,7 +57,11 @@
       },
       {
         "command": "temcoRepositories.repositoryPull",
-        "title": "Pull This Repository on Its Page",
+        "title": "Pull This Repository on Its Page"
+      },
+      {
+        "command": "temcoRepositories.revealInTree",
+        "title": "View This Repository in the Panel",
         "icon": "$(repo)"
       },
       {

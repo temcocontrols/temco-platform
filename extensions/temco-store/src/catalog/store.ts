@@ -274,6 +274,10 @@ export class Catalog {
    *
    * Keyed by slug rather than by URL so a folder, a fork and a clone of the same project stay one row when the
    * caller says they are — R2's discovery decides that, and the catalog only records the decision.
+   *
+   * **A re-record is not a forget.** Callers record a source from what GitHub says, which never includes a local copy,
+   * so writing `excluded.path` would detach a clone that is still on the disk. The path is only ever cleared on purpose,
+   * through `setSourcePath(slug, undefined)` — hence the `COALESCE` below.
    */
   addSource(source: SourceInput): number {
     this.db
@@ -282,7 +286,8 @@ export class Catalog {
            (kind, name, slug, remote_url, path, default_branch, branch, docs_root, registry_path, added_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(slug) DO UPDATE SET
-           kind = excluded.kind, name = excluded.name, remote_url = excluded.remote_url, path = excluded.path,
+           kind = excluded.kind, name = excluded.name, remote_url = excluded.remote_url,
+           path = COALESCE(excluded.path, sources.path),
            default_branch = excluded.default_branch, branch = excluded.branch, docs_root = excluded.docs_root,
            registry_path = excluded.registry_path`
       )

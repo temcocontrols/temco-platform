@@ -316,6 +316,10 @@ const COMMITS_CSS = `
 /* The part's note reads in the page's own description voice: it explains the list, and it should not be smaller type
    than the sentence at the top of the page that also explains it. */
 .az-section__desc { font-size: 13px; line-height: 20px; }
+/* A clone's description is a sentence about the copy — its folder, its last commit, the pages that name it — not machine
+   text, so it reads in the same voice and size as the row's own title. The kit sets the meta in mono for the rows that
+   quote a command; here it is prose, so it inherits instead. */
+.az-entries .az-entry__meta { font-family: inherit; font-size: 13px; line-height: 18px; }
 .commits { margin: 0 34px var(--sp-2) 34px; }
 .commits > summary { cursor: pointer; color: var(--az-blue); font-size: 12px; line-height: 18px; }
 .commits__all { float: right; color: var(--az-blue); text-decoration: none; }
