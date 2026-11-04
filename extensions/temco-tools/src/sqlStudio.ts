@@ -46,7 +46,7 @@ export const SQL_PAGES: SqlPage[] = [
 	// with two groups. The old commands stay registered as ways into it, so a keybinding or a menu item still lands.
 	{ id: 'queries', label: 'Query Library', note: 'statements to load, built-in and your own', mark: 'book', command: 'temcoTools.sql.queries', viewType: 'temcoTools.sql.queries', group: 'rows' },
 	{ id: 'history', label: 'History', note: 'what was run in this window, newest first', mark: 'clock', command: 'temcoTools.sql.history', viewType: 'temcoTools.sql.history', group: 'rows' },
-	{ id: 'schema', label: 'Schema', note: 'the tables the file actually has', mark: 'list', command: 'temcoTools.sql.schema', viewType: 'temcoTools.sql.schema', group: 'file' },
+	{ id: 'schema', label: 'Table Structure', note: 'the tables, their columns and indexes', mark: 'list', command: 'temcoTools.sql.schema', viewType: 'temcoTools.sql.schema', group: 'file' },
 	{ id: 'connections', label: 'Database', note: 'the file, its size, and how to put it back', mark: 'database', command: 'temcoTools.sql.connections', viewType: 'temcoTools.sql.connections', group: 'file' }
 ];
 
@@ -183,10 +183,6 @@ function actionsOf(markup: string): { label: string; command: string; kind?: 'pr
 
 const decode = (text: string): string =>
 	text.replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
-
-/** One part of a page: its heading, the count and sentence under it, and what can be done from here. */
-const rule = (options: { label: string; count?: string; note?: string; actions?: string; plain?: boolean }): string =>
-	part({ title: options.label, count: options.count, note: options.note, actions: options.actions });
 
 /** A part and the list of rows under it. */
 const group = (options: { label: string; count?: string; note?: string; actions?: string; body: string }): string =>
@@ -500,29 +496,39 @@ ${results}`;
 }
 
 /**
- * The Data page's own styles: a strip of tables, then one table's rows at the full width of the page.
- *
- * The two-column layout is gone. A 260px sidebar repeated the Schema page's own index in a narrower column and cost a
- * third of the width for every row; a table is picked from a strip that wraps, and the grid — the reason the page
- * exists — gets the whole width. The grid is the only thing that scrolls, so the table's name and its page controls
- * stay on screen while a fifty-row page is read.
+ * The bar that both table pages carry: the table's name, its shape, and what can be done with it. Shared, so the two
+ * pages cannot drift apart on the one line a reader looks at first.
  */
-const DATA_CSS = `
-.dq-tables { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0 0; }
-.dq-table { display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 10px; border: 1px solid var(--border);
+const TABLE_BAR_CSS = `
+.tb-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 0;
+  padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.tb-bar__title { font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: 13px; font-weight: 600;
+  color: var(--fg-strong); }
+.tb-bar__facts { color: var(--fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tb-bar__acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.tb-bar__acts .az-btn { flex: 0 0 auto; white-space: nowrap; }
+`;
+
+/** The strip of tables the Data page picks from: it has the width for it, and no room for a column of names. */
+const TABLE_STRIP_CSS = `
+.tb-strip { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0 0; }
+.tb-pick { display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 10px; border: 1px solid var(--border);
   border-radius: 0; background: none; color: var(--fg); font: inherit; font-size: 12px; line-height: 17px; cursor: pointer;
   transition: background-color 90ms ease-out, border-color 90ms ease-out; }
-.dq-table:hover { background: color-mix(in srgb, var(--az-blue) 7%, transparent); }
-.dq-table.is-on { background: color-mix(in srgb, var(--az-blue) 12%, transparent); border-color: var(--az-blue);
+.tb-pick:hover { background: color-mix(in srgb, var(--az-blue) 7%, transparent); }
+.tb-pick.is-on { background: color-mix(in srgb, var(--az-blue) 12%, transparent); border-color: var(--az-blue);
   color: var(--fg-strong); font-weight: 600; }
-.dq-table__n { color: var(--fg-subtle); font-variant-numeric: tabular-nums; font-weight: 400; }
-.dq-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 20px 0 0;
-  padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-.dq-head__title { font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: 13px; font-weight: 600;
-  color: var(--fg-strong); }
-.dq-head__facts { color: var(--fg-subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
-.dq-head__acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-.dq-head__acts .az-btn { flex: 0 0 auto; white-space: nowrap; }
+.tb-pick__n { color: var(--fg-subtle); font-variant-numeric: tabular-nums; font-weight: 400; }
+`;
+
+/**
+ * The Data page's own styles: the table strip, then one table's rows at the width of the page.
+ *
+ * Data has no sidebar on purpose — a browser's job is the grid, and a 260px column of names costs a third of the width
+ * for every row. Table Structure keeps one, because there the right-hand side is a wide grid of columns plus a statement,
+ * and the list of tables is the thing a reader moves through.
+ */
+const DATA_CSS = `${TABLE_STRIP_CSS}${TABLE_BAR_CSS}
 .az-grid { max-height: calc(100vh - 330px); min-height: 220px; margin-top: 12px; }
 @media (max-width: 700px) {
   .az-grid { max-height: none; }
@@ -539,7 +545,7 @@ function dataBody(
 	// The strip is how a table is picked: every table, its size, and the one on screen marked. It wraps instead of
 	// scrolling sideways, so a table at the end of the list is never hiding behind an edge.
 	const strip = tables
-		.map((item) => `<button type="button" class="dq-table${item.name === table ? ' is-on' : ''}" data-command="temcoTools.sql.browse" data-args="${esc(JSON.stringify([item.name]))}"${item.name === table ? ' aria-current="true"' : ''}>${esc(item.name)}<span class="dq-table__n">${item.rows.toLocaleString('en-US')}</span></button>`)
+		.map((item) => `<button type="button" class="tb-pick${item.name === table ? ' is-on' : ''}" data-command="temcoTools.sql.browse" data-args="${esc(JSON.stringify([item.name]))}"${item.name === table ? ' aria-current="true"' : ''}>${esc(item.name)}<span class="tb-pick__n">${item.rows.toLocaleString('en-US')}</span></button>`)
 		.join('');
 
 	const head = page === undefined ? '' : page.columns.map((column) => `<th>${esc(column)}</th>`).join('');
@@ -557,16 +563,16 @@ function dataBody(
 	})}
 ${tables.length === 0
 			? `<div class="mt-16">${callout('The database has no tables yet. Reset it from the <b>Database</b> page to write this build’s schema.', 'warn')}</div>`
-			: `<div class="dq-tables" role="group" aria-label="Tables">${strip}</div>
+			: `<div class="tb-strip" role="group" aria-label="Tables">${strip}</div>
 ${table === undefined
 				? `<div class="mt-16">${callout('Pick a table above.')}</div>`
-				: `<div class="dq-head">
-	<span class="dq-head__title">${esc(table)}</span>
-	<span class="dq-head__facts">${n(page?.columns.length ?? 0, 'column', 'columns')} · ${range}</span>
-	<div class="dq-head__acts">${button('Query it', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', mark: 'code', args: [table] })
+				: `<div class="tb-bar">
+	<span class="tb-bar__title">${esc(table)}</span>
+	<span class="tb-bar__facts">${n(page?.columns.length ?? 0, 'column', 'columns')} · ${range}</span>
+	<div class="tb-bar__acts">${button('Query it', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', mark: 'code', args: [table] })
 					+ (offset > 0 ? button('Previous', 'temcoTools.sql.page', { small: true, kind: 'ghost', mark: 'chevron-left', args: [-1] }) : '')
 					+ (page !== undefined && to < page.total ? button('Next', 'temcoTools.sql.page', { small: true, kind: 'ghost', mark: 'chevron-right', args: [1] }) : '')
-					+ button('Schema', 'temcoTools.sql.schema', { small: true, kind: 'ghost', mark: 'list' })}</div>
+					+ button('Structure', 'temcoTools.sql.schema', { small: true, kind: 'ghost', mark: 'list' })}</div>
 </div>
 ${page === undefined
 					? callout('The rows could not be read. The file may be locked by another window.')
@@ -643,58 +649,107 @@ ${state.history.length === 0
 }
 
 /**
- * *Schema* — the tables the file has, one at a time.
+ * The Table Structure page's own styles: tables on the left, the one picked on the right.
  *
- * A wall of every table with every column is unreadable at fourteen tables. This is the same shape as Data: an index
- * on the left, and the thing you picked on the right, with the acts that make maintaining it possible — look at the
- * rows, ask a question, copy the statement that created it.
+ * The right-hand side is a column grid and a statement — wide content that a reader works through — while the left is a
+ * short list a reader moves down. So the list gets its own column and stays put (`position: sticky`) while the columns
+ * and the folded DDL scroll beside it. Under 900px the two stack, because a 260px list beside a squeezed grid helps
+ * nobody.
+ */
+const STRUCTURE_CSS = `${TABLE_BAR_CSS}
+.ts-split { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 26px; align-items: start; margin: 18px 0 0; }
+.ts-side { position: sticky; top: 6px; max-height: calc(100vh - 190px); overflow-y: auto; overflow-x: hidden; }
+.ts-side__head { display: flex; align-items: baseline; gap: 8px; padding-bottom: 7px; margin-bottom: 6px;
+  border-bottom: 1px solid var(--border); }
+.ts-side__title { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--fg-muted); }
+.ts-side__head .az-btn { margin-left: auto; }
+.ts-list { display: flex; flex-direction: column; gap: 1px; }
+.ts-item { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 6px 8px; border: 0;
+  border-radius: 0; background: none; color: var(--fg); font: inherit; font-size: 12px; line-height: 18px;
+  text-align: left; cursor: pointer; transition: background-color 90ms ease-out; }
+.ts-item:hover { background: color-mix(in srgb, var(--az-blue) 7%, transparent); }
+.ts-item.is-on { background: color-mix(in srgb, var(--az-blue) 13%, transparent); color: var(--fg-strong); font-weight: 600; }
+.ts-item__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--vscode-editor-font-family, Consolas, monospace); }
+.ts-item__n { flex: 0 0 auto; color: var(--fg-subtle); font-variant-numeric: tabular-nums; font-weight: 400; }
+.ts-main { min-width: 0; }
+.az-grid { max-height: 360px; margin-top: 12px; }
+.ts-col { font-family: var(--vscode-editor-font-family, Consolas, monospace); color: var(--fg-strong); }
+.ts-key { color: var(--az-blue); font-size: 11px; }
+.ts-indexes { margin: 10px 0 0; color: var(--fg-muted); font-size: 12px; line-height: 18px; }
+.ts-indexes code { font-family: var(--vscode-editor-font-family, Consolas, monospace); color: var(--fg); }
+.ts-ddl { margin: 16px 0 0; }
+.ts-ddl > summary { cursor: pointer; color: var(--az-blue); font-size: 12px; line-height: 20px; }
+.ts-ddl[open] > summary { margin-bottom: 8px; }
+.ts-code { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 0; background: var(--editor-bg);
+  color: var(--fg); font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: 12px;
+  line-height: 18px; max-height: 220px; overflow: auto; white-space: pre; }
+@media (max-width: 900px) {
+  .ts-split { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .ts-side { position: static; max-height: 220px; }
+}
+`;
+
+/**
+ * *Table Structure* — the tables the file has on the left, the one on screen column by column on the right.
+ *
+ * Two columns, because the two sides are different shapes: a short list of names to move down, and a wide grid of
+ * columns plus a statement to read across. The old page had a four-figure strip above both and the `CREATE` statement
+ * always open under them; now the counts are in the sentence under the title, and the statement is folded away.
  */
 function schemaBody(tables: TableFact[], stored: number, expected: number, selected: string | undefined): string {
 	const rows = tables.reduce((total, table) => total + table.rows, 0);
 	const table = tables.find((entry) => entry.name === selected) ?? tables[0];
 
-	const picker = tables
-		.map((entry) => `${row({ mark: 'list', tone: entry.name === table?.name ? 'accent' : undefined, title: entry.name, meta: [n(entry.columns.length, 'column', 'columns'), entry.indexes.length > 0 ? n(entry.indexes.length, 'index', 'indexes') : undefined, `${entry.rows.toLocaleString('en-US')} rows`], state: entry.name === table?.name ? 'showing' : 'open', actions: button('Open', 'temcoTools.sql.selectTable', { small: true, kind: 'ghost', args: [entry.name] }) })}`)
+	const list = tables
+		.map((entry) => `<button type="button" class="ts-item${entry.name === table?.name ? ' is-on' : ''}" data-command="temcoTools.sql.selectTable" data-args="${esc(JSON.stringify([entry.name]))}"${entry.name === table?.name ? ' aria-current="true"' : ''} title="${esc(entry.name)} — ${n(entry.rows, 'row', 'rows')}, ${n(entry.columns.length, 'column', 'columns')}"><span class="ts-item__name">${esc(entry.name)}</span><span class="ts-item__n">${entry.rows.toLocaleString('en-US')}</span></button>`)
 		.join('');
 
-	const columnRow = (column: TableFact['columns'][number]): string =>
-		`${row({ mark: 'code', tone: column.primaryKey ? 'accent' : undefined, title: column.name, meta: [column.type || 'no type', column.primaryKey ? 'primary key' : undefined, column.notNull ? 'not null' : undefined, column.defaultValue === undefined ? undefined : `default ${column.defaultValue}`] })}`;
+	const head = '<th>Column</th><th>Type</th><th>Null</th><th>Default</th><th>Key</th>';
+	const body = table === undefined
+		? ''
+		: table.columns.map((column) => `<tr>
+	<td><span class="ts-col">${esc(column.name)}</span></td>
+	<td>${column.type === undefined || column.type.length === 0 ? '<span class="cell-muted">—</span>' : esc(column.type)}</td>
+	<td>${column.notNull ? 'not null' : '<span class="cell-muted">null</span>'}</td>
+	<td>${column.defaultValue === undefined ? '<span class="cell-muted">—</span>' : esc(String(column.defaultValue))}</td>
+	<td>${column.primaryKey ? '<span class="ts-key">primary key</span>' : ''}</td>
+</tr>`).join('');
 
 	const detail = table === undefined
 		? callout('The database has no tables. Reset it from the <b>Database</b> page to write this build’s schema.', 'warn')
-		: `${rule({
-			label: table.name,
-			count: `${table.rows.toLocaleString('en-US')} rows · ${n(table.columns.length, 'column', 'columns')}`,
-			actions: button('Data', 'temcoTools.sql.browse', { small: true, kind: 'ghost', mark: 'list', args: [table.name] })
-				+ button('Query', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', mark: 'code', args: [table.name] })
-				+ button('Copy DDL', 'temcoTools.sql.copyDdl', { small: true, kind: 'ghost', mark: 'code', args: [table.name] })
-		})}
-<div class="record-list">${table.columns.map(columnRow).join('')}</div>
-<p class="group-note">${table.indexes.length === 0 ? 'No index of its own — the primary key is the only way in.' : `Indexes: ${table.indexes.join(', ')}.`}</p>
-<div class="mt-16">${callout(`<b>As written.</b> This is the statement the file holds, which is what a copy of the database would need to be rebuilt from.`)}</div>
-<pre class="code" style="max-height:220px">${esc(table.sql)}</pre>`;
+		: `<div class="tb-bar">
+	<span class="tb-bar__title">${esc(table.name)}</span>
+	<span class="tb-bar__facts">${n(table.columns.length, 'column', 'columns')} · ${n(table.rows, 'row', 'rows')}${table.indexes.length === 0 ? '' : ` · ${n(table.indexes.length, 'index', 'indexes')}`}</span>
+	<div class="tb-bar__acts">${button('Browse rows', 'temcoTools.sql.browse', { small: true, kind: 'ghost', mark: 'list', args: [table.name] })
+			+ button('Query it', 'temcoTools.sql.queryTable', { small: true, kind: 'ghost', mark: 'code', args: [table.name] })
+			+ button('Copy DDL', 'temcoTools.sql.copyDdl', { small: true, kind: 'ghost', mark: 'download', args: [table.name] })}</div>
+</div>
+<div class="az-grid"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+<p class="ts-indexes">${table.indexes.length === 0
+				? 'No index of its own — the primary key is the only way in.'
+				: `Indexes: ${table.indexes.map((index) => `<code>${esc(index)}</code>`).join(', ')}.`}</p>
+<details class="ts-ddl"><summary>The statement the file holds</summary>
+<pre class="ts-code">${esc(table.sql)};</pre></details>`;
+
+	const side = `<div class="ts-side">
+	<div class="ts-side__head"><span class="ts-side__title">Tables</span>${button('Refresh', 'temcoTools.sql.refreshSchema', { small: true, kind: 'ghost', mark: 'refresh' })}</div>
+	<div class="ts-list" role="group" aria-label="Tables">${list}</div>
+</div>`;
 
 	return `${pageHead({
-		title: 'Schema',
+		title: 'Table Structure',
 		mark: 'list',
-		desc: `What the database actually has: ${n(tables.length, 'table', 'tables')}, ${rows.toLocaleString('en-US')} rows. The definition lives in the store’s schema.ts — this is the file, read back.`,
+		desc: `What the database actually has: ${n(tables.length, 'table', 'tables')} and ${rows.toLocaleString('en-US')} rows, column by column. The definition lives in the store’s schema.ts — this is the file, read back.`,
 		actions: button('Refresh', 'temcoTools.sql.refreshSchema', { mark: 'refresh' }) + button('Database', 'temcoTools.sql.connections', { mark: 'database' })
 	})}
-${tiles([
-			{ value: String(tables.length), label: 'Tables' },
-			{ value: rows.toLocaleString('en-US'), label: 'Rows' },
-			{ value: String(stored), label: 'Schema stored' },
-			{ value: String(expected), label: 'This build expects' }
-		])}
 ${stored === expected
 			? ''
 			: `<div class="mt-16">${callout(`<b>The file and this build disagree.</b> The database says schema ${stored}; this build writes schema ${expected}. Rows written since the change may mean something else — reset only if the data can be read again.`, 'warn')}</div>`}
 ${tables.length === 0
 			? `<div class="mt-16">${detail}</div>`
-			: `<div class="split mt-24" style="grid-template-columns: 300px minmax(0, 1fr); gap: 28px; align-items: start">
-<div>${group({ label: 'Tables', count: n(tables.length, 'table', 'tables'), actions: button('Refresh', 'temcoTools.sql.refreshSchema', { small: true, kind: 'ghost', mark: 'refresh' }), body: picker })}</div>
-<div>${detail}</div>
-</div>`}`;
+			: `<div class="ts-split">${side}<div class="ts-main">${detail}</div></div>`}`;
 }
 
 /**
@@ -1005,7 +1060,7 @@ export class SqlPages {
 				} finally {
 					catalog?.close();
 				}
-				return shell(definition, schemaBody(tables, facts.schemaVersion, facts.expected, this.state.schemaTable));
+				return shell(definition, schemaBody(tables, facts.schemaVersion, facts.expected, this.state.schemaTable), STRUCTURE_CSS);
 			}
 			case 'queries':
 			case 'reports':
