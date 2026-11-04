@@ -18,7 +18,7 @@ interface UiApi {
 	pageColumn(): vscode.ViewColumn;
 	fileColumn(): vscode.ViewColumn;
 	rowSlug(target: unknown): string | undefined;
-	page(body: string, options?: { title?: string; script?: string; extraCss?: string; resources?: string }): string;
+	page(body: string, options?: { title?: string; script?: string; extraCss?: string; resources?: string; initialWork?: unknown }): string;
 	icon(name: string, cls?: string): string;
 	hero(options: HeroOptions): string;
 	section(options: { title: string; desc?: string; actions?: string }): string;

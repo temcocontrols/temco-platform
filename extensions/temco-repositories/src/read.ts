@@ -50,7 +50,11 @@ export function registerReadCommands(
 }
 
 /**
- * Reads every source that has never been read, one after another.
+ * Reads every source, one after another — every one, not only the ones nobody has read yet.
+ *
+ * A source with a clone is read from its files, which costs nothing but time; a source without one is read over the
+ * API. That difference is why this is a explicit act rather than something the page does on its own, and why the
+ * progress says which source is being read: on a large organisation the API half is the slow one.
  *
  * One at a time on purpose: two reads at once would interleave in the output channel, and a host that rate
  * limits one caller is asked twice as often for no gain. Each read reports itself quietly, and this says what
@@ -60,7 +64,7 @@ async function readAllSources(
   context: vscode.ExtensionContext,
   output: vscode.OutputChannel,
   refresh: () => void,
-  /** A project's slug: read only what *it* cites. Nothing means every source that has never been read. */
+  /** A project's slug: read only what *it* cites. Nothing means every source the window has recorded. */
   project?: string
 ): Promise<void> {
   const catalog = await open(context);
@@ -77,7 +81,7 @@ async function readAllSources(
         : new Set(catalog.document(slugOf(project))?.sources.map((source) => source.name) ?? []);
 
     wanted = rows
-      .filter((source) => source.pages === undefined && (cited === undefined || cited.has(source.name)))
+      .filter((source) => cited === undefined || cited.has(source.name))
       .map((source) => ({ slug: source.slug, name: source.name }));
   } finally {
     catalog.close();
@@ -86,25 +90,36 @@ async function readAllSources(
   if (wanted.length === 0) {
     void vscode.window.showInformationMessage(
       project === undefined
-        ? 'Temco Repositories: every source has been read already.'
-        : 'Temco Repositories: every source of this project has been read already.'
+        ? 'Temco Repositories: no source is recorded, so there is nothing to read.'
+        : 'Temco Repositories: this project cites no source, so there is nothing to read.'
     );
     return;
   }
 
+  let read = 0;
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Temco Repositories: reading sources' },
-    async (progress) => {
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `Temco Repositories: reading ${wanted.length} source${wanted.length === 1 ? '' : 's'}`,
+      cancellable: true
+    },
+    async (progress, cancellation) => {
       for (const [index, source] of wanted.entries()) {
-        progress.report({ message: `${source.name} (${index + 1} of ${wanted.length})` });
+        if (cancellation.isCancellationRequested) {
+          return;
+        }
+        progress.report({ message: `${source.name} (${index + 1} of ${wanted.length})`, increment: 100 / wanted.length });
         await readSource(context, output, refresh, source.slug, true);
+        read += 1;
       }
     }
   );
 
   output.show(true);
   void vscode.window.showInformationMessage(
-    `Temco Repositories: read ${wanted.length} source${wanted.length === 1 ? '' : 's'} — see the output for what each one held.`
+    read === 0
+      ? 'Temco Repositories: nothing was read.'
+      : `Temco Repositories: read ${read} source${read === 1 ? '' : 's'} — see the output for what each one held.`
   );
 }
 

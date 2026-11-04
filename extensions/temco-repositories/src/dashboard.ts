@@ -252,7 +252,7 @@ export class DashboardPage {
 				this.timer = undefined;
 			}
 		});
-		this.panel.webview.onDidReceiveMessage(runCommand);
+		this.				panel.webview.onDidReceiveMessage(runCommand);
 		// A read that finishes, a clone that lands, a source that is forgotten: the page is about exactly those facts.
 		// Only while it is the panel on screen — a page nobody is looking at costs a `git log` per clone for nothing.
 		this.changes = this.onDidChange(() => {
@@ -313,18 +313,22 @@ export class DashboardPage {
  * than dropped, because a column that only shows what is new cannot be checked against the history it came from.
  */
 const COMMITS_CSS = `
-.commits { margin: 0 0 var(--sp-2) 34px; }
+/* The part's note reads in the page's own description voice: it explains the list, and it should not be smaller type
+   than the sentence at the top of the page that also explains it. */
+.az-section__desc { font-size: 13px; line-height: 20px; }
+.commits { margin: 0 34px var(--sp-2) 34px; }
 .commits > summary { cursor: pointer; color: var(--az-blue); font-size: 12px; line-height: 18px; }
 .commits__all { float: right; color: var(--az-blue); text-decoration: none; }
-.commits__all:hover, .commits__row:hover .commits__subject { text-decoration: underline; }
+.commits__all:hover { text-decoration: underline; }
 .commits__list { margin: var(--sp-2) 0 0; padding: 0; list-style: none; }
 .commits__item { padding: 1px 0; font-size: 12px; line-height: 17px; }
 .commits__item--seen { opacity: .55; }
-.commits__row { display: flex; gap: var(--sp-3); align-items: baseline; color: inherit; text-decoration: none; }
-.commits__hash { font-family: var(--font-mono); color: var(--fg-subtle); }
+.commits__row { display: flex; gap: var(--sp-3); align-items: baseline; color: inherit; text-decoration: none; cursor: pointer; }
+.commits__row:hover .commits__subject { text-decoration: underline; }
+/* The hash is the link: it is what a person copies and what GitHub keys the commit by. */
+.commits__hash { font-family: var(--font-mono); color: var(--az-blue); }
 .commits__subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); }
 .commits__date { color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
-.commits__mark { color: var(--fg-subtle); width: 3ch; }
 `;
 
 /** Whether the AI module is installed, which is what decides if a Draft control would do anything. */
@@ -386,13 +390,11 @@ function cloneRow(clone: Clone, canDraft: boolean, theme: FileIconTheme | undefi
 			citedPhrase(clone),
 			pagesPhrase(clone)
 		],
-		// One act per state, not two that look alike: a source with no clone is cloned (which reads it in the same
-		// pass), and a source with a clone is read again or pulled. Drafting belongs to the AI module — where that
-		// module is not installed, the word would be a control that does nothing, which is worse than not offering it.
+		// One act per state, not two that look alike — and both of them happen on the repository's own page, where the
+		// command and its output are read together. A clone is not something to start blind from a list.
 		actions: (clone.cloned
-			? button('Read', 'temcoRepositories.readSource', { kind: 'link', args: [clone.slug] })
-				+ button('Pull', 'temcoRepositories.pullSource', { kind: 'link', args: [clone.slug] })
-			: button('Clone it', 'temcoRepositories.fetchSource', { kind: 'link', args: [clone.slug] }))
+			? button('Pull', 'temcoRepositories.repositoryPull', { kind: 'link', args: [clone.slug] })
+			: button('Clone it', 'temcoRepositories.repositoryClone', { kind: 'link', args: [clone.slug] }))
 			+ (canDraft && clone.docs.length > 0 ? button('Draft', 'temcoAi.stale', { kind: 'link' }) : '')
 	});
 	return `${row}${commitFold(clone)}`;
@@ -415,10 +417,11 @@ function commitFold(clone: Clone): string {
 		: `${web}/commits${clone.branch === undefined ? '' : `/${encodeURIComponent(clone.branch)}`}`;
 	const items = clone.commits.map((commit) => {
 		const href = web === undefined ? undefined : `${web}/commit/${encodeURIComponent(commit.short)}`;
+		// No "seen"/"new" word: the dimming says which side of the watermark a commit is on, and the fold's own
+		// sentence already gives the date the watermark is.
 		const body = `<span class="commits__hash">${escapeHtml(commit.short)}</span>`
 			+ `<span class="commits__subject">${escapeHtml(commit.subject)}</span>`
-			+ `<span class="commits__date">${escapeHtml(commit.date)}</span>`
-			+ `<span class="commits__mark">${commit.seen ? 'seen' : 'new'}</span>`;
+			+ `<span class="commits__date">${escapeHtml(commit.date)}</span>`;
 		return `<li class="commits__item${commit.seen ? ' commits__item--seen' : ''}">`
 			+ (href === undefined
 				? body
@@ -427,7 +430,7 @@ function commitFold(clone: Clone): string {
 	}).join('');
 	const open = listHref === undefined
 		? ''
-		: `<a class="commits__all" href="${escapeHtml(listHref)}" title="Open the commits on GitHub">On GitHub</a>`;
+		: `<a class="commits__all" href="${escapeHtml(listHref)}" title="Open the commits on GitHub">Commits on GitHub</a>`;
 	return `<details class="commits"><summary><span class="commits__text">Show the ${n(clone.commits.length, 'commit', 'commits')} it read`
 		+ `${clone.read === undefined ? '' : `, last read ${escapeHtml(clone.read)}`}</span>${open}</summary>`
 		+ `<ul class="commits__list">${items}</ul></details>`;

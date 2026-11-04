@@ -1,4 +1,4 @@
-﻿// The working area: our own folder, outside every repository.
+// The working area: our own folder, outside every repository.
 //
 // A source is cloned here so that its **files** can be read. A page is written from code, and code that exists
 // only behind an API is one file per call, no history, and no working tree for a build. The clone is a copy we
@@ -26,7 +26,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { ClonePanel } from './clonePanel';
+import { WorkReporter } from './workReporter';
 import { Catalog, Selection, slugOf } from './store';
 /** How long a git command may take. A clone of a large repository is slow; an hour is not an answer either. */
 const GIT_TIMEOUT_MS = 30 * 60 * 1000;
@@ -76,11 +76,11 @@ export function registerWorkareaCommands(
   selection: Selection,
   output: vscode.OutputChannel,
   refresh: () => void,
-  clones: ClonePanel
+  work: WorkReporter
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('temcoRepositories.fetchSource', (target?: unknown) =>
-      fetchSource(context, output, refresh, clones, slugOfTarget(target))
+      fetchSource(context, output, refresh, work, slugOfTarget(target))
     ),
     // The same clone, asked for by something that needs the *files* rather than the person: a draft, an analysis. It
     // returns the folder instead of reporting, and still asks before it writes anything to the machine.
@@ -88,7 +88,7 @@ export function registerWorkareaCommands(
       ensureClone(context, output, refresh, slugOfTarget(target))
     ),
     vscode.commands.registerCommand('temcoRepositories.pullSource', (target?: unknown) =>
-      pullSource(context, output, refresh, slugOfTarget(target))
+      pullSource(context, output, refresh, work, slugOfTarget(target))
     ),
     vscode.commands.registerCommand('temcoRepositories.openClone', (target?: unknown) =>
       openClone(context, slugOfTarget(target))
@@ -213,7 +213,7 @@ async function fetchSource(
   context: vscode.ExtensionContext,
   output: vscode.OutputChannel,
   refresh: () => void,
-  clones: ClonePanel,
+  work: WorkReporter,
   wanted?: string
 ): Promise<void> {
   const source = await sourceOf(context, wanted);
@@ -258,15 +258,22 @@ async function fetchSource(
   output.appendLine(
     `[work] cloning ${source.name} — ${source.remoteUrl}, branch ${source.branch ?? source.defaultBranch ?? 'as the remote decides'}, into ${folder}`
   );
-  // The page is where the clone explains itself: one line per thing git says, as it says it. The notification stays
-  // because a clone can run for minutes, and a window with the notification and no page is not a reason to wonder.
-  clones.begin({ slug: source.slug, name: source.name, remote: source.remoteUrl, branch: source.branch, folder });
+  // The page that started the act is where it explains itself: a state line, and one line per thing git says as it
+  // says it. The notification stays too, because a clone can run for minutes and the page may be behind other tabs.
+  work.state({
+    slug: source.slug, name: source.name, act: 'clone', state: 'running',
+    text: `Cloning ${source.name} into ${folder}…`, folder,
+  });
+  work.line(source.slug, `$ git clone --single-branch${source.branch ? ` --branch ${source.branch}` : ''} ${source.remoteUrl}`);
   const result = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Temco Repositories: cloning ${source.name}` },
-    () => git(args, undefined, output, (one) => clones.line(one))
+    () => git(args, undefined, output, (one) => work.line(source.slug, one))
   );
   if (!result.ok) {
-    clones.finish(false, `${source.name} could not be cloned — ${firstLine(result.output)}`);
+    work.state({
+      slug: source.slug, name: source.name, act: 'clone', state: 'err',
+      text: `${source.name} could not be cloned — ${firstLine(result.output)}`, folder,
+    });
     failed(
       output,
       `Temco Repositories: ${source.name} could not be cloned. ${firstLine(result.output)}`,
@@ -277,12 +284,16 @@ async function fetchSource(
 
   await withCatalog(context, (catalog) => catalog.setSourcePath(source.slug, folder));
   output.appendLine(`[work] ${source.name} cloned into ${folder}`);
-  clones.finish(true, `${source.name} is cloned into ${folder}. Reading it next, so its pages appear at once.`);
+  work.state({
+    slug: source.slug, name: source.name, act: 'clone', state: 'ok',
+    text: `${source.name} is cloned into ${folder}. Reading it, so its pages appear at once.`, folder,
+  });
   refresh();
   // The copy and the read are one act. A clone nobody read leaves the row saying "never read", and what the source
   // declares is the reason to have the copy at all — so the read runs here, through the same command the Read action
   // runs, which records the pages and stamps the watermark exactly once.
   await vscode.commands.executeCommand('temcoRepositories.readSource', source.slug);
+  work.line(source.slug, `✓ cloned and read: ${folder}`);
 }
 
 /**
@@ -351,6 +362,7 @@ async function pullSource(
   context: vscode.ExtensionContext,
   output: vscode.OutputChannel,
   refresh: () => void,
+  work: WorkReporter,
   wanted?: string
 ): Promise<void> {
   const source = await sourceOf(context, wanted);
@@ -371,11 +383,20 @@ async function pullSource(
   }
 
   // `--ff-only`: a local copy is a copy. Nothing here resolves a merge, and nothing here commits.
+  work.state({
+    slug: source.slug, name: source.name, act: 'pull', state: 'running',
+    text: `Pulling ${source.name} in ${folder}…`, folder,
+  });
+  work.line(source.slug, `$ git pull --ff-only   (in ${folder})`);
   const result = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Temco Repositories: pulling ${source.name}` },
-    () => git(['pull', '--ff-only'], folder, output)
+    () => git(['pull', '--ff-only'], folder, output, (one) => work.line(source.slug, one))
   );
   if (!result.ok) {
+    work.state({
+      slug: source.slug, name: source.name, act: 'pull', state: 'err',
+      text: `${source.name} could not be pulled — ${firstLine(result.output)}`, folder,
+    });
     failed(
       output,
       `Temco Repositories: ${source.name} could not be pulled. ${firstLine(result.output)}`,
@@ -383,15 +404,16 @@ async function pullSource(
     );
     return;
   }
+  output.appendLine(`[work] ${source.name} pulled into ${folder}`);
   refresh();
-  void vscode.window.showInformationMessage(
-    `Temco Repositories: ${source.name} is up to date with its branch.`,
-    'Read it again'
-  ).then((choice) => {
-    if (choice === 'Read it again') {
-      void vscode.commands.executeCommand('temcoRepositories.readSource', source.slug);
-    }
+  work.state({
+    slug: source.slug, name: source.name, act: 'pull', state: 'ok',
+    text: `${source.name} is up to date with its branch. Reading it again.`, folder,
   });
+  // Pulling and reading are one act, exactly as cloning and reading are: what a person wants after "freshen this copy"
+  // is the pages the new commits touch, not a notification asking whether to read them.
+  await vscode.commands.executeCommand('temcoRepositories.readSource', source.slug);
+  work.line(source.slug, `✓ pulled and read: ${folder}`);
 }
 
 /** Show a local copy in the file manager — the ordinary way to look at what was cloned. */

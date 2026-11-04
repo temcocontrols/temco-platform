@@ -39,6 +39,11 @@ export interface PageOptions {
 	 * image. Without it the policy allows no source but `data:`, which is why every page up to now inlined everything.
 	 */
 	resources?: string;
+	/**
+	 * A value the page's script finds as `window.__temcoInitial` when it runs — the state a page needs *before* its first
+	 * message, such as the last thing an act reported.
+	 */
+	initialWork?: unknown;
 }
 
 let stylesheet: string | undefined;
@@ -78,6 +83,12 @@ export function page(context: vscode.ExtensionContext, body: string, options: Pa
 		+ `${sources.length > 0 ? ` font-src ${sources};` : ''}`
 		+ `${options.script ? ` script-src 'nonce-${nonce}';` : ''}`;
 	const script = options.script ? `<script nonce="${nonce}">${options.script}</script>` : '';
+	// A page may need one fact before its first message arrives — the last thing an act reported. It is handed over as
+	// a value rather than as markup so the page draws it with everything else, and `<` is escaped so nothing inside it
+	// can close the tag.
+	const seed = options.initialWork === undefined
+		? ''
+		: `<script nonce="${nonce}">window.__temcoInitial = ${JSON.stringify(options.initialWork).replace(/</g, '\\u003c')};</script>`;
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,6 +100,7 @@ export function page(context: vscode.ExtensionContext, body: string, options: Pa
 <body>
 ${icons(context)}
 <div class="view"><div class="view__inner">${body}</div></div>
+${seed}
 ${script}
 </body>
 </html>`;
@@ -105,7 +117,7 @@ export { icon, toneMark } from './components';
  */
 export const COMMAND_SCRIPT = `
 (function () {
-        const api = acquireVsCodeApi();
+        const api = window.__temcoApi || (window.__temcoApi = acquireVsCodeApi());
         document.addEventListener('click', (event) => {
                 const target = event.target.closest('[data-command]');
                 if (!target) {

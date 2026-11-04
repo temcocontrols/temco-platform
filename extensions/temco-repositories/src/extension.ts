@@ -17,9 +17,8 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { REPOSITORY_FILE_SCHEME, RepositoryFileProvider, languageOf, repositoryFileUri } from './fileView';
-import { ClonePanel } from './clonePanel';
-import { registerReadCommands, tokenOf } from './read';
-import { applyToSource } from './apply';
+import { WorkReporter } from './workReporter';
+import { registerReadCommands, tokenOf } from './read';import { applyToSource } from './apply';
 import { CodeFile, Material, RepositorySource, codeFiles, readMaterials, sourceTree } from './repository';
 import { RepositoryDetailPage, REPOSITORY_DETAIL_VIEW_TYPE } from './repositoryPage';
 import { RepositoriesPage } from './repositoriesPage';
@@ -60,10 +59,15 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 	);
 	const refresh = (): void => changed.fire();
 
+	// One reporter for the window: a clone or a pull writes its state and its lines to it, and the page about that
+	// repository is the one subscriber.
+	const work = new WorkReporter();
+	context.subscriptions.push(work);
+
 	// The page that lists the organisation: what is there, what has been read, and what has a local copy.
 	const repositories = new RepositoriesPage(context, selection, output, refresh);
 	// One repository, opened from a row or from the panel: its facts, its local copy, and what is inside it.
-	const detail = new RepositoryDetailPage(context, selection, output, refresh);
+	const detail = new RepositoryDetailPage(context, selection, output, refresh, work);
 	// What decides both: the enterprise the page opens on, where a download lands, and the token.
 	const settings = new RepositorySettingsPage(context, refresh);
 	// Every clone at once, grouped by project: what moved since the last read, and the pages that name it. It repaints
@@ -110,16 +114,25 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 			if (typeof name === 'string' && name.length > 0) {
 				detail.open(name, organisation);
 			}
+		}),
+		// A row's own act, performed on the repository's page rather than invisibly from a list: the page opens, and the
+		// clone or the pull runs there with its output in front of the person.
+		vscode.commands.registerCommand('temcoRepositories.repositoryClone', (name?: unknown) => {
+			if (typeof name === 'string' && name.length > 0) {
+				detail.openAndRun(name, 'clone');
+			}
+		}),
+		vscode.commands.registerCommand('temcoRepositories.repositoryPull', (name?: unknown) => {
+			if (typeof name === 'string' && name.length > 0) {
+				detail.openAndRun(name, 'pull');
+			}
 		})
 	);
 
 	// Reading a source, and the token that reaches one.
 	registerReadCommands(context, selection, output, refresh);
-	// The working area: cloning a source so its files can be read, and pulling it when it has moved on. The clone page
-	// is the one thing that outlives a command, so it is created here and disposed with the module.
-	const clones = new ClonePanel();
-	context.subscriptions.push({ dispose: () => clones.dispose() });
-	registerWorkareaCommands(context, selection, output, refresh, clones);
+	// The working area: cloning a source so its files can be read, and pulling it when it has moved on.
+	registerWorkareaCommands(context, selection, output, refresh, work);
 
 	// Where downloads go, chosen rather than typed: the setting is one path, and a folder dialog is how a person
 	// answers it. The settings page is the other half — this is the shortcut from the page that uses the path.

@@ -49,7 +49,15 @@
       },
       {
         "command": "temcoRepositories.repository",
-        "title": "Open a Repository",
+        "title": "Open a Repository"
+      },
+      {
+        "command": "temcoRepositories.repositoryClone",
+        "title": "Clone This Repository on Its Page"
+      },
+      {
+        "command": "temcoRepositories.repositoryPull",
+        "title": "Pull This Repository on Its Page",
         "icon": "$(repo)"
       },
       {

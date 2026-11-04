@@ -731,7 +731,7 @@ function html(citing = false): string {
 }
 
 const CLIENT = `
-const vscode = acquireVsCodeApi();
+const vscode = window.__temcoApi || (window.__temcoApi = acquireVsCodeApi());
 const $ = (id) => document.getElementById(id);
 let organisations = [];
 let current;
