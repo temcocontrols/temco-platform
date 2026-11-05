@@ -93,6 +93,14 @@ export function registerWorkareaCommands(
     vscode.commands.registerCommand('temcoRepositories.openClone', (target?: unknown) =>
       openClone(context, slugOfTarget(target))
     ),
+    // The same clone, opened *inside* the window instead of beside it: added to the Explorer, named after the
+    // repository. `openClone` above hands it to the operating system; this one makes it a folder of this workspace.
+    vscode.commands.registerCommand('temcoRepositories.showInExplorer', (target?: unknown) =>
+      showInExplorer(context, slugOfTarget(target))
+    ),
+    vscode.commands.registerCommand('temcoRepositories.hideFromExplorer', (target?: unknown) =>
+      hideFromExplorer(context, slugOfTarget(target))
+    ),
     vscode.commands.registerCommand('temcoRepositories.removeClone', (target?: unknown) =>
       removeClone(context, refresh, slugOfTarget(target))
     ),
@@ -430,8 +438,63 @@ async function openClone(context: vscode.ExtensionContext, wanted?: string): Pro
   await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(folder));
 }
 
-/** Remove a local copy: the folder only. The repository, the catalog row and the project are untouched. */
-async function removeClone(
+/**
+ * Show a clone in the Explorer.
+ *
+ * The Explorer is the one panel that answers "where is this among the folders I am working in", and a window opened on
+ * an unrelated folder — or on no folder at all — cannot answer it for a clone that lives somewhere else. So the clone is
+ * added as a workspace folder, named after the repository rather than after the path it happens to occupy, and selected.
+ *
+ * Added rather than replaced: two clones and the site folder in one window is the ordinary case here, and an act started
+ * from a row must never close the folder somebody else is reading.
+ */
+async function showInExplorer(context: vscode.ExtensionContext, wanted?: string): Promise<void> {
+  const source = await sourceOf(context, wanted);
+  if (source === undefined) {
+    return;
+  }
+  const folder = source.path ?? cloneFolder(source.name);
+  if (!(await isThere(folder))) {
+    void vscode.window.showInformationMessage(
+      `Temco Repositories: ${source.name} has no clone to show. Clone it first, then show it here.`
+    );
+    return;
+  }
+  const uri = vscode.Uri.file(folder);
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (!folders.some((candidate) => samePath(candidate.uri.fsPath, folder))) {
+    // The name is the repository's, so a row in Explorer reads `temco-learn` rather than the path it was cloned into.
+    const added = await vscode.workspace.updateWorkspaceFolders(folders.length, 0, { uri, name: source.name });
+    if (!added) {
+      void vscode.window.showWarningMessage(`Temco Repositories: ${folder} could not be added to this window.`);
+      return;
+    }
+  }
+  await vscode.commands.executeCommand('workbench.view.explorer');
+  await vscode.commands.executeCommand('revealInExplorer', uri);
+}
+
+/** Take the clone out of the Explorer's folders again. The copy on disk is untouched — this is the window, not the file. */
+async function hideFromExplorer(context: vscode.ExtensionContext, wanted?: string): Promise<void> {
+  const source = await sourceOf(context, wanted);
+  if (source === undefined) {
+    return;
+  }
+  const folder = source.path ?? cloneFolder(source.name);
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (!folders.some((candidate) => samePath(candidate.uri.fsPath, folder))) {
+    void vscode.window.showInformationMessage(`Temco Repositories: ${source.name} is not open in the Explorer.`);
+    return;
+  }
+  await closeWorkspaceFoldersAt(folder);
+}
+
+/** Two paths naming the same folder, which on Windows is a comparison that cannot be made with `===`. */
+function samePath(left: string, right: string): boolean {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+}
+
+/** Remove a local copy: the folder only. The repository, the catalog row and the project are untouched. */async function removeClone(
   context: vscode.ExtensionContext,
   refresh: () => void,
   wanted?: string
@@ -844,6 +907,15 @@ function slugOfTarget(target: unknown): string | undefined {
     const slug = (target as { slug?: unknown }).slug;
     if (typeof slug === 'string' && slug.length > 0) {
       return slug;
+    }
+    // A row in the Repositories panel: the tree item carries the node, and the node carries the row it was built from.
+    // Without this, a menu entry handed its own row still had to ask which source was meant.
+    const row = (target as { node?: { row?: { slug?: unknown; name?: unknown } } }).node?.row;
+    if (typeof row?.slug === 'string' && row.slug.length > 0) {
+      return row.slug;
+    }
+    if (typeof row?.name === 'string' && row.name.length > 0) {
+      return slugOf(row.name);
     }
   }
   return undefined;

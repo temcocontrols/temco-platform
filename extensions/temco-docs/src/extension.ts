@@ -29,6 +29,9 @@ import { restore, rowSlug } from './ui';
 import { DocsPages } from './docsPages';
 import { PagePropertiesPanel } from './draftView';
 import { registerMediaCommands } from './media';
+import { registerFileActions } from './fileActions';
+import { registerPageDecorations } from './decorations';
+import { registerSearches } from './searches';
 import { NewPagePage } from './newPagePage';
 import { registerWordCount } from './outline';
 import { PANEL_VIEW_TYPE, DocsPanel, DocsPanelState } from './panelView';
@@ -1287,6 +1290,15 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
   registerPageCommands(context, pageDeps);
   // and where a row is: opening it, revealing it, a terminal at its folder, its path on the clipboard.
   registerRowCommands(context, { selected: () => selectedRow() });
+  // The two panels people already work in, told what the memory knows. A page's badge costs nothing to draw and
+  // answers the one question a file list cannot — has this been read, and has it moved on since — so it is registered
+  // here, from the module that owns pages, rather than rebuilt wherever a tree happens to be drawn.
+  const decorations = registerPageDecorations(context);
+  context.subscriptions.push(projects().onDidChange(() => void decorations.load()));
+  // The questions this product asks of its own prose, each one opening a Search Editor scoped to the project's `docs/`.
+  registerSearches(context, { roots: () => roots });
+  // What the Explorer's own context menu offers on a file: read its source, find that source's row, or see who links here.
+  registerFileActions(context);
   // Screenshots: capture or paste, and the file lands in the page's own `media/` before the reference to it means
   // anything. Whichever tree or editor the person used last decides which page it belongs to.
   let lastTouched: 'tree' | 'page' = 'page';

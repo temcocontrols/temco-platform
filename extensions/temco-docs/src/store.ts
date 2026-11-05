@@ -99,6 +99,8 @@ export interface SourceDetail {
 	defaultBranch?: string;
 	docsRoot?: string;
 	registryPath?: string;
+	/** When the source was last read, as the database stamped it — what a page's badge is measured against. */
+	lastRead?: string;
 }
 
 /** A page as a read found it — enough for a tree, and nothing invented. */

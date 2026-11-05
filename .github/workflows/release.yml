@@ -72,8 +72,15 @@ jobs:
         run: |
           set -euo pipefail
           status="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${RELEASE_BRANCH}...${TAG}" --jq .status)"
+          # `compare/<base>...<head>` reports where **head** is, and head here is the tag:
+          #   identical — the tag is the branch tip
+          #   behind    — the tag is an ancestor of the branch tip, so it *is* on the branch and the branch has moved on
+          #   ahead     — the tag carries commits the branch does not have, so it is *not* on the branch
+          #   diverged  — neither
+          # `behind` therefore has to pass: cutting a release and then committing the fix that release needed is how a
+          # pipeline is repaired, and the tag still names a commit this branch contains.
           case "$status" in
-            identical|ahead) echo "Tag $TAG is on $RELEASE_BRANCH." ;;
+            identical|behind) echo "Tag $TAG is on $RELEASE_BRANCH." ;;
             *)
               echo "::error::Tag $TAG is not on $RELEASE_BRANCH (compare status: $status)."
               echo "Releases are cut from $RELEASE_BRANCH; main mirrors upstream and is never released from."
@@ -87,6 +94,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 150
     env:
+      # Packaging downloads the built-in extensions from **GitHub Releases** (`bundle-marketplace-extensions-build`), and
+      # that call is authenticated only when this is set. Without it a hosted runner shares GitHub's unauthenticated
+      # allowance of 60 requests an hour, so the third or fourth extension comes back `403 (you may be rate limited)` and
+      # the whole packaging step dies about eleven seconds in — which is exactly what the first run of this workflow did.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # `@vscode/policy-watcher` builds from source on the macOS runner, and its default deployment target
       # (below 10.13) makes libc++ reject std::get<...>. The Electron base this product ships needs 11 or newer anyway.
       MACOSX_DEPLOYMENT_TARGET: '11.0'
@@ -132,7 +144,6 @@ jobs:
         env:
           # Packaging downloads the Electron binary itself; Playwright is not needed to build.
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare Electron types
         run: node build/npm/electronTypes.ts

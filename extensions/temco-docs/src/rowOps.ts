@@ -24,6 +24,9 @@ export interface RowDeps {
 export function registerRowCommands(context: vscode.ExtensionContext, deps: RowDeps): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('temcoDocs.reveal', (node?: DocsNode) => reveal(deps, node)),
+    vscode.commands.registerCommand('temcoDocs.showInExplorer', (node?: DocsNode) =>
+      showInExplorer(deps, node)
+    ),
     vscode.commands.registerCommand('temcoDocs.openTerminal', (node?: DocsNode) =>
       openTerminal(deps, node)
     ),
@@ -49,6 +52,34 @@ async function reveal(deps: RowDeps, node?: DocsNode): Promise<void> {
   // The operating system's file manager, which is what the Explorer's own *Reveal in File Explorer* opens —
   // not `revealInExplorer`, which is the VS Code view of that name and knows nothing about a folder in `docs/`.
   await vscode.commands.executeCommand('revealFileInOS', uri);
+}
+
+/**
+ * Select the page in the **Explorer** — a different act from `reveal` above, which opens the operating system's file
+ * manager.
+ *
+ * The two exist because they answer different questions: the file manager is for "where is this, outside the window",
+ * the Explorer is for "where is this among the folders I am working in". The Explorer can only answer the second for a
+ * file inside a folder the window has open, so a page reached through the catalog — and a project folder this window
+ * never added — says so instead of selecting nothing.
+ */
+async function showInExplorer(deps: RowDeps, node?: DocsNode): Promise<void> {
+  const row = targeted(deps, node);
+  if (row === undefined) {
+    return explained(row);
+  }
+  const uri = fileOf(row);
+  if (uri === undefined) {
+    return explained(row);
+  }
+  if (vscode.workspace.getWorkspaceFolder(uri) === undefined) {
+    void vscode.window.showInformationMessage(
+      `Temco Docs: ${rowName(row)} is in a folder this window does not have open, so the Explorer has no row to select.`
+    );
+    return;
+  }
+  // Selected, not opened: the person is already on the page, and what they want is to see where it sits.
+  await vscode.commands.executeCommand('revealInExplorer', uri);
 }
 
 /** A terminal at the row's own folder: what a person wants next after reading a page or a chapter. */

@@ -297,8 +297,43 @@
       },
       {
         "command": "temcoDocs.reveal",
-        "title": "Reveal in Explorer",
+        "title": "Reveal in File Explorer",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "temcoDocs.showInExplorer",
+        "title": "Show in Explorer",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "temcoDocs.findUnfinished",
+        "title": "Find Unfinished Prose",
+        "icon": "$(search)"
+      },
+      {
+        "command": "temcoDocs.findLinks",
+        "title": "Find Links to Check",
+        "icon": "$(search)"
+      },
+      {
+        "command": "temcoDocs.findVersions",
+        "title": "Find Version Numbers",
+        "icon": "$(search)"
+      },
+      {
+        "command": "temcoDocs.readSourceOfFile",
+        "title": "Read This Source",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "temcoDocs.revealSourceOfFile",
+        "title": "Show the Source in the Panel",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "temcoDocs.findReferencesToFile",
+        "title": "Find References to This Page",
+        "icon": "$(references)"
       },
       {
         "command": "temcoDocs.openTerminal",
@@ -712,7 +747,36 @@
       }
     ],
     "menus": {
+      "explorer/context": [
+        {
+          "command": "temcoDocs.readSourceOfFile",
+          "when": "resourceScheme == file",
+          "group": "temcoDocs@1"
+        },
+        {
+          "command": "temcoDocs.revealSourceOfFile",
+          "when": "resourceScheme == file",
+          "group": "temcoDocs@2"
+        },
+        {
+          "command": "temcoDocs.findReferencesToFile",
+          "when": "resourceScheme == file && resourceExtname == .md",
+          "group": "temcoDocs@3"
+        }
+      ],
       "commandPalette": [
+        {
+          "command": "temcoDocs.readSourceOfFile",
+          "when": "false"
+        },
+        {
+          "command": "temcoDocs.revealSourceOfFile",
+          "when": "false"
+        },
+        {
+          "command": "temcoDocs.findReferencesToFile",
+          "when": "false"
+        },
         {
           "command": "temcoDocs.knowledge",
           "when": "false"
@@ -1101,6 +1165,11 @@
           "command": "temcoDocs.openPage",
           "when": "view == temcoDocs.pages && viewItem =~ /^(page|missingPage|loosePage)$/",
           "group": "1_open@1"
+        },
+        {
+          "command": "temcoDocs.showInExplorer",
+          "when": "view == temcoDocs.pages && viewItem =~ /^(page|loosePage)$/",
+          "group": "2_show@0"
         },
         {
           "command": "temcoDocs.reveal",

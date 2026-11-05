@@ -151,6 +151,16 @@
         "icon": "$(folder-opened)"
       },
       {
+        "command": "temcoRepositories.showInExplorer",
+        "title": "Show in Explorer",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "temcoRepositories.hideFromExplorer",
+        "title": "Hide from Explorer",
+        "icon": "$(close)"
+      },
+      {
         "command": "temcoRepositories.removeClone",
         "title": "Remove the Clone",
         "icon": "$(trash)"
@@ -234,6 +244,16 @@
           "command": "temcoRepositories.openClone",
           "when": "view == temcoRepositories.list && viewItem == temcoSource",
           "group": "1_copy@1"
+        },
+        {
+          "command": "temcoRepositories.showInExplorer",
+          "when": "view == temcoRepositories.list && viewItem == temcoSource",
+          "group": "1_copy@2"
+        },
+        {
+          "command": "temcoRepositories.hideFromExplorer",
+          "when": "view == temcoRepositories.list && viewItem == temcoSource",
+          "group": "1_copy@3"
         },
         {
           "command": "temcoRepositories.removeSource",
