@@ -186,7 +186,7 @@ function fromLocalEsbuild(extensionPath: string, esbuildConfigFileName: string):
 		});
 	}).then(() => {
 		// After esbuild completes, collect all files using vsce
-		return vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.None });
+		return listLocalEsbuildFiles(vsce, extensionPath);
 	}).then(fileNames => {
 		if (packagedDependencies.length > 0) {
 			const packagedDependencyFileNames = packagedDependencies.flatMap(dependency =>
@@ -213,7 +213,9 @@ function fromLocalEsbuild(extensionPath: string, esbuildConfigFileName: string):
 				path: filePath,
 				stat: fs.statSync(filePath),
 				base: extensionPath,
-				contents: fs.createReadStream(filePath)
+				// A buffer rather than a stream, for the reason spelled out in `fromLocalNormal`: a stream-contents File
+				// opens its descriptor when it is built, and the copilot extension alone is 21 000 files.
+				contents: fs.readFileSync(filePath)
 			}));
 
 		es.readArray(files).pipe(result);
@@ -224,6 +226,39 @@ function fromLocalEsbuild(extensionPath: string, esbuildConfigFileName: string):
 	});
 
 	return result.pipe(createStatsStream(path.basename(extensionPath)));
+}
+
+/**
+ * The files an esbuild-built extension ships.
+ *
+ * `PackageManager.None` tells vsce there is no dependency graph to resolve, and along with assuming that, it drops the
+ * `.vscodeignore` rules that re-include files inside `node_modules`. The copilot extension is built that way and keeps
+ * its whole SDK behind exactly such rules (`!node_modules/@github/copilot/sdk/**`) — without them it ships with an
+ * empty `@github/copilot`, and `prepareBuiltInCopilotRipgrepShim` then aborts the packaging with "Copilot SDK directory
+ * not found". So when an ignore file re-includes something under `node_modules`, ask vsce for the dependency-aware list
+ * too and keep those entries; nothing else changes for the extensions that do not do this.
+ */
+async function listLocalEsbuildFiles(vsce: typeof import('@vscode/vsce'), extensionPath: string): Promise<string[]> {
+	const fileNames = await vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.None });
+
+	const ignoreFilePath = path.join(extensionPath, '.vscodeignore');
+	const reIncludesNodeModules = fs.existsSync(ignoreFilePath)
+		&& fs.readFileSync(ignoreFilePath, 'utf8').split(/\r?\n/)
+			.some(line => line.trim().startsWith('!') && line.includes('node_modules'));
+	if (!reIncludesNodeModules) {
+		return fileNames;
+	}
+
+	try {
+		const withDependencies = await vsce.listFiles({ cwd: extensionPath, packageManager: vsce.PackageManager.Npm });
+		const nodeModuleEntries = withDependencies.filter(fileName => fileName.replace(/\\/g, '/').startsWith('node_modules/'));
+		return Array.from(new Set([...fileNames, ...nodeModuleEntries]));
+	} catch (err) {
+		// `npm list` exits non-zero for a tree with extraneous or missing peers. Nothing to add here — the extension
+		// keeps the files vsce could list without resolving dependencies.
+		console.warn(`Could not resolve node_modules entries for ${path.basename(extensionPath)}: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`);
+		return fileNames;
+	}
 }
 
 const userAgent = 'VSCode Build';
