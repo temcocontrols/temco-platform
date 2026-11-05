@@ -1,0 +1,1164 @@
+# The local assistant and its MCP server
+
+The assistant runs a model on the user's machine. This document specifies the tool server it calls, the protocol between them, the code on both sides, the build that produces the server, and the way the two processes find each other inside the packaged application.
+
+It is organised in three parts:
+
+1. **What exists** — the current call path, measured, with file and line references (§1–§2).
+2. **What will be built** — the C# server and the TypeScript client, in full (§4–§6).
+3. **Build and run** — how the server is compiled, where it is installed, and how it is started from inside the running application (§7–§8).
+
+Everything in §3 marked *proven* was compiled and executed while this document was written — the C# server on .NET 10.0.400 with `ModelContextProtocol` 2.3.1, the TypeScript client typechecked with `tsc` 5 against `@modelcontextprotocol/client` 2.4.0 and the declarations in `src/vscode-dts/vscode.d.ts`. The probe project is described in §3.4 so the result can be reproduced.
+
+---
+
+## 1. What runs today
+
+One funnel. Every AI feature in the product ends at `complete()`.
+
+```
+webview (temcoAi.panel)                aiPage.ts
+   │  postMessage {type:'ask', text}
+   ▼
+pipeline                               ai/panel.ts
+   │  retrieve(docs) -> prompt -> complete()
+   ▼
+complete(context, messages, options)   ai/runtime.ts:104
+   │  POST http://127.0.0.1:<port>/v1/chat/completions
+   ▼
+llama-server                           spawned at ai/runtime.ts:144
+   │  --model <gguf> --host 127.0.0.1 --port <n> --ctx-size 8192
+   ▼
+Qwen2.5-Instruct (1.5B / 3B / 7B, Q4_K_M)   pinned in ai/catalog.ts
+```
+
+The request body is built at `ai/runtime.ts:115`:
+
+```json
+{ "messages": [ ... ], "temperature": 0.2, "stream": false, "max_tokens": 640 }
+```
+
+There is no `tools` key, the answer is read as a single string, and `llama-server` is started without `--jinja`. The assistant answers from retrieved text; it cannot read a point, query the catalog, or run a program.
+
+The state it already keeps, which the server reuses rather than replaces:
+
+| Thing | Where | Shape |
+| --- | --- | --- |
+| Runtime and model pins | `extensions/temco-ai/src/ai/catalog.ts` | llama.cpp `b11577` per platform, Qwen2.5 1.5B/3B/7B; `ArtifactKind = 'runtime' \| 'model'`, entries carry `platform`, `architecture`, `sha256` |
+| Download, checksum, unpack | `extensions/temco-ai/src/ai/install.ts` | `install(context, entry)`, `installedArtifacts(context)`, `modelRoot(context)` |
+| The install root | `install.ts:41` | `temcoAi.modelFolder`, else `context.globalStorageUri.fsPath`; each artifact unpacks into a folder named `entry.id` |
+| The one HTTP call | `ai/runtime.ts:104` | `complete()` |
+| Prompt versions | `ai/prompts.ts` | `ai-v5` |
+| Citation logging | `ai/store.ts` | `temcocontrols.temco-store` API |
+| Catalog database | `extensions/temco-store/src/catalog/store.ts:70` | `globalStorage/catalog/catalog.db`, `node:sqlite`, WAL |
+
+---
+
+## 2. What the model cannot do today, precisely
+
+| Missing piece | Consequence | Where it goes |
+| --- | --- | --- |
+| `--jinja` on the `llama-server` argument list | The server does not apply the model's chat template, so it never emits `tool_calls` and rejects a `tools` payload | `ai/runtime.ts:146-157` |
+| `tools` in the request body | The model is never told a tool exists | `ai/runtime.ts:115` |
+| Reading `choices[0].message.tool_calls` | A reply that asks for a tool is treated as final text | `ai/runtime.ts:121` |
+| Something that executes a call | The extension host could, but then the tool surface is private to the assistant | `tools/temco-mcp` |
+| A loop over `tool_calls` | One turn is one request, so a call cannot be answered | `ai/agent.ts` |
+
+The first three are one commit in `temco-ai`; the last two are §5 and §6.
+
+---
+
+## 3. What is proven, and what is not
+
+### 3.1 The server half, proven
+
+Built, published, and driven over stdio. Transcript from the actual run:
+
+```
+-> {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"temco-ai","version":"1.0.0"}}}
+<- {"result":{"protocolVersion":"2025-06-18","capabilities":{"logging":{},"tools":{"listChanged":true}},"serverInfo":{"name":"temco-mcp","version":"1.0.0"}},"id":1,"jsonrpc":"2.0"}
+
+-> {"jsonrpc":"2.0","method":"notifications/initialized"}
+
+-> {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+<- {"result":{"tools":[{"name":"device.list","title":"List devices","description":"Every T3000 device known to the panel: serial, name, product type, address, and whether it is online.","inputSchema":{"type":"object","properties":{"nameContains":{"description":"Optional text; only devices whose name contains it are returned.","type":["string","null"],"default":null}}},"annotations":{"title":"List devices","destructiveHint":false,"idempotentHint":true,"openWorldHint":false,"readOnlyHint":true}}, … device.read_point elided … ]},"id":2,"jsonrpc":"2.0"}
+
+-> {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"device.read_point","arguments":{"serial":1234,"pointType":"BAD","pointIndex":1}}}
+<- {"result":{"content":[{"type":"text","text":"pointType must be INPUT, OUTPUT or VARIABLE, not 'BAD'."}],"isError":true},"id":3,"jsonrpc":"2.0"}
+
+-> {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"device.read_point","arguments":{"serial":1234,"pointType":"INPUT","pointIndex":1}}}
+<- {"result":{"content":[{"type":"text","text":"device 1234 has no INPUT point 1: No connection could be made because the target machine actively refused it. (127.0.0.1:3210)"}],"isError":true},"id":4,"jsonrpc":"2.0"}
+```
+
+What that establishes:
+
+- The `[McpServerTool]` attributes on a plain class, discovered by `WithToolsFromAssembly()`, produce a `tools/list` whose `inputSchema` is generated from the C# signature, and whose `annotations` carry the four hints — `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` — so a client can gate a call on the server's own declaration. The extension still keeps its own `DESTRUCTIVE` set (§6.4): a server is not the authority on whether its tools are safe.
+- A parameter with a default (`string? nameContains = null`) has `"default": null` and is absent from `required`; without the default it is `["string","null"]` listed as required. That is why §5.4 gives optional parameters a default.
+- A tool that returns `CallToolResult` with `IsError = true` sends its message to the client verbatim. A tool that *throws* does not: the same call threw `ArgumentException` and the client received only `"An error occurred invoking 'device.read_point'."` — the reason is written to stderr and lost to the model. Calling `device.list` with `{}` while the platform service was down failed the same way, because `HttpRequestException` escaped the tool.
+- Logging configured with `LogToStandardErrorThreshold` keeps stdout clean: 3 KB of log lines arrived on stderr while stdout carried nothing but JSON-RPC.
+
+### 3.2 The output, measured
+
+`dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false`:
+
+| File | Size |
+| --- | --- |
+| `temco-mcp.exe` | 159 KB |
+| `temco-mcp.dll` | 27 KB |
+| `e_sqlite3.dll` | 1,933 KB |
+| `coreclr.dll` | 4,506 KB |
+| `hostfxr.dll` | 371 KB |
+| everything else | the rest |
+| **230 files** | **82.9 MB** |
+
+A self-contained publish carries the runtime, so this is the cost *per platform*. Trimming it would shrink it and break `WithToolsFromAssembly()`; single-file publish would shrink the file count and extract `e_sqlite3.dll` to a temporary directory at run time. Both are rejected for that reason. §7.5 turns the size into a decision: the server is installed on first use, by the code that already installs the model runtime, instead of being bundled into the installer.
+
+### 3.3 The extension half, and what remains unproven
+
+| # | Link | Status |
+| --- | --- | --- |
+| 1 | `llama-server` emits `tool_calls` when started with `--jinja` | Vendor-documented; the runtime is not installed on the machine this document was written on. §8.5 step 2 settles it in one command. |
+| 2 | The extension host may spawn a child process | Proven — `ai/runtime.ts:144` already spawns `llama-server`. |
+| 3 | A CommonJS extension loads the MCP client | Proven — `@modelcontextprotocol/client` 2.4.0 installed, and the `ai/mcp.ts` in §6.2 typechecked with `tsc` 5 (`"module": "commonjs"`, `strict`, 0 errors) using the declarations from `src/vscode-dts/vscode.d.ts`. The package ships a `.cjs` build and `temco-ai/package.json` is `"type": "commonjs"`. |
+| 4 | A downloaded binary can be executed from the extension's storage | Proven by the same mechanism the runtime uses: `install()` unpacks into `modelRoot(context)` and `runtime.ts` spawns the unpacked executable from there. |
+| 5 | Two processes can share the catalog | Proven — `catalog/store.ts:73` sets `journal_mode = WAL`; the server opens the file `ReadOnly` with a `busy_timeout`. |
+| 6 | The server never writes next to itself | Proven — the published apphost writes nothing to disk; state goes to `TEMCO_MCP_STATE` and the catalog. |
+| 7 | A turn completes end to end inside the app | To be proven by §8.5, the moment the runtime is installed. |
+
+The chain has no unproven link that needs an API this build does not have.
+
+### 3.4 Reproducing the probe
+
+```
+tools/temco-mcp-probe/          # not committed; the shape of §5, with a stub IPlatformApi
+  Temco.Mcp.csproj              # as §5.2
+  Program.cs                    # as §5.3
+  Platform/IPlatformApi.cs      # the records and the interface
+  Platform/HttpPlatformApi.cs   # GET /devices, GET|PUT /devices/{serial}/points/{type}/{index}
+  Store/Audit.cs                # as §5.8
+  Tools/DeviceTools.cs          # as §5.4
+```
+
+```powershell
+dotnet build -c Release
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o out
+# then speak MCP to out\temco-mcp.exe with stdin held open - see §8.5
+```
+
+Two things the probe taught that the design now depends on:
+
+- **`Microsoft.Extensions.Hosting` is a required explicit reference.** `ModelContextProtocol` does not flow the assembly that contains `Host.CreateApplicationBuilder`, and the failure is `CS0103: The name 'Host' does not exist in the current context`.
+- **`Microsoft.Data.Sqlite` 10.0.0 pulls a flagged native SQLite.** Restore raises `NU1903` (high severity, `SQLitePCLRaw.lib.e_sqlite3` 2.1.11). 10.0.14 restores and builds with zero warnings.
+
+---
+
+## 4. Change 1 — let the runtime call tools
+
+### 4.1 The argument list
+
+```ts
+  const server = spawn(
+    runtime.path,
+    [
+      '--model',
+      model.path,
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(port),
+      '--ctx-size',
+      '8192',
+      // Without this the server never applies the model's chat template, so a `tools` payload is
+      // rejected and a reply never carries `tool_calls`.
+      '--jinja',
+    ],
+    { windowsHide: true }
+  );
+```
+
+### 4.2 The types
+
+```ts
+/** One tool as the model sees it: a name, a sentence, and a JSON Schema for the arguments. */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/** One call the model asked for, answered by whoever owns the tool. */
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface Completion {
+  text: string;
+  toolCalls: readonly ToolCall[];
+}
+```
+
+`ChatMessage`, at `ai/runtime.ts:38`, gains the third role that carries a tool result and the two fields that pair a call with its answer:
+
+```ts
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[];
+  tool_call_id?: string;
+}
+```
+
+### 4.3 `complete()` gains `tools` and returns the calls
+
+```ts
+export async function complete(
+  context: vscode.ExtensionContext,
+  messages: readonly ChatMessage[],
+  options: {
+    onToken?: (text: string) => void;
+    token?: vscode.CancellationToken;
+    maxTokens?: number;
+    /** Omitted for the plain question-and-answer path, which stays exactly as it is. */
+    tools?: readonly ToolSpec[];
+  } = {}
+): Promise<Completion> {
+  const server = await startAiServer(context);
+  const payload = JSON.stringify({
+    messages,
+    temperature: 0.2,
+    stream: options.onToken !== undefined,
+    max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
+    ...(options.tools?.length
+      ? {
+          tools: options.tools.map((tool) => ({
+            type: 'function',
+            function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+          })),
+          tool_choice: 'auto',
+          parallel_tool_calls: true,
+        }
+      : {}),
+  });
+  const response = await post(server.port, '/v1/chat/completions', payload, options.onToken, options.token);
+  touchIdle();
+  return readCompletion(response, options.onToken !== undefined);
+}
+
+/**
+ * A streamed turn is text-only: a half-rendered call cannot be answered, so a turn that may call a tool is
+ * never streamed.
+ */
+function readCompletion(raw: string, streamed: boolean): Completion {
+  if (streamed) {
+    return { text: raw, toolCalls: [] };
+  }
+  const parsed = JSON.parse(raw) as {
+    choices?: {
+      message?: {
+        content?: string | null;
+        tool_calls?: { id: string; function: { name: string; arguments: string } }[];
+      };
+    }[];
+  };
+  const message = parsed.choices?.[0]?.message;
+  const toolCalls = (message?.tool_calls ?? []).map((call) => ({
+    id: call.id,
+    name: call.function.name,
+    arguments: parseArguments(call.function.arguments),
+  }));
+  return { text: message?.content ?? '', toolCalls };
+}
+
+function parseArguments(text: string): Record<string, unknown> {
+  try {
+    const value: unknown = JSON.parse(text || '{}');
+    return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+```
+
+`complete()` changes shape, so all four call sites read `.text` instead of the string: `ai/panel.ts:219`, `ai/panel.ts:308`, `extension.ts:128`, `extension.ts:140`. With `tools` omitted they behave exactly as they do now.
+
+---
+
+## 5. The server — `tools/temco-mcp`
+
+### 5.1 Layout
+
+```
+tools/temco-mcp/
+  Temco.Mcp.csproj
+  Program.cs                 host, logging to stderr, stdio transport
+  Platform/
+    IPlatformApi.cs          the outside world, as one interface
+    HttpPlatformApi.cs       the implementation: base URL from the environment
+  Tools/
+    DeviceTools.cs           [McpServerToolType]
+    DocsTools.cs
+    RepoTools.cs
+    CatalogTools.cs
+  Store/
+    CatalogDb.cs             read-only SQLite over the extension's catalog
+    Audit.cs                 one row per call
+  tests/
+    Temco.Mcp.Tests.csproj   drives the real host over an in-memory transport
+```
+
+It lives at the repository root rather than under `extensions/` because it is not an extension: it is a program the extension starts.
+
+### 5.2 `Temco.Mcp.csproj`
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- A trimmed build breaks WithToolsFromAssembly(); a single-file build extracts e_sqlite3.dll at run
+         time. The publish output is a plain folder instead. -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <AssemblyName>temco-mcp</AssemblyName>
+    <RootNamespace>Temco.Mcp</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" Version="2.3.1" />
+    <!-- Explicit: ModelContextProtocol does not flow the assembly that declares Host. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <!-- 10.0.0 restores SQLitePCLRaw.lib.e_sqlite3 2.1.11, which NuGet flags NU1903 (high). -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+  </ItemGroup>
+</Project>
+```
+
+### 5.3 `Program.cs`
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Temco.Mcp;
+using Temco.Mcp.Tools;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+// stdout is the protocol. Every log line must go to stderr, or the first write breaks the stream.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
+
+builder.Services.AddSingleton<IPlatformApi>(_ => new HttpPlatformApi(
+    Environment.GetEnvironmentVariable("TEMCO_PLATFORM_API") ?? "http://127.0.0.1:3210",
+    TimeSpan.FromSeconds(20)));
+builder.Services.AddSingleton(_ => new Audit(
+    Environment.GetEnvironmentVariable("TEMCO_MCP_STATE")
+        ?? Path.Combine(Path.GetTempPath(), "temco-mcp")));
+
+builder.Services
+    .AddMcpServer(options =>
+    {
+        options.ServerInfo = new() { Name = "temco-mcp", Version = "1.0.0" };
+    })
+    .WithStdioServerTransport()
+    .WithToolsFromAssembly();
+
+await builder.Build().RunAsync();
+```
+
+The two `using Temco.Mcp…` lines are load-bearing: top-level statements sit in the global namespace, so the project's own types are not in scope without them.
+
+### 5.4 A tool, in full
+
+The attribute defaults are the unsafe ones — `ReadOnly = false`, `Destructive = true`, `OpenWorld = true` — so every tool states its own intent.
+
+```csharp
+using System.ComponentModel;
+using System.Text.Json;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
+
+namespace Temco.Mcp.Tools;
+
+[McpServerToolType]
+public sealed class DeviceTools(IPlatformApi platform, Audit audit)
+{
+    [McpServerTool(
+        Name = "device.list",
+        Title = "List devices",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false)]
+    [Description("Every T3000 device known to the panel: serial, name, product type, address, and whether it is online.")]
+    public async Task<CallToolResult> ListDevices(
+        [Description("Optional text; only devices whose name contains it are returned.")] string? nameContains = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var devices = await platform.GetDevicesAsync(nameContains, cancellationToken);
+            audit.Record("device.list", JsonSerializer.Serialize(new { nameContains }), devices.Count);
+            return Text(JsonSerializer.Serialize(devices));
+        }
+        catch (Exception error) when (error is HttpRequestException or InvalidOperationException)
+        {
+            return Fail($"the platform service did not answer: {error.Message}");
+        }
+    }
+
+    [McpServerTool(
+        Name = "device.read_point",
+        Title = "Read a point",
+        ReadOnly = true,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false)]
+    [Description("Read one input, output or variable of a device: its value, units, and range.")]
+    public async Task<CallToolResult> ReadPoint(
+        [Description("Device serial number.")] int serial,
+        [Description("Point type: INPUT, OUTPUT or VARIABLE.")] string pointType,
+        [Description("One-based point index, as the point list shows it.")] int pointIndex,
+        CancellationToken cancellationToken = default)
+    {
+        if (pointType is not ("INPUT" or "OUTPUT" or "VARIABLE"))
+        {
+            return Fail($"pointType must be INPUT, OUTPUT or VARIABLE, not '{pointType}'.");
+        }
+        try
+        {
+            var point = await platform.ReadPointAsync(serial, pointType, pointIndex, cancellationToken);
+            audit.Record("device.read_point", JsonSerializer.Serialize(new { serial, pointType, pointIndex }), 1);
+            return Text(JsonSerializer.Serialize(point));
+        }
+        catch (Exception error) when (error is HttpRequestException or InvalidOperationException)
+        {
+            return Fail($"device {serial} has no {pointType} point {pointIndex}: {error.Message}");
+        }
+    }
+
+    [McpServerTool(
+        Name = "device.write_point",
+        Title = "Write a point",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = false,
+        OpenWorld = true)]
+    [Description("Write one point. Changes equipment state, so it is never called without an approval from the person at the keyboard.")]
+    public async Task<CallToolResult> WritePoint(
+        [Description("Device serial number.")] int serial,
+        [Description("Point type: OUTPUT or VARIABLE.")] string pointType,
+        [Description("One-based point index.")] int pointIndex,
+        [Description("The value to write.")] double value,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await platform.WritePointAsync(serial, pointType, pointIndex, value, cancellationToken);
+            audit.Record("device.write_point", JsonSerializer.Serialize(new { serial, pointType, pointIndex, value }), 1);
+            return Text(JsonSerializer.Serialize(result));
+        }
+        catch (Exception error) when (error is HttpRequestException or InvalidOperationException)
+        {
+            return Fail($"the write did not reach device {serial}: {error.Message}");
+        }
+    }
+
+    private static CallToolResult Text(string text) =>
+        new() { Content = [new TextContentBlock { Text = text }] };
+
+    private static CallToolResult Fail(string message) =>
+        new() { IsError = true, Content = [new TextContentBlock { Text = message }] };
+}
+```
+
+Three rules follow from §3.1 and hold for every tool:
+
+1. **Return `CallToolResult`; do not throw.** An exception reaches the model as `"An error occurred invoking '<tool>'."` with no reason, so a model that passed a wrong argument cannot correct it. That includes infrastructure failures: a refused connection to the platform service is the tool's error to report, not an exception to leak.
+2. **Give an optional parameter a default, and default the token with it.** `string? nameContains = null` yields `"default": null` and keeps the name out of `required`; without it the schema lists it as required. Because C# requires optional parameters to come after required ones, a tool with any optional argument ends its list with `(… , string? optional = null, CancellationToken cancellationToken = default)` — the token needs the default too, or the compiler rejects the order (`CS1737`).
+3. **State the four hints on every tool.** `ReadOnly`, `Destructive`, `Idempotent`, `OpenWorld` default to `false`, `true`, `false` and `true` respectively, and reach the client as `annotations`; leaving them out claims the tool destroys things and reaches outside the machine.
+
+### 5.5 The platform interface
+
+The tools do not speak T3000 protocols. They call one interface, so the transport can change without touching a tool.
+
+```csharp
+namespace Temco.Mcp;
+
+public interface IPlatformApi
+{
+    Task<IReadOnlyList<DeviceInfo>> GetDevicesAsync(string? nameContains, CancellationToken cancellationToken);
+    Task<PointInfo> ReadPointAsync(int serial, string pointType, int pointIndex, CancellationToken cancellationToken);
+    Task<WriteResult> WritePointAsync(int serial, string pointType, int pointIndex, double value, CancellationToken cancellationToken);
+}
+
+public sealed record DeviceInfo(int Serial, string Name, string ProductType, string? Address, bool Online);
+public sealed record PointInfo(string Label, double Value, string Units, string Description);
+public sealed record WriteResult(bool Accepted, string Message);
+```
+
+```csharp
+using System.Net.Http.Json;
+using System.Text.Json;
+
+namespace Temco.Mcp;
+
+public sealed class HttpPlatformApi : IPlatformApi
+{
+    private readonly HttpClient _http;
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    public HttpPlatformApi(string baseUrl, TimeSpan timeout)
+    {
+        _http = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = timeout };
+    }
+
+    public async Task<IReadOnlyList<DeviceInfo>> GetDevicesAsync(string? nameContains, CancellationToken cancellationToken)
+    {
+        var url = nameContains is null ? "/devices" : $"/devices?nameContains={Uri.EscapeDataString(nameContains)}";
+        var devices = await _http.GetFromJsonAsync<List<DeviceInfo>>(url, Json, cancellationToken);
+        return devices ?? [];
+    }
+
+    public async Task<PointInfo> ReadPointAsync(int serial, string pointType, int pointIndex, CancellationToken cancellationToken)
+    {
+        var point = await _http.GetFromJsonAsync<PointInfo>(
+            $"/devices/{serial}/points/{pointType}/{pointIndex}", Json, cancellationToken);
+        return point ?? throw new InvalidOperationException($"Device {serial} has no {pointType} point {pointIndex}.");
+    }
+
+    public async Task<WriteResult> WritePointAsync(int serial, string pointType, int pointIndex, double value, CancellationToken cancellationToken)
+    {
+        var response = await _http.PutAsJsonAsync(
+            $"/devices/{serial}/points/{pointType}/{pointIndex}", new { value }, Json, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<WriteResult>(Json, cancellationToken);
+        return result ?? new WriteResult(false, "The service returned no answer.");
+    }
+}
+```
+
+Which service answers on `TEMCO_PLATFORM_API` is open decision 1 in §11. Only `HttpPlatformApi` is affected by the answer.
+
+### 5.6 The catalog database, read-only
+
+`temco-store` owns the file; the server only reads it.
+
+```csharp
+using Microsoft.Data.Sqlite;
+
+namespace Temco.Mcp;
+
+public sealed class CatalogDb
+{
+    private readonly string _connectionString;
+
+    public CatalogDb(string path)
+    {
+        // The extension opened this file with journal_mode=WAL, so a reader here never blocks its writes.
+        _connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = true,
+        }.ToString();
+    }
+
+    public async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>> QueryAsync(
+        string sql, CancellationToken cancellationToken)
+    {
+        await using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using (var pragma = connection.CreateCommand())
+        {
+            // Read-only, but still a shared file: wait rather than fail while a writer holds the lock.
+            pragma.CommandText = "PRAGMA busy_timeout = 5000;";
+            await pragma.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var rows = new List<IReadOnlyDictionary<string, object?>>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var row = new Dictionary<string, object?>(StringComparer.Ordinal);
+            for (var i = 0; i < reader.FieldCount; i++)
+            {
+                row[reader.GetName(i)] = await reader.IsDBNullAsync(i, cancellationToken) ? null : reader.GetValue(i);
+            }
+            rows.Add(row);
+        }
+        return rows;
+    }
+}
+```
+
+The path comes from the extension, which uses the same expression as `catalog/store.ts:1473`: `vscode.Uri.joinPath(context.globalStorageUri, 'catalog', 'catalog.db').fsPath`.
+
+### 5.7 The tool catalogue
+
+Names are the contract; the model sees them verbatim. Twenty-three is deliberately short — a local 7B model loses accuracy as the list grows and the arguments deepen — and every argument is a scalar.
+
+| Tool | Reads / writes | Backed by |
+| --- | --- | --- |
+| `device.list` | reads devices | `IPlatformApi.GetDevicesAsync` |
+| `device.describe` | reads one device | `IPlatformApi` |
+| `device.read_point` | reads one point | `IPlatformApi.ReadPointAsync` |
+| `device.write_point` | writes one point | `IPlatformApi.WritePointAsync` |
+| `device.trendlog_list` | reads trendlog names | `IPlatformApi` |
+| `device.trendlog_query` | reads history over a range | `IPlatformApi` |
+| `device.alarm_list` | reads alarms, optionally active only | `IPlatformApi` |
+| `device.alarm_acknowledge` | acknowledges one alarm | `IPlatformApi` |
+| `docs.search` | full-text over the published documentation | `docs/` in the repository |
+| `docs.read` | reads one page by path | `docs/` |
+| `docs.outline` | reads the table of contents | `docs/README.md` |
+| `docs.stale` | counts pages whose code moved | `docs/` |
+| `repo.list` | reads repositories | `IPlatformApi` |
+| `repo.show` | reads one repository | `IPlatformApi` |
+| `repo.status` | reads the working tree of one clone | `IPlatformApi` |
+| `repo.log` | reads commits | `IPlatformApi` |
+| `repo.diff` | reads a diff; never applies one | `IPlatformApi` |
+| `project.list` | reads projects | `IPlatformApi` |
+| `project.create` | creates one project | `IPlatformApi` |
+| `catalog.query` | runs one read-only statement | `CatalogDb` |
+| `catalog.tables` | lists tables and columns | `CatalogDb` |
+| `learn.search` | searches the site's content | `IPlatformApi` |
+| `learn.post_status` | reads the publication state of a topic | `IPlatformApi` |
+
+### 5.8 Audit
+
+One row per call, in the extension's storage, so what the assistant did can be read back.
+
+```csharp
+using Microsoft.Data.Sqlite;
+
+namespace Temco.Mcp;
+
+public sealed class Audit
+{
+    private readonly string _path;
+
+    public Audit(string appDataDirectory)
+    {
+        _path = Path.Combine(appDataDirectory, "temco-mcp", "audit.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+        using var connection = new SqliteConnection($"Data Source={_path}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE IF NOT EXISTS calls (
+                at TEXT NOT NULL,
+                tool TEXT NOT NULL,
+                arguments TEXT NOT NULL,
+                rows INTEGER NOT NULL
+            );
+            """;
+        command.ExecuteNonQuery();
+    }
+
+    public void Record(string tool, string arguments, int rows)
+    {
+        using var connection = new SqliteConnection($"Data Source={_path}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO calls (at, tool, arguments, rows) VALUES ($at, $tool, $arguments, $rows);
+            """;
+        command.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("$tool", tool);
+        command.Parameters.AddWithValue("$arguments", arguments);
+        command.Parameters.AddWithValue("$rows", rows);
+        command.ExecuteNonQuery();
+    }
+}
+```
+
+The policy gate is in the loop (§6.4), not in the tool: a call to something in the `DESTRUCTIVE` set is only made after the panel asks the person.
+
+---
+
+## 6. The client inside `temco-ai`
+
+### 6.1 Dependency
+
+```json
+"dependencies": {
+  "@modelcontextprotocol/client": "2.4.0"
+}
+```
+
+`temco-ai` declares no runtime dependency today, so this is the first. The package ships CommonJS and the extension is already `"type": "commonjs"`, so nothing else changes.
+
+### 6.2 `ai/mcp.ts`
+
+```ts
+import { Client } from '@modelcontextprotocol/client';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import type { ToolSpec } from './runtime';
+
+const CALL_TIMEOUT_MS = 30_000;
+
+interface McpTool {
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+}
+
+/** One stdio session with the tool server: started for a turn, closed when the turn ends. */
+export class ToolSession implements vscode.Disposable {
+  private client: Client | undefined;
+  private transport: StdioClientTransport | undefined;
+  private tools: readonly ToolSpec[] = [];
+
+  constructor(
+    private readonly command: string,
+    private readonly env: Record<string, string>,
+    private readonly log: (line: string) => void
+  ) {}
+
+  async open(): Promise<readonly ToolSpec[]> {
+    if (this.client) {
+      return this.tools;
+    }
+    const transport = new StdioClientTransport({
+      command: this.command,
+      args: [],
+      env: this.env,
+      // Piped so the server's log lines land in the "Temco AI" output channel rather than nowhere.
+      stderr: 'pipe',
+    });
+    transport.stderr?.on('data', (chunk: Buffer) => this.log(`[mcp] ${chunk.toString().trimEnd()}`));
+
+    const client = new Client({ name: 'temco-ai', version: '1.0.0' });
+    await client.connect(transport);
+    const listed = (await client.listTools()) as { tools: McpTool[] };
+
+    this.client = client;
+    this.transport = transport;
+    this.tools = listed.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description ?? '',
+      parameters: tool.inputSchema ?? { type: 'object', properties: {} },
+    }));
+    this.log(`[mcp] ${this.tools.length} tools from ${this.command}`);
+    return this.tools;
+  }
+
+  async call(name: string, args: Record<string, unknown>, token?: vscode.CancellationToken): Promise<string> {
+    const client = this.client;
+    if (!client) {
+      throw new Error('The tool server is not running.');
+    }
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), CALL_TIMEOUT_MS);
+    const subscription = token?.onCancellationRequested(() => abort.abort());
+    try {
+      const result = await client.callTool({ name, arguments: args }, { signal: abort.signal });
+      const parts = (result.content ?? []) as { type: string; text?: string }[];
+      return parts.map((part) => part.text ?? '').join('\n');
+    } finally {
+      clearTimeout(timer);
+      subscription?.dispose();
+    }
+  }
+
+  dispose(): void {
+    this.client?.close().catch(() => undefined);
+    this.transport?.close().catch(() => undefined);
+    this.client = undefined;
+    this.transport = undefined;
+    this.tools = [];
+  }
+}
+```
+
+`isError` is not special-cased: per §3.1 a failing tool already returns its reason as text, and that text is what the model should read.
+
+### 6.3 `ai/binPath.ts` — where the binary is
+
+The server is an installed artifact, exactly like the runtime and the models: a catalog entry, a checksum, a folder under `modelRoot(context)`, recorded in the manifest by `install()`.
+
+```ts
+import { catalog, CatalogEntry } from './catalog';
+import { install, installedArtifacts } from './install';
+
+/** The catalog entry for this machine, if the catalogue has one for it. */
+export function serverEntry(): CatalogEntry | undefined {
+  return catalog.find(
+    (entry) =>
+      entry.kind === 'tool-server' &&
+      entry.platform === process.platform &&
+      entry.architecture === process.arch
+  );
+}
+
+/** The installed executable, or undefined when it has not been installed on this machine yet. */
+export function serverBinary(context: vscode.ExtensionContext): string | undefined {
+  const entry = serverEntry();
+  if (!entry) {
+    return undefined;
+  }
+  return installedArtifacts(context).find((artifact) => artifact.id === entry.id)?.path;
+}
+
+/** Installs it if needed, and answers with the executable path. */
+export async function ensureServerBinary(context: vscode.ExtensionContext): Promise<string> {
+  const entry = serverEntry();
+  if (!entry) {
+    throw new Error(`No tool server is published for ${process.platform}-${process.arch}.`);
+  }
+  const artifact = await install(context, entry);
+  return artifact.path;
+}
+
+export function serverEnv(context: vscode.ExtensionContext): Record<string, string> {
+  const env: Record<string, string> = {};
+  // The child inherits nothing useful on its own, and a curated list is easier to audit than a copy of
+  // the extension host's environment.
+  for (const key of ['PATH', 'HOME', 'USERPROFILE', 'SystemRoot', 'TEMP', 'TMP', 'TMPDIR', 'LANG']) {
+    const value = process.env[key];
+    if (typeof value === 'string') {
+      env[key] = value;
+    }
+  }
+  env.TEMCO_CATALOG_DB = vscode.Uri.joinPath(context.globalStorageUri, 'catalog', 'catalog.db').fsPath;
+  env.TEMCO_MCP_STATE = context.globalStorageUri.fsPath;
+  env.TEMCO_PLATFORM_API =
+    vscode.workspace.getConfiguration('temcoAi').get<string>('platformApi') ?? 'http://127.0.0.1:3210';
+  return env;
+}
+```
+
+Three consequences, all of them wanted:
+
+- The installer stays the size it is; the server arrives on first use, the same way a model does, with the same checksum gate (`temcoAi.allowUnpinned`).
+- `ArtifactKind` in `catalog.ts:7` becomes `'runtime' | 'model' | 'tool-server'`, and one `install()` serves all three. `modelRoot(context)` stays the single root, so `temcoAi.modelFolder` moves the server too.
+- A missing binary is an ordinary state, not an error: the panel offers "Install the tool server", and until then the plain answer path runs unchanged.
+
+### 6.4 `ai/agent.ts`, the loop
+
+```ts
+import { complete, type ChatMessage, type ToolSpec } from './runtime';
+import { ToolSession } from './mcp';
+import { ensureServerBinary, serverEnv } from './binPath';
+
+const MAX_STEPS = 6;
+const DESTRUCTIVE = new Set(['device.write_point', 'device.alarm_acknowledge', 'project.create']);
+
+export interface AgentResult {
+  text: string;
+  steps: { tool: string; arguments: Record<string, unknown>; result: string }[];
+}
+
+/**
+ * Asks, runs what the model asked for, asks again — until it answers in words or the step budget is spent.
+ * Every call in DESTRUCTIVE stops here and waits for the person.
+ */
+export async function runAgent(
+  context: vscode.ExtensionContext,
+  messages: readonly ChatMessage[],
+  options: {
+    onToken?: (text: string) => void;
+    onStep?: (step: { tool: string; arguments: Record<string, unknown> }) => void;
+    approve?: (tool: string, args: Record<string, unknown>) => Promise<boolean>;
+    token?: vscode.CancellationToken;
+    log: (line: string) => void;
+  }
+): Promise<AgentResult> {
+  const binary = await ensureServerBinary(context);
+  const session = new ToolSession(binary, serverEnv(context), options.log);
+  const steps: AgentResult['steps'] = [];
+  const thread: ChatMessage[] = [...messages];
+  try {
+    const tools: readonly ToolSpec[] = await session.open();
+    for (let step = 0; step < MAX_STEPS; step++) {
+      const reply = await complete(context, thread, {
+        tools,
+        token: options.token,
+        onToken: options.onToken,
+      });
+      if (reply.toolCalls.length === 0) {
+        return { text: reply.text, steps };
+      }
+      thread.push({
+        role: 'assistant',
+        content: reply.text,
+        tool_calls: reply.toolCalls.map((call) => ({
+          id: call.id,
+          type: 'function',
+          function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+        })),
+      });
+      for (const call of reply.toolCalls) {
+        options.onStep?.({ tool: call.name, arguments: call.arguments });
+        const allowed = DESTRUCTIVE.has(call.name)
+          ? await (options.approve?.(call.name, call.arguments) ?? Promise.resolve(false))
+          : true;
+        const result = allowed
+          ? await session.call(call.name, call.arguments, options.token)
+          : 'The person declined this call.';
+        steps.push({ tool: call.name, arguments: call.arguments, result });
+        thread.push({ role: 'tool', tool_call_id: call.id, content: result });
+      }
+    }
+    return { text: 'I stopped after six steps without a final answer.', steps };
+  } finally {
+    session.dispose();
+  }
+}
+```
+
+### 6.5 Lifecycle
+
+| Event | What happens |
+| --- | --- |
+| A turn that may need data | `runAgent` ensures the binary, opens a session, lists the tools, and keeps the process for the turn |
+| The turn ends | `session.dispose()` closes the client, the transport closes, the process exits |
+| The model runtime goes idle (`temcoAi.idleMinutes`) | The runtime stops as it does now; the tool server is already gone |
+| The window closes | `deactivate()` stops the runtime and disposes any open session |
+| No binary for this platform | `serverEntry()` returns undefined, the panel shows why, and the plain answer path still runs |
+
+---
+
+## 7. Building it
+
+### 7.1 Locally
+
+```powershell
+winget install Microsoft.DotNet.SDK.10   # once per machine; .NET 10 is the current LTS
+
+dotnet publish tools/temco-mcp/Temco.Mcp.csproj -c Release -r win-x64 --self-contained true `
+  -p:PublishSingleFile=false -o artifacts/temco-mcp-win-x64
+dotnet publish tools/temco-mcp/Temco.Mcp.csproj -c Release -r linux-x64 --self-contained true `
+  -p:PublishSingleFile=false -o artifacts/temco-mcp-linux-x64
+dotnet publish tools/temco-mcp/Temco.Mcp.csproj -c Release -r osx-arm64 --self-contained true `
+  -p:PublishSingleFile=false -o artifacts/temco-mcp-osx-arm64
+```
+
+The three RIDs are the three rows of the release matrix in `.github/workflows/release.yml`:
+
+| Release matrix | `process.platform` / `process.arch` | RID | Catalog entry id |
+| --- | --- | --- | --- |
+| `win32` / `x64` | `win32` / `x64` | `win-x64` | `temco-mcp-win-x64` |
+| `linux` / `x64` | `linux` / `x64` | `linux-x64` | `temco-mcp-linux-x64` |
+| `darwin` / `arm64` | `darwin` / `arm64` | `osx-arm64` | `temco-mcp-osx-arm64` |
+
+`serverEntry()` matches on `process.platform` and `process.arch`, so the table is the only place the mapping is written down; the folder name comes from the entry id, which `install()` uses as the unpack folder.
+
+### 7.2 What it produces
+
+230 files and 82.9 MB for one platform (§3.2), because a self-contained publish carries the runtime with it. The whole folder is the artifact: apphost, `temco-mcp.dll`, `e_sqlite3.dll`, and the framework. Nothing is written next to it at run time, so it may sit in a read-only store.
+
+### 7.3 Into an archive, and its checksum
+
+The archive is the unit that is downloaded and verified, exactly as a model is:
+
+```powershell
+Compress-Archive -Path artifacts\temco-mcp-win-x64\* -DestinationPath artifacts\temco-mcp-win-x64.zip
+(Get-FileHash artifacts\temco-mcp-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+```
+
+The hash goes into `catalog.ts` next to the URL, with `kind: 'tool-server'`, `platform`, `architecture`, `bytes`, and `licence`. The unpacked folder `temco-mcp-win-x64` is what `install()` records, and `artifact.path` is the executable inside it.
+
+`.gitignore`:
+
+```
+artifacts/
+```
+
+A build output of the machine, never of git.
+
+### 7.4 In CI
+
+In `.github/workflows/release.yml`, in the build job, as the last step — after the installers are built, because the artifact rides in the release rather than in the installer:
+
+```yaml
+      - name: Install the .NET SDK the tool server is built with
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build the tool server for this platform
+        shell: bash
+        env:
+          RID: ${{ matrix.platform == 'darwin' && 'osx-arm64' || format('{0}-{1}', matrix.platform == 'win32' && 'win' || matrix.platform, matrix.arch) }}
+        run: |
+          dotnet publish tools/temco-mcp/Temco.Mcp.csproj \
+            -c Release -r "$RID" --self-contained true -p:PublishSingleFile=false \
+            -o "artifacts/temco-mcp-$RID"
+          cd artifacts && 7z a "temco-mcp-$RID.zip" "temco-mcp-$RID"   # `zip` on Linux and macOS
+```
+
+The archive is then uploaded as a release asset next to the installers, so one release carries three of them. The catalog in `catalog.ts` names the release asset URLs and pins their checksums; the extension downloads only the one for the machine it is on.
+
+Two properties matter:
+
+1. It runs on the same runner as the build, so the RID matches the artefact the release publishes. There is no cross-compilation and no RID guessing.
+2. It is a separate step with its own exit code, so a broken tool server fails the release instead of hiding behind a later command — the failure mode that the Windows `pwsh` steps in this workflow were split to avoid.
+
+### 7.5 During development
+
+```powershell
+dotnet publish tools/temco-mcp/Temco.Mcp.csproj -c Release -r win-x64 --self-contained true `
+  -p:PublishSingleFile=false -o "$env:APPDATA\temco-platform\User\globalStorage\temcocontrols.temco-ai\temco-mcp-win-x64"
+```
+
+That folder is `modelRoot(context)`'s default, and `temco-ai.modelFolder` points it anywhere else. The manifest is what makes `installedArtifacts()` see the artifact, so during development the panel's "Install the tool server" path is exercised by pointing `temcoAi.modelFolder` at a folder with a matching manifest entry — or by dropping the publish output in place and letting the installer record it from the catalogue.
+
+---
+
+## 8. Running it inside the application
+
+### 8.1 The process tree
+
+```
+temco-platform.exe                    the window
+ └─ extension host (Node, type: commonjs)
+     ├─ llama-server                   ai/runtime.ts:144    one model, loopback HTTP
+     └─ temco-mcp                      ai/mcp.ts            one per turn, stdio JSON-RPC
+         └─ (HTTP) the platform service on 127.0.0.1:3210
+```
+
+Neither child starts at activation. `llama-server` starts on the first `complete()`; `temco-mcp` starts on the first turn that needs tools. Both are stopped explicitly, so a closed window leaves no processes behind.
+
+### 8.2 Where the binary is, per layout
+
+| Layout | Install root | Executable |
+| --- | --- | --- |
+| Development | `<repo>/extensions/temco-ai` `globalStorage`, or `temcoAi.modelFolder` | `<root>/temco-mcp-win-x64/temco-mcp.exe` |
+| Packaged | `<userData>/User/globalStorage/temcocontrols.temco-ai` | `<root>/temco-mcp-win-x64/temco-mcp.exe` |
+
+The binary is *not* inside `extensions/temco-ai`, and no `.vscodeignore` question arises: it is installed by `install()`, the same call that installs a model, and resolved by `installedArtifacts()`. The install root is the same root the models use, so a user who moved `temcoAi.modelFolder` onto a larger disk moved the tool server with them.
+
+The published file keeps its executable bit through `Compress-Archive`/`unzip`, and the manifest records the path that was verified. If a copy loses the bit, the first `open()` fails with `EACCES`; the one-time repair belongs next to the spawn:
+
+```ts
+if (process.platform !== 'win32') {
+  try {
+    fs.chmodSync(binary, 0o755);
+  } catch {
+    // Read-only install; the file most likely already carries the bit.
+  }
+}
+```
+
+### 8.3 What the application passes in
+
+| Variable | Value | Why the server needs it |
+| --- | --- | --- |
+| `TEMCO_CATALOG_DB` | `<globalStorage>/catalog/catalog.db` | The catalog, opened `ReadOnly`, WAL already on |
+| `TEMCO_MCP_STATE` | `<globalStorage>` | Where `audit.db` is created |
+| `TEMCO_PLATFORM_API` | `temcoAi.platformApi`, default `http://127.0.0.1:3210` | Where the device, repo, and project tools get their answers |
+| `PATH`, `HOME`/`USERPROFILE`, `SystemRoot`, `TEMP*`, `LANG` | copied from the extension host | Nothing else is inherited; a curated list is auditable |
+
+Everything else is a setting read with `vscode.workspace.getConfiguration('temcoAi')` in `serverEnv()`, never a file next to the binary.
+
+### 8.4 The stdio contract
+
+Newline-delimited JSON-RPC on stdin/stdout; stderr is for logs only. The transcript in §3.1 is the real thing. One rule follows from it and from a failure observed while writing this document:
+
+**The client must keep stdin open for the life of the session.** Driving the server from a file that ends immediately produced a full stderr log, executed tool calls, and *zero* responses on stdout: the transport saw end-of-input, finished the session, and the answers had nowhere to go. `StdioClientTransport` holds the pipe open; a hand-written probe must too.
+
+The server also never writes to stdout outside the protocol, which is why §5.3 clears the logging providers and sends them to stderr.
+
+### 8.5 Verifying it end to end
+
+```powershell
+# 1. the server answers MCP at all, without the application
+npx @modelcontextprotocol/inspector <installRoot>\temco-mcp-win-x64\temco-mcp.exe
+#    -> the inspector lists the tools from §5.7 and can call one
+
+# 2. the runtime can call a tool at all. Both paths are printed by the extension on start:
+#    "[ai] starting <label> as <runtime.path> on 127.0.0.1:<port>" in the "Temco AI" output channel.
+Set-Content -LiteralPath probe.json -Encoding UTF8 -Value '{"model":"local","messages":[{"role":"user","content":"read input 1 of device 1234"}],"tools":[{"type":"function","function":{"name":"device.read_point","description":"Read one point: its value, units and range.","parameters":{"type":"object","properties":{"serial":{"type":"integer"},"pointType":{"type":"string"},"pointIndex":{"type":"integer"}},"required":["serial","pointType","pointIndex"]}}}]}'
+& "<runtime.path>" --model "<model.path>" --host 127.0.0.1 --port 8099 --jinja
+#    in a second window, once the model has loaded:
+curl.exe http://127.0.0.1:8099/v1/chat/completions -H "Content-Type: application/json" --data-binary "@probe.json"
+#    -> a working setup answers with choices[0].message.tool_calls, not prose
+
+# 3. the whole turn, in the application
+scripts\code.bat
+#    -> ask in the Temco AI panel: "read input 1 of device 1234"
+#    -> the "Temco AI" output channel shows [mcp] 23 tools from …, then the call, then the answer
+```
+
+Step 2 decides whether `--jinja` alone is enough for the chosen model. If the reply is prose with no `tool_calls`, the model's template is the reason, and the answer is `--chat-template-file` or a model whose template the runtime already knows.
+
+### 8.6 The second exposure: the same server for Copilot Chat
+
+The server is a plain MCP server, so the application can also declare it to the language model that ships with the product — same binary, same environment, started by the editor instead of by `temco-ai`.
+
+```ts
+export function registerToolServer(context: vscode.ExtensionContext): vscode.Disposable {
+  return vscode.lm.registerMcpServerDefinitionProvider('temcoAi.tools', {
+    provideMcpServerDefinitions: () => {
+      const binary = serverBinary(context);
+      return binary
+        ? [new vscode.McpStdioServerDefinition('Temco Platform Tools', binary, [], serverEnv(context), '1.0.0')]
+        : [];
+    },
+  });
+}
+```
+
+`McpStdioServerDefinition(label, command, args?, env?, version?)`; `version` is what makes the editor notice a changed tool list and offer a refresh. The provider is called eagerly and must not prompt — anything interactive belongs in `resolveMcpServerDefinition`.
+
+### 8.7 When it does not start
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `spawn … ENOENT` | The artifact is not installed, or the manifest has no entry for this platform | `serverEntry()` in the panel; install it for this RID (§7.1) |
+| `spawn … EACCES` on macOS or Linux | The executable bit was lost in a copy | The `chmod` guard in §8.2 |
+| The handshake hangs, then times out | Something wrote to stdout before the protocol | A `Console.WriteLine`, or a logger without `LogToStandardErrorThreshold` (§5.3) |
+| Requests answered by nothing, log full of tool activity | stdin closed early | Keep the pipe open (§8.4) |
+| `SQLITE_BUSY` | A writer holds the catalog longer than 5 s | The `busy_timeout` in §5.6; a long write in `temco-store` is the real cause |
+| The model reads `An error occurred invoking …` | The tool threw instead of returning `CallToolResult` — including a refused connection to the platform service | §5.4 rule 1 |
+| Tools listed, calls return prose | The model answered instead of calling | Tighten the tool descriptions; the prompt's instruction to call is the other half |
+| `tool_calls` never appear | `--jinja` is missing | §4.1, then §8.5 step 2 |
+
+---
+
+## 9. Left panel and pages
+
+The activity-bar group stays `AI` (`temcoAiHub`, owned by `temco-workbench`); `temco-ai` keeps contributing into it and into its own secondary-sidebar view.
+
+| Surface | Id | Content |
+| --- | --- | --- |
+| Activity bar, `AI` | `temcoAiHub` | Group container |
+| └ Draft | `temcoAi.draft` | The turn in progress: assistant text, one row per tool call with its arguments and result |
+| └ What it does | `temcoAi.whatItDoes` | The catalogue from §5.7, grouped, each row with its read/write kind |
+| └ Server | `temcoAi.server` | Installed version and path, tool count, log tail, install/repair action, the settings from §8.3 |
+| Secondary side bar | `temcoAi.panel` (`Temco AI`) | The conversation as it is now, plus an inline approval card when a destructive call is pending |
+| Editor page | `temcoAi.page` | Today's settings page with the server section added |
+| Editor pages | `temcoAi.actions`, `temcoAi.citations`, `temcoAi.stale` | Unchanged |
+
+Commands added: `temcoAi.toolServer` (opens `Server`), `temcoAi.installToolServer`, `temcoAi.restartToolServer`, `temcoAi.copyToolServerCommand` (the exact command line with its environment, for pasting into a terminal).
+
+---
+
+## 10. Security
+
+| Concern | Rule |
+| --- | --- |
+| The model decides what to call | The loop is the boundary, not the model's goodwill: `DESTRUCTIVE` is a set in the extension, not a property read from the server |
+| A write reaches equipment | Only after an explicit yes in the panel, and the yes is recorded with the arguments |
+| The server is reachable from the network | It is not: stdio only, started by us, never listening |
+| The catalog is modified | Opened `ReadOnly` (§5.6); writes stay in `temco-store` |
+| A tool result is code | Results are text and are rendered as text, never evaluated |
+| A downloaded server is tampered with | Pinned sha256 per platform, and the `temcoAi.allowUnpinned` gate that already guards the models |
+| Secrets | None are passed; the environment is a curated list, not a copy of the host's |
+
+---
+
+## 11. Open decisions
+
+1. **Who answers `TEMCO_PLATFORM_API`.** The device, repo, and project tools need one HTTP surface. Either a service in the product answers it, or `IPlatformApi` gains an implementation that speaks T3000 protocols directly and the URL becomes a connection setting. Only `HttpPlatformApi` changes either way.
+2. **Settled by measurement: the server is installed, not bundled.** An 82.9 MB, 230-file folder per platform in every installer is worse than a verified download on first use through the machinery that already installs models. Bundling stays available for an air-gapped build by adding the artifact to the catalogue with a `file://` URL.
+3. **Where the audit lives.** The server owns `audit.db` in this document, while the extension already owns the store schema. One has to be authoritative before the first release.
+4. **Whether the 7B model may act by default.** The 1.5B model may not; the catalogue can carry a per-model `maxTools` and a `mayCallDestructive` flag.
+5. **HTTP transport.** `ModelContextProtocol.AspNetCore` would let one server process serve several windows. Not needed for one window, and not in this design.
