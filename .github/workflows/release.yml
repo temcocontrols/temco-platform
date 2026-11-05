@@ -134,13 +134,22 @@ jobs:
           cache: npm
 
       # The packaging steps run the repository's own scripts; a missing toolchain fails later and less clearly.
+      #
+      # `g++-13` on purpose: Electron 43 ships V8 headers the image's default g++ 11 cannot parse — `native-keymap` dies
+      # with "expected ';' before 'public'" in `v8-primitive.h` while `npm ci` compiles it — and g++ 13 is what compiles
+      # it on a 24.04 runner. The 22.04 default `dpkg` is what `prepare-deb` needs (see the matrix comment above).
       - name: Install Linux build tools
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config libx11-dev libx11-xcb-dev libxkbfile-dev \
-            libnotify-bin libkrb5-dev fakeroot dpkg-dev rpm
+            libnotify-bin libkrb5-dev fakeroot dpkg-dev rpm \
+            software-properties-common
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get install -y --no-install-recommends gcc-13 g++-13
+          echo "CC=gcc-13" >> "$GITHUB_ENV"
+          echo "CXX=g++-13" >> "$GITHUB_ENV"
 
       # `npm ci` compiles the native modules from source (`.npmrc` sets `build_from_source`), and gyp takes the macOS
       # deployment target from its own settings — `MACOSX_DEPLOYMENT_TARGET` above is read by Xcode's tools, not by gyp's
@@ -200,6 +209,14 @@ jobs:
       - name: Package the application (Windows)
         if: matrix.platform == 'win32'
         run: npm run gulp vscode-win32-x64-min
+
+      # `code.iss` ships `tools\*` next to the application — the updater the installer runs — and the files come from
+      # `build/win32/{inno_updater.exe,vcruntime140.dll}`. Without this task Inno aborts with
+      # `No files found matching "...\VSCode-win32-x64\tools\*"`, which is how the first run that packaged the application
+      # successfully ended.
+      - name: Place the updater the installer ships (Windows)
+        if: matrix.platform == 'win32'
+        run: npm run gulp vscode-win32-x64-inno-updater
 
       - name: Build the installer (Windows)
         if: matrix.platform == 'win32'
