@@ -137,7 +137,12 @@ function fromLocalNormal(extensionPath: string): Stream {
 					path: filePath,
 					stat: fs.statSync(filePath),
 					base: extensionPath,
-					contents: fs.createReadStream(filePath)
+					// A buffer, not `fs.createReadStream`. A stream-contents File opens its descriptor as soon as it is built,
+					// so building one per file opened the whole extension at once: tens of thousands of descriptors for a
+					// module carrying a UI library, which no platform allows a process — Windows stops at 2048 outright, and
+					// that is the `EMFILE: too many open files` this packaging step used to die of. Reading each file to a
+					// buffer opens one descriptor at a time, which is what `gulp.src` does for every other extension here.
+					contents: fs.readFileSync(filePath)
 				}));
 
 			es.readArray(files).pipe(result);
