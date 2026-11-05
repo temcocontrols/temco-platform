@@ -317,6 +317,8 @@
     "vscode:prepublish": "npm run check-commands && npm run check-types && npm run build-webview"
   },
   "devDependencies": {
+    "@fluentui/react-components": "^9.75.0",
+    "@fluentui/react-icons": "^2.0.344",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -324,9 +326,5 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "@fluentui/react-components": "^9.75.0",
-    "@fluentui/react-icons": "^2.0.344"
   }
 }

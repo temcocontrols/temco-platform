@@ -138,6 +138,18 @@ jobs:
             build-essential pkg-config libx11-dev libx11-xcb-dev libxkbfile-dev \
             libnotify-bin libkrb5-dev fakeroot dpkg-dev rpm
 
+      # `npm ci` compiles the native modules from source (`.npmrc` sets `build_from_source`), and gyp takes the macOS
+      # deployment target from its own settings — `MACOSX_DEPLOYMENT_TARGET` above is read by Xcode's tools, not by gyp's
+      # make generator, so on its own it changes nothing. The generator does start from the environment (`CXXFLAGS.target
+      # ?= $(CPPFLAGS) $(CXXFLAGS)` in its Makefile) and appends it *after* the flags gyp computed, so a
+      # `-mmacosx-version-min` here is the one the compiler obeys. Without it `@vscode/policy-watcher` fails to build with
+      # "'std::get<...>' is unavailable: introduced in macOS 10.13", which is exactly how the macOS job died.
+      - name: Set the macOS deployment target for node-gyp
+        if: matrix.platform == 'darwin'
+        run: |
+          echo "CFLAGS=-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}" >> "$GITHUB_ENV"
+          echo "CXXFLAGS=-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET}" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         # Twice at most: the registry occasionally drops a tarball, and a release should not fail on that.
         run: npm ci || npm ci
@@ -162,9 +174,16 @@ jobs:
           npm run gulp vscode-win32-x64-min
           npm run gulp vscode-win32-x64-user-setup
 
+      # A guard rather than the cure. The cure was in the modules: their webview libraries were declared as runtime
+      # dependencies, so packaging copied ~127,000 files (`@fluentui/react-icons` is a directory per icon) and every
+      # platform died with `EMFILE: too many open files` part-way through `@fluentui/react-icons` — on Windows too, where
+      # no limit can be raised. They are devDependencies now, because esbuild inlines them into the webview bundle and no
+      # extension-host file imports them. The limit is still raised here for the modules that do ship dependencies, and it
+      # has to be set in the same shell as the command: it is a property of the process, not of the runner.
       - name: Package (Linux)
         if: matrix.platform == 'linux'
         run: |
+          ulimit -n 65536
           npm run gulp vscode-linux-x64-min
           npm run gulp vscode-linux-x64-prepare-deb
           npm run gulp vscode-linux-x64-build-deb
@@ -172,6 +191,7 @@ jobs:
       - name: Package (macOS)
         if: matrix.platform == 'darwin'
         run: |
+          ulimit -n 65536
           npm run gulp vscode-darwin-arm64-min
 
       # One staging folder per platform, so the release job has one shape to collect.
