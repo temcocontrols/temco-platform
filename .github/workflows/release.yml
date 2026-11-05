@@ -104,13 +104,17 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
     strategy:
       fail-fast: false
+      # The Linux build is pinned to 22.04 on purpose. `vscode-linux-x64-prepare-deb` computes the package's shared-library
+      # dependencies with Chromium's vendored `dpkg-shlibdeps.pl`, which calls the *system* `Dpkg::Shlibs` Perl modules.
+      # Under dpkg 1.22 (Ubuntu 24.04, `ubuntu-latest`) that combination dies in `SymbolFile.pm` with
+      # "Can't use an undefined value as a HASH reference", which is how the first Linux run that got that far failed.
       matrix:
         include:
           - os: windows-latest
             label: Windows x64
             platform: win32
             arch: x64
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             label: Linux x64
             platform: linux
             arch: x64
