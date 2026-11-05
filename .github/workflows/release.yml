@@ -163,10 +163,14 @@ jobs:
       # The extensions this fork adds ship inside the app: `out/**` is what the package copies, and the webview bundles
       # are esbuild output under each module's own `out/` — which the gulp packaging chain does not produce.
       # Built-in marketplace extensions need no step here; the packaging task downloads and bundles them itself.
-      - name: Compile extensions and webviews
-        run: |
-          npm run gulp compile-extensions
-          npm run build-webviews
+      #
+      # One command per step: a Windows runner's default shell keeps going after a command that exits non-zero, so a
+      # single block hides the failure that mattered and reports only what the next command tripped over.
+      - name: Compile the extensions
+        run: npm run gulp compile-extensions
+
+      - name: Bundle the webviews
+        run: npm run build-webviews
 
       # The libraries a module's *webview* needs are devDependencies — esbuild inlines them into the bundle in
       # `out/webview/` — but `npm ci` installs them anyway, and packaging copies whatever is on disk. Two things come of
@@ -175,34 +179,46 @@ jobs:
       # `temco-editor` at 1,067 and `temco-workbench` at 84. `temco-learn` is pruned without `--omit=dev` because its
       # manifest declares no dependencies at all: anything in its `node_modules` is a leftover from an older lockfile, and
       # `npm prune` is what removes it.
+      #
+      # `npm prune` only trusts the manifest, so it does nothing for a commit that still lists those libraries as
+      # dependencies — and every commit up to and including the one `v1.144.0` first pointed at does. That is how a run
+      # ended with `EMFILE` inside `@fluentui` and then reported the *next* command's `ENOENT` instead.
+      # `build/drop-webview-libraries.mjs` drops them by name as well, and counts what is left: a module that would hand
+      # the packaging walk more files than it can open now fails this step in seconds, by name.
       - name: Drop the libraries the package does not ship
         run: |
           npm prune --omit=dev --no-audit --no-fund --prefix extensions/temco-docs
           npm prune --omit=dev --no-audit --no-fund --prefix extensions/temco-editor
           npm prune --omit=dev --no-audit --no-fund --prefix extensions/temco-workbench
           npm prune --no-audit --no-fund --prefix extensions/temco-learn
+          node build/drop-webview-libraries.ts
 
-      - name: Package (Windows)
+      - name: Package the application (Windows)
         if: matrix.platform == 'win32'
-        run: |
-          npm run gulp vscode-win32-x64-min
-          npm run gulp vscode-win32-x64-user-setup
+        run: npm run gulp vscode-win32-x64-min
 
-      # A guard rather than the cure. The cure was in the modules: their webview libraries were declared as runtime
-      # dependencies, so packaging copied ~127,000 files (`@fluentui/react-icons` is a directory per icon) and every
-      # platform died with `EMFILE: too many open files` part-way through `@fluentui/react-icons` — on Windows too, where
-      # no limit can be raised. They are devDependencies now, because esbuild inlines them into the webview bundle and no
-      # extension-host file imports them. The limit is still raised here for the modules that do ship dependencies, and it
-      # has to be set in the same shell as the command: it is a property of the process, not of the runner.
-      - name: Package (Linux)
+      - name: Build the installer (Windows)
+        if: matrix.platform == 'win32'
+        run: npm run gulp vscode-win32-x64-user-setup
+
+      # The limit is a guard, not the cure: the cure is the step above, which leaves every module with at most a couple
+      # of thousand files. It is set in the same shell as the command because it is a property of the process, not of the
+      # runner, and Windows cannot raise it at all — which is why the tree is what has to stay small.
+      - name: Package the application (Linux)
         if: matrix.platform == 'linux'
         run: |
           ulimit -n 65536
           npm run gulp vscode-linux-x64-min
-          npm run gulp vscode-linux-x64-prepare-deb
-          npm run gulp vscode-linux-x64-build-deb
 
-      - name: Package (macOS)
+      - name: Prepare the .deb (Linux)
+        if: matrix.platform == 'linux'
+        run: npm run gulp vscode-linux-x64-prepare-deb
+
+      - name: Build the .deb (Linux)
+        if: matrix.platform == 'linux'
+        run: npm run gulp vscode-linux-x64-build-deb
+
+      - name: Package the application (macOS)
         if: matrix.platform == 'darwin'
         run: |
           ulimit -n 65536
