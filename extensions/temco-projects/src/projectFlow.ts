@@ -826,6 +826,7 @@ ${section({ title: 'What is inside it', desc: 'The documentation it already has,
 ${empty}
 
 <div class="az-flow" data-initial-type="${esc(initial)}">
+	<div class="flow-error" id="wizard-error" role="alert" hidden></div>
 	${choiceCards({ items: CHOICES, selected: initial })}
 	<div class="flow-head">
 		<span class="flow-head__title" id="form-title">Empty project</span>
@@ -870,8 +871,6 @@ ${empty}
 		ticked: DEFAULT_TARGETS
 	})}
 
-	<div class="flow-error" id="wizard-error" hidden></div>
-
 	${actionBar({
 		summaryId: 'wizard-summary',
 		actions: `<button type="button" class="az-btn" id="wizard-cancel">${icon('close')}<span>Cancel</span></button><button type="button" class="az-btn az-btn--primary" id="wizard-create">${icon('check')}<span>Create Project</span></button>`
@@ -903,7 +902,9 @@ const FLOW_CSS = `
 .flow-pin__sub { color: var(--ink-3); font-size: 12px; line-height: 16px; }
 .flow-list { max-height: 300px; overflow: auto; border: 1px solid var(--hairline); border-radius: var(--r-2);
   background: var(--surface-card); }
-.flow-error { margin-top: 12px; padding: 8px 12px; border: 1px solid var(--err-ink); border-radius: var(--r-2);
+/* Above the form rather than beside the Create button: the message answers a question about a field near the top of the
+   page, and a line under the fold is a line nobody reads. */
+.flow-error { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--err-ink); border-radius: var(--r-2);
   color: var(--err-ink); font-size: 12px; }
 .flow-draft { margin: 10px 0 0; max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
   padding: 12px 14px; border: 1px solid var(--hairline); border-radius: var(--r-2);
