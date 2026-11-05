@@ -10,10 +10,69 @@ import { git } from './git';
 import { repoReady, siteRepo } from './siteRepo';
 import { publishingTarget } from './publish';
 
-/** One path git reports as changed, in porcelain's own two-letter code. */
+/** One path git reports as changed, in porcelain's own two-letter code, and why it is changed. */
 export interface Change {
 	code: string;
 	path: string;
+	/**
+	 * What kind of change this is, which decides what may be done about it.
+	 *
+	 * - `generated` — a file the site's own scripts write on every build. Committed, so it shows as modified after a build,
+	 *   and reproducible, so discarding it costs nothing.
+	 * - `noise` — no content difference at all: the working copy has different line endings from the commit. Windows reports
+	 *   these on every build, and treating them as work would mean the clone is never clean there.
+	 * - `edit` — somebody changed the bytes: source, prose, a manifest, a new file.
+	 */
+	kind: 'generated' | 'noise' | 'edit';
+}
+
+/**
+ * The paths the site's build writes.
+ *
+ * `scripts/catalog.mts`, `search.mts`, `zip.mts`, `pdf.mts` and `chm.mts` all write under `public/`, and `vite build` copies
+ * that folder into `dist/`. Both are *committed* — so a fresh clone has a site without a build — which is why a build
+ * leaves the clone "dirty" with nothing a person did. The rule is the folder, not a list of files: the day a script writes
+ * `public/pdf/` or `public/chm/`, it is already covered.
+ */
+const GENERATED = [/^public\//u, /^dist\//u];
+
+/**
+ * What changed, and what wrote it — from `git status --porcelain` and `git diff --numstat`, and nothing else.
+ *
+ * The order of the questions is the whole point:
+ *
+ * 1. **generated, by path** — `public/content/*.json` is written by the build even when git reports no line counts for it,
+ *    which is the Windows line-ending case; asking "did the bytes change?" first would file them under somebody's work.
+ * 2. **untracked** (`??`) — a file the commit does not have. Always a person's, and never something a pull may delete.
+ * 3. **no counts at all, or 0/0** — the same bytes with different line endings. Nothing to keep.
+ * 4. everything else — an edit.
+ */
+export function classifyChanges(status: string, numstat: string): Change[] {
+	const counted = new Map<string, { added: number; removed: number }>();
+	for (const line of numstat.split(/\r?\n/u)) {
+		const [added, removed, ...rest] = line.split('\t');
+		const path = rest.join('\t').trim();
+		if (path !== '') {
+			counted.set(path, { added: Number(added), removed: Number(removed) });
+		}
+	}
+	return status
+		.split(/\r?\n/u)
+		.map((line) => line.trimEnd())
+		.filter((line) => line !== '')
+		.map((line) => {
+			const code = line.slice(0, 2).trim() || 'M';
+			const path = line.slice(3).trim();
+			const counts = counted.get(path);
+			const kind: Change['kind'] = GENERATED.some((pattern) => pattern.test(path))
+				? 'generated'
+				: code.includes('?')
+					? 'edit'
+					: counts === undefined || (counts.added === 0 && counts.removed === 0)
+						? 'noise'
+						: 'edit';
+			return { code, path, kind };
+		});
 }
 
 /** Everything the Site page draws. */
@@ -82,6 +141,23 @@ export async function fetchOrigin(folder = siteRepo()): Promise<boolean> {
 /** Forget the fetch cache: a pull has just moved the ref, so the next read should not wait for the window to lapse. */
 export function forgetFetch(folder = siteRepo()): void {
 	fetchedAt.delete(path.resolve(folder).toLowerCase());
+}
+
+/**
+ * The paths a pull may throw away on its own: the build's output, and the files Windows reports only because the line
+ * endings in the working copy differ from the ones in the commit.
+ *
+ * Exactly the changes nobody made, and nothing else — an edit is never in here, so nothing a person wrote can be lost by a
+ * pull. Both kinds are reproducible: the build writes the first, and git writes the second back the moment the file is
+ * restored.
+ */
+export function disposableOf(changes: readonly Change[]): string[] {
+	return changes.filter((change) => change.kind !== 'edit').map((change) => change.path);
+}
+
+/** The changes somebody actually made: what a pull refuses to run over, and what a commit is for. */
+export function editsOf(changes: readonly Change[]): Change[] {
+	return changes.filter((change) => change.kind === 'edit');
 }
 
 /** The newest modification under a folder, as an ISO date: "installed two hours ago" without a lockfile to read. */async function youngest(folder: string, depth = 2): Promise<string | undefined> {
@@ -154,11 +230,8 @@ export async function readRepoFacts(folder = siteRepo(), options: { fetch?: bool
 	}
 
 	const status = await git(folder, ['status', '--porcelain']).catch(() => '');
-	facts.changes = status
-		.split(/\r?\n/u)
-		.map((line) => line.trimEnd())
-		.filter((line) => line !== '')
-		.map((line) => ({ code: line.slice(0, 2).trim() || 'M', path: line.slice(3) }));
+	const numstat = await git(folder, ['diff', '--numstat']).catch(() => '');
+	facts.changes = classifyChanges(status, numstat);
 
 	return facts;
 }

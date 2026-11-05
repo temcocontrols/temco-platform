@@ -83,11 +83,36 @@ function end(pid: number): Promise<void> {
 	});
 }
 
+/** Whether a process id still names something running. */
+function alive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The server's own process, across windows.
+ *
+ * The server is a child of the extension host and `npm` hands the port to a grandchild, so closing a window does not close
+ * it — and Vite's `strictPort` makes the next `serve` exit the moment the port is taken. What a person then saw was a red
+ * "failed" on a bar whose frame was, in fact, showing the site: the *previous* window's server. Recording the pid is what
+ * lets the next window tell "my own leftover" from "something else on this port".
+ */
+export interface ServerBookkeeping {
+	get(): number | undefined;
+	set(pid: number | undefined): void;
+}
+
+const NO_BOOKKEEPING: ServerBookkeeping = { get: () => undefined, set: () => undefined };
+
 /**
  * The site's server: one server, started the one way the module serves the site.
  *
  * `serve` runs the repository's own script against `dist/`, on the one port. Starting it twice is not a thing a person means
- * to do, so a start while one is running first ends it.
+ * to do, so a start while one is running first ends it — including one that outlived the window that started it.
  */
 export class SiteRunner implements vscode.Disposable {
 	private child: ChildProcess | undefined;
@@ -97,7 +122,11 @@ export class SiteRunner implements vscode.Disposable {
 
 	readonly onDidChange = this.changed.event;
 
-	constructor(private readonly read: () => string = siteRepo, private readonly port: () => number = sitePort) { }
+	constructor(
+		private readonly read: () => string = siteRepo,
+		private readonly port: () => number = sitePort,
+		private readonly bookkeeping: ServerBookkeeping = NO_BOOKKEEPING
+	) { }
 
 	get status(): SiteStatus {
 		return this.current;
@@ -136,6 +165,26 @@ export class SiteRunner implements vscode.Disposable {
 			}
 		}
 
+		// The port may already be answered before anything is started here. Two cases, and they are not the same one:
+		// a server this machine started from a *previous window* (recorded, so it can be ended), or something else
+		// altogether (adopted, because killing a process this module does not own is not its decision).
+		if (await answers(url)) {
+			const remembered = this.bookkeeping.get();
+			if (remembered !== undefined && alive(remembered)) {
+				log(`[site] port ${port} was still held by the server from an earlier window (pid ${String(remembered)}) — ending it first.`);
+				await end(remembered);
+				this.bookkeeping.set(undefined);
+				const until = Date.now() + 5000;
+				while (Date.now() < until && (await answers(url))) {
+					await sleep(250);
+				}
+			} else {
+				log(`[site] something already answers at ${url} and this window did not start it — showing it as it is.`);
+				this.set({ state: 'running', url });
+				return this.current;
+			}
+		}
+
 		const child = spawn(`npm run ${SCRIPT} -- --port ${String(port)}`, {
 			cwd: repo,
 			shell: true,
@@ -144,11 +193,14 @@ export class SiteRunner implements vscode.Disposable {
 			env: process.env
 		});
 		this.child = child;
+		// Recorded before anything else can fail: this pid is what the *next* window ends if it finds the port taken.
+		this.bookkeeping.set(child.pid);
 		child.stdout?.on('data', (chunk: Buffer) => log(String(chunk).trimEnd()));
 		child.stderr?.on('data', (chunk: Buffer) => log(String(chunk).trimEnd()));
 		child.on('error', (error: Error) => {
 			if (this.child === child) {
 				this.child = undefined;
+				this.bookkeeping.set(undefined);
 				this.fail(`The server could not be started — ${error.message}`);
 			}
 		});
@@ -157,6 +209,7 @@ export class SiteRunner implements vscode.Disposable {
 				return;
 			}
 			this.child = undefined;
+			this.bookkeeping.set(undefined);
 			if (!this.leaving && this.current.state !== 'stopped') {
 				this.fail(`The server stopped by itself${code === null ? '' : ` (exit ${String(code)})`} — the log says why.`);
 			}
@@ -175,13 +228,15 @@ export class SiteRunner implements vscode.Disposable {
 	/** Stop whatever is running. Nothing is left behind: the port is free afterwards, or `npm` did not own it. */
 	async stop(): Promise<void> {
 		const child = this.child;
-		const pid = child?.pid;
+		// A server started by an earlier window has no child here — but its pid was recorded, and that is enough to end it.
+		const pid = child?.pid ?? this.bookkeeping.get();
 		const url = this.url();
 		this.child = undefined;
 		this.leaving = true;
 		this.set({ state: 'stopped' });
 		if (pid !== undefined) {
 			await end(pid);
+			this.bookkeeping.set(undefined);
 			// The port is the proof, not the process: `npm` hands the server to a child that can outlive the kill.
 			const until = Date.now() + 5000;
 			while (Date.now() < until && (await answers(url))) {

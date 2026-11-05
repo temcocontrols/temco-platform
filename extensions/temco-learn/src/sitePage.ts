@@ -68,6 +68,17 @@ export const PAGE_STYLE = `
 .site-add__row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--sp-3); padding: var(--sp-1) 0; }
 .site-add__name { min-width: 0; color: var(--ink-1); font-size: 12.5px; line-height: 18px; overflow-wrap: anywhere; }
 .site-add__why { color: var(--ink-3); font-size: 11.5px; line-height: 18px; }
+.site-changes { display: grid; gap: var(--sp-1); padding: var(--sp-2) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); background: color-mix(in srgb, var(--az-blue, #0078d4) 4%, var(--surface-card)); }
+.site-changes--focus { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
+.site-changes__group { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); padding: var(--sp-2) 0 0; }
+.site-changes__group:first-child { padding-top: 0; }
+.site-changes__kind { color: var(--ink-3); font-size: 10px; line-height: 14px; letter-spacing: 0.06em; text-transform: uppercase; }
+.site-changes__why { color: var(--ink-3); font-size: 11.5px; line-height: 16px; }
+.site-change { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3); padding: 1px 0; }
+.site-change__code { color: var(--ink-3); font-family: var(--font-mono); font-size: 11px; }
+.site-change__path { min-width: 0; color: var(--ink-1); font-family: var(--font-mono); font-size: 11.5px; line-height: 16px; overflow-wrap: anywhere; }
+.site-change__acts { display: flex; gap: var(--sp-3); }
+.site-change__more { color: var(--ink-3); font-size: 11.5px; line-height: 16px; padding-left: 30px; }
 `;
 
 /** The links in the meta line are buttons in the page's own dress: a command, never an `href` into the website. */
@@ -97,18 +108,18 @@ export interface SitePageFacts {
 	port: number;
 	/** The builds on this machine that are not versions on the site yet — the one act this page owns that no other page does. */
 	pending: readonly PendingBuild[];
-	/** Set when the page was opened *for* the add section: it comes first, and says so. */
-	focus?: 'add';
+	/** Set when the page was opened *for* a section: it comes first, and says so. */
+	focus?: 'add' | 'changes';
 }
 
 export class SitePage implements vscode.Disposable {
 	private opened: vscode.WebviewPanel | undefined;
-	private focus: 'add' | undefined;
+	private focus: 'add' | 'changes' | undefined;
 
 	constructor(private readonly read: () => Promise<SitePageFacts>) { }
 
-	/** Opens the page, or brings it forward. `focus` puts the add section at the top, for the acts that mean "add one". */
-	open(focus?: 'add', restored?: vscode.WebviewPanel): void {
+	/** Opens the page, or brings it forward. `focus` puts the section a caller meant at the top. */
+	open(focus?: 'add' | 'changes', restored?: vscode.WebviewPanel): void {
 		this.focus = focus;
 		if (this.opened !== undefined) {
 			this.opened.reveal(pageColumn());
@@ -257,6 +268,70 @@ function adds(state: SitePageFacts): string {
 	].join('\n');
 }
 
+/**
+ * What changed in the clone, and what may be done about each kind.
+ *
+ * The figure in the meta line says how many paths; this says *which*, because "commit or discard them first" is not advice
+ * a person can act on without knowing that five of the six were written by the last build. The grouping is the point: an
+ * edit is somebody's work and is the only thing a pull refuses to run over.
+ */
+const KIND_GROUP = [
+	{ kind: 'edit' as const, title: 'Yours', why: 'changed by hand — a pull stops here, so commit or discard these first' },
+	{ kind: 'generated' as const, title: 'Written by the build', why: 'the catalog, the search index and the content JSONs — rebuilt by npm run build' },
+	{ kind: 'noise' as const, title: 'Line endings only', why: 'no content difference at all — Windows reports these after every build' }
+];
+
+function changes(state: SitePageFacts): string {
+	const repo = state.repo;
+	if (!repo.ready || repo.changes.length === 0) {
+		return '';
+	}
+	const groups = KIND_GROUP.map((group) => ({ ...group, rows: repo.changes.filter((change) => change.kind === group.kind) })).filter(
+		(group) => group.rows.length > 0
+	);
+	const disposable = repo.changes.filter((change) => change.kind !== 'edit').map((change) => change.path);
+	const edits = repo.changes.filter((change) => change.kind === 'edit').length;
+
+	const body = groups
+		.map((group) => {
+			const shown = group.rows.slice(0, 8);
+			const rows = shown.map(
+				(change) =>
+					`<div class="site-change"><span class="site-change__code">${escapeHtml(change.code)}</span><span class="site-change__path">${escapeHtml(
+						change.path
+					)}</span><span class="site-change__acts">${button('Diff', 'temcoLearn.site.diff', {
+						kind: 'link',
+						args: change.path
+					})}${button('Discard', 'temcoLearn.site.discard', { kind: 'link', args: { paths: [change.path] } })}</span></div>`
+			);
+			const rest =
+				group.rows.length > shown.length
+					? `<span class="site-change__more">and ${plural(group.rows.length - shown.length, 'more path')} of the same kind</span>`
+					: '';
+			const bulk =
+				group.kind === 'edit'
+					? ''
+					: button(`Discard all ${group.rows.length}`, 'temcoLearn.site.discard', { kind: 'link', args: { paths: group.rows.map((change) => change.path) } });
+			return `<div class="site-changes__group"><span class="site-changes__kind">${escapeHtml(group.title)}</span><span class="site-changes__why">${escapeHtml(
+				group.why
+			)}</span>${bulk}</div>${rows.join('')}${rest}`;
+		})
+		.join('');
+
+	return [
+		section({
+			title: 'Changes in the clone',
+			desc: 'Everything git reports as different from the last commit, grouped by what wrote it.',
+			actions:
+				button(edits === 0 ? 'Commit and push' : `Commit and push ${plural(edits, 'edit')}`, 'temcoLearn.site.commit', { kind: 'link', mark: 'upload' }) +
+				(disposable.length === 0
+					? ''
+					: button(`Discard ${plural(disposable.length, 'build path')}`, 'temcoLearn.site.discard', { kind: 'link', args: { paths: disposable } }))
+		}),
+		`<div class="site-changes${state.focus === 'changes' ? ' site-changes--focus' : ''}">${body}</div>`
+	].join('\n');
+}
+
 export function html(state: SitePageFacts): string {
 	const repo = state.repo;
 	const url = siteUrl(state.port);
@@ -358,6 +433,8 @@ export function html(state: SitePageFacts): string {
 	// The add section comes first when the page was opened for it — that is what the four buttons that mean "add a build"
 	// promise — and sits after the machine otherwise, where it reads as the next step of the same lifecycle.
 	const addsSection = adds(state);
+	// The changes come before the add section: a pull refused because the clone is dirty is the commonest way into this page.
+	const changesSection = changes(state);
 
 	return [
 		head,
@@ -371,6 +448,7 @@ export function html(state: SitePageFacts): string {
 					actions: button('Try again', 'temcoLearn.site.start') + button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link' })
 				})
 			: '',
+		state.focus === 'changes' ? changesSection : '',
 		state.focus === 'add' ? addsSection : '',
 		section({
 			title: 'This machine',
@@ -399,6 +477,7 @@ export function html(state: SitePageFacts): string {
 			{ tone: repo.built ? 'ok' : 'warn' }
 		)}</div>`,
 		state.focus === 'add' ? '' : addsSection,
+		state.focus === 'changes' ? '' : changesSection,
 		section({
 			title: 'Activity',
 			desc: 'What a clone, a pull, a build or a server printed in this window, and what the last publish attempt said.',

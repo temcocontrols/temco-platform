@@ -24,7 +24,7 @@ import { ensureRepo, publishSite, PublishSink } from './publish';
 import { Server } from './server';
 import { importBuild, readSite, Site, workRoot } from './site';
 import { pageUrl, repoReady, sitePort, siteRepo } from './siteRepo';
-import { forgetFetch, readRepoFacts } from './siteFacts';
+import { disposableOf, editsOf, forgetFetch, readRepoFacts } from './siteFacts';
 import { SiteLog } from './siteLog';
 import { SitePage, SitePageFacts, SITE_VIEW_TYPE } from './sitePage';
 import { describe, SiteRunner, SiteStatus } from './siteRunner';
@@ -38,6 +38,15 @@ const plural = (count: number, one: string, many?: string): string =>
 	String(count) + ' ' + (count === 1 ? one : many === undefined ? one + 's' : many);
 
 const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** How many changed paths stop a publish to show them first: below this the box alone is enough. */
+const MANY_PATHS = 10;
+
+/** Where the pid of the running site server is kept, so a window opened later can end a server that outlived its own. */
+const SERVER_PID_KEY = 'temcoLearn.serverPid';
+
+/** The message a publish writes when nobody writes one: the date, because the repository holds several projects. */
+const defaultMessage = (): string => 'docs: publish the site (' + new Date().toISOString().slice(0, 10) + ')';
 
 /** Why a build is on the add list: the project is not on the site at all, or this build is newer than the version it serves. */
 function whyWaiting(id: string, site: Site): string {
@@ -61,7 +70,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Build outputs are static folders on disk and have nothing to do with the site's servers: one loopback server for a
 	// look at a file, stopped when the panel closes.
 	const server = new Server();
-	const runner = new SiteRunner();
+	const runner = new SiteRunner(siteRepo, sitePort, {
+		get: () => context.globalState.get<number>(SERVER_PID_KEY),
+		set: (pid) => void context.globalState.update(SERVER_PID_KEY, pid)
+	});
 	const preview = new Preview(() => runner.stop());
 	// Publishing says what it does once, and two places listen: the output channel, and the page that explains a push.
 	const publishLog = new PublishLog();
@@ -380,17 +392,55 @@ export function activate(context: vscode.ExtensionContext): void {
 	/**
 	 * Commit the clone and push it. The page that asked for it is also the page that shows what happened: the lines land in
 	 * its own log, and it redraws from git when the push is over.
+	 *
+	 * The message is asked for rather than invented, because a commit that carries somebody's writing deserves a sentence
+	 * about it — and the box is pre-filled, so publishing unchanged is still two presses.
 	 */
 	const publishNow = async (): Promise<void> => {
 		publishSink.appendLine('[publish] started');
 		try {
 			await ensureRepo(repo());
+			const facts = await readRepoFacts(repo());
+			const theirs = editsOf(facts.changes);
+			if (facts.changes.length > MANY_PATHS) {
+				const answer = await vscode.window.showInformationMessage(
+					plural(facts.changes.length, 'path') + ' will be committed from temco-learn',
+					{
+						detail:
+							facts.changes
+								.slice(0, 6)
+								.map((change) => `${change.code}  ${change.path}`)
+								.join('\n') + (facts.changes.length > 6 ? `\n… and ${facts.changes.length - 6} more` : '') + `\n${theirs.length} of them your own.`
+					},
+					'Publish now',
+					'Show the changes first'
+				);
+				if (answer === 'Show the changes first') {
+					sitePage.open('changes');
+					return;
+				}
+				if (answer !== 'Publish now') {
+					return;
+				}
+			}
+			const message = await vscode.window.showInputBox({
+				title: 'Publish temco-learn',
+				prompt:
+					theirs.length === 0
+						? `${plural(facts.changes.length, 'path')} to commit — the message git will carry`
+						: `${plural(facts.changes.length, 'path')} to commit, ${theirs.length} of them your own — the message git will carry`,
+				value: defaultMessage()
+			});
+			if (message === undefined) {
+				publishSink.appendLine('[publish] cancelled — nothing was committed');
+				return;
+			}
 			const catalogued = await runner.run('catalog', log);
 			if (catalogued !== 0) {
 				publishSink.appendLine('[publish] the catalog could not be rebuilt, so nothing was committed');
 				return;
 			}
-			const published = await publishSite(repo(), publishSink);
+			const published = await publishSite(repo(), publishSink, message);
 			publishSink.appendLine(
 				published.unchanged
 					? '[publish] nothing had changed - ' + (published.commit === '' ? 'the last commit' : published.commit) + ' is already on ' + published.base
@@ -402,7 +452,41 @@ export function activate(context: vscode.ExtensionContext): void {
 		} finally {
 			publishing.refresh();
 			sitePage.refresh();
+			overview.refresh();
 			output.show(true);
+		}
+	};
+
+	/** Set paths back to the last commit — the act that makes a refused pull possible again. */
+	const discard = async (target?: unknown): Promise<void> => {
+		const asked = typeof target === 'string' ? [target] : (target as { paths?: unknown } | undefined)?.paths;
+		const paths = Array.isArray(asked) ? asked.filter((entry): entry is string => typeof entry === 'string') : [];
+		if (paths.length === 0) {
+			return;
+		}
+		const code = await runner.git(['restore', '--', ...paths], log);
+		if (code !== 0) {
+			say('Nothing was discarded — the log says what git refused.');
+			return;
+		}
+		say(
+			'Discarded ' + plural(paths.length, 'path') + ' — ' + (paths.length === 1 ? 'it matches' : 'they match') + ' the last commit again.'
+		);
+		sitePage.refresh();
+		overview.refresh();
+	};
+
+	/** The difference a row is about, in the editor's own diff rather than a copy of it on a page. */
+	const showDiff = async (target?: unknown): Promise<void> => {
+		if (typeof target !== 'string' || target.length === 0) {
+			return;
+		}
+		const uri = vscode.Uri.file(path.join(repo(), target));
+		try {
+			// Provided by the built-in Git extension: the working copy against HEAD, which is what the row means.
+			await vscode.commands.executeCommand('git.openChange', uri);
+		} catch {
+			await vscode.commands.executeCommand('vscode.open', uri);
 		}
 	};
 
@@ -446,14 +530,40 @@ export function activate(context: vscode.ExtensionContext): void {
 			return;
 		}
 		const facts = await readRepoFacts(folder, { fetch: true });
-		if (facts.changes.length > 0) {
-			complain(
-				'temco-learn has ' +
-					plural(facts.changes.length, 'path') +
-					' changed in ' +
-					folder +
-					', so nothing was pulled — commit or discard them first.'
+
+		// A build leaves the clone "dirty" with nothing a person did: the catalog, the search index and the content JSONs are
+		// written by the site's own scripts and committed, and on Windows every one of them also reports a line-ending
+		// change. Those are discarded — they are reproduced by the build that follows a pull — so that a pull is not blocked
+		// by the last build. What somebody actually edited still stops it.
+		const disposable = disposableOf(facts.changes);
+		if (disposable.length > 0) {
+			const restored = await runner.git(['restore', '--', ...disposable], log);
+			if (restored !== 0) {
+				complain('The build output could not be set aside, so nothing was pulled — the log says why.');
+				return;
+			}
+			say(
+				'Set aside ' +
+					plural(disposable.length, 'path') +
+					' the last build wrote, so the clone is clean enough to pull.'
 			);
+		}
+		const edits = editsOf(facts.changes);
+		if (edits.length > 0) {
+			say(
+				'Nothing was pulled: ' +
+					plural(edits.length, 'path') +
+					' here ' +
+					(edits.length === 1 ? 'is' : 'are') +
+					' yours, not the build\u2019s — ' +
+					edits
+						.slice(0, 3)
+						.map((change) => change.path)
+						.join(', ') +
+					(edits.length > 3 ? ', \u2026' : '') +
+					'. Commit or discard them, then get the latest again.'
+			);
+			sitePage.open('changes');
 			return;
 		}
 		if (facts.behind === 0) {
@@ -666,6 +776,11 @@ export function activate(context: vscode.ExtensionContext): void {
 		// and the palette call. Both do the same thing, so there is one behaviour to trust rather than two that drift.
 		vscode.commands.registerCommand('temcoLearn.site.pull', getLatest),
 		vscode.commands.registerCommand('temcoLearn.site.update', getLatest),
+		// One row of the changes list: its difference, and setting it back to the last commit.
+		vscode.commands.registerCommand('temcoLearn.site.diff', showDiff),
+		vscode.commands.registerCommand('temcoLearn.site.discard', discard),
+		// Commit and push from the changes list, with the message the person wrote in the box.
+		vscode.commands.registerCommand('temcoLearn.site.commit', publishNow),
 		vscode.commands.registerCommand('temcoLearn.site.clearLog', () => {
 			siteLog.clear();
 			sitePage.refresh();

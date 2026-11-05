@@ -143,6 +143,54 @@ test('the page never reaches into the website to do it', () => {
 	assert.doesNotMatch(html, /<a [^>]*href=/u, 'the page links instead of running a command');
 });
 
+/** The paths the page lists, grouped, as `kind:path`. */
+const changeRows = (html: string): string[] => {
+	const groups = [...html.matchAll(/site-changes__kind">([^<]*)</gu)];
+	const rows = [...html.matchAll(/site-change__path">([^<]*)</gu)].map((match) => match[1]);
+	return groups.map((group) => group[1]).concat(rows);
+};
+
+test('the changes are grouped by what wrote them, because "commit or discard them" is not advice without it', () => {
+	const dirty = facts({
+		repo: {
+			...repo,
+			changes: [
+				{ code: 'M', path: '.gitignore', kind: 'edit' },
+				{ code: 'M', path: 'public/catalog.json', kind: 'generated' },
+				{ code: 'M', path: 'public/search.json', kind: 'generated' },
+				{ code: 'M', path: 'public/content/t3000/1.0.json', kind: 'noise' }
+			]
+		}
+	});
+	const html = site.html(dirty);
+	// Yours first: it is the only group a pull stops for, so it is the only one that needs a person.
+	assert.deepEqual(changeRows(html), [
+		'Yours',
+		'Written by the build',
+		'Line endings only',
+		'.gitignore',
+		'public/catalog.json',
+		'public/search.json',
+		'public/content/t3000/1.0.json'
+	]);
+	assert.match(html, /Commit and push 1 edit/u, 'the commit act does not say what it will carry');
+	assert.equal((html.match(/data-command="temcoLearn\.site\.diff"/gu) ?? []).length, 4, 'a row does not offer its difference');
+	// A discard for each of the four rows, one for the two groups the build wrote, and one for the whole list of them —
+	// and none of them is offered for "Yours" as a group.
+	assert.equal((html.match(/data-command="temcoLearn\.site\.discard"/gu) ?? []).length, 7, 'the discard acts are not where they belong');
+	assert.match(html, /Discard 3 build paths/u);
+	// The header of the group of edits carries no bulk discard: those are the paths somebody has to decide about.
+	const yoursHeader = /site-changes__kind">Yours<\/span>(?:(?!<\/div>)[\s\S])*<\/div>/u.exec(html)?.[0] ?? '';
+	assert.ok(yoursHeader.startsWith('site-changes__kind">Yours'), 'the group of edits was not found');
+	assert.equal(yoursHeader.includes('temcoLearn.site.discard'), false, 'the group of edits offers a bulk discard');
+});
+
+test('a clean clone says nothing about changes, rather than drawing an empty list', () => {
+	const html = site.html(facts());
+	assert.equal(html.includes('Changes in the clone'), false, 'the page draws a changes section with nothing in it');
+	assert.equal(html.includes('temcoLearn.site.commit'), false, 'the page offers a commit with nothing to commit');
+});
+
 let failedCount = 0;
 for (const { name, run } of cases) {
 	try {

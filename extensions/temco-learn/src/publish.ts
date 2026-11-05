@@ -88,10 +88,11 @@ export async function ensureRepo(root: string): Promise<PublishingTarget> {
 /**
  * Commit what changed and push it at the branch Pages builds from.
  *
- * The commit message names the date rather than a version: the repository holds several projects, each with its own
- * versions, and a message that claims one of them would be wrong about the others.
+ * The default message names the date rather than a version: the repository holds several projects, each with its own
+ * versions, and a message that claims one of them would be wrong about the others. A caller that knows what it changed
+ * passes its own words instead.
  */
-export async function publishSite(root: string, output: PublishSink): Promise<Published> {
+export async function publishSite(root: string, output: PublishSink, message?: string): Promise<Published> {
 	const target = await ensureRepo(root);
 
 	const changed = (await git(target.root, ['status', '--porcelain'])).trim();
@@ -104,7 +105,7 @@ export async function publishSite(root: string, output: PublishSink): Promise<Pu
 		await git(target.root, [
 			'-c', 'user.name=Temco Learn',
 			'-c', 'user.email=learn@temcocontrols.com',
-			'commit', '-m', 'docs: publish the site (' + new Date().toISOString().slice(0, 10) + ')'
+			'commit', '-m', message !== undefined && message.trim().length > 0 ? message.trim() : 'docs: publish the site (' + new Date().toISOString().slice(0, 10) + ')'
 		]);
 		commit = (await git(target.root, ['rev-parse', '--short', 'HEAD'])).trim();
 	}

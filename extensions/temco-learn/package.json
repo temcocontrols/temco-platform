@@ -140,6 +140,24 @@
         "icon": "$(sync)"
       },
       {
+        "command": "temcoLearn.site.commit",
+        "title": "Commit and Push the Clone",
+        "category": "Temco Learn",
+        "icon": "$(github-action)"
+      },
+      {
+        "command": "temcoLearn.site.discard",
+        "title": "Discard Changes in the Clone",
+        "category": "Temco Learn",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "temcoLearn.site.diff",
+        "title": "Show the Difference",
+        "category": "Temco Learn",
+        "icon": "$(diff)"
+      },
+      {
         "command": "temcoLearn.site.terminal",
         "title": "Open a Terminal in the Site",
         "category": "Temco Learn"
