@@ -134,6 +134,12 @@
         "category": "Temco Learn"
       },
       {
+        "command": "temcoLearn.site.update",
+        "title": "Get the Latest temco-learn",
+        "category": "Temco Learn",
+        "icon": "$(sync)"
+      },
+      {
         "command": "temcoLearn.site.terminal",
         "title": "Open a Terminal in the Site",
         "category": "Temco Learn"

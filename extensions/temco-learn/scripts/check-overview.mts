@@ -93,7 +93,7 @@ const cases: { name: string; run: () => void }[] = [];
 const test = (name: string, run: () => void) => cases.push({ name, run });
 
 /** A website with two projects, one build waiting, three unpublished changes, and the files those builds wrote. */
-function state(overrides: { projects?: unknown[]; builds?: unknown[]; artifacts?: unknown[]; pending?: number; published?: unknown } = {}): unknown {
+function state(overrides: { projects?: unknown[]; builds?: unknown[]; artifacts?: unknown[]; pending?: number; published?: unknown; repo?: unknown } = {}): unknown {
 	return {
 		site: {
 			projects: overrides.projects ?? [
@@ -118,7 +118,10 @@ function state(overrides: { projects?: unknown[]; builds?: unknown[]; artifacts?
 			commit: '6f2c1ab',
 			at: new Date(Date.now() - 12 * 60e3).toISOString(),
 			pending: overrides.pending ?? 3
-		}
+		},
+		// Only when a case asks for it: the clone is the one fact the page has to fetch for, so the default page is the one
+		// that did not look.
+		...(overrides.repo === undefined ? {} : { repo: overrides.repo })
 	};
 }
 
@@ -197,6 +200,35 @@ test('with nothing built and nothing published, the callout says so, and the thr
 			['Publishing', 'no address yet · nothing waiting']
 		]
 	);
+});
+
+test('the page says the repository has moved on, and names the one act that fixes it', () => {
+	const clone = {
+		folder: 'C:/Temco/temco-learn', ready: true, cloned: true, behind: 3, ahead: 0, changes: [],
+		installed: true, built: true, commit: '164232f', at: new Date(Date.now() - 3600e3).toISOString()
+	};
+	const moved = overview.html(state({ repo: clone }));
+	assert.match(moved, /temco-learn has 3 commits you do not have/u);
+	assert.match(moved, /data-command="temcoLearn\.site\.update"/u);
+	assert.match(moved, /data-command="temcoLearn\.site\.page"/u);
+	// It is the first thing on the page after the title: the reader arrives here, so the sentence a reader needs comes first.
+	assert.ok(
+		moved.indexOf('temcoLearn.site.update') < moved.indexOf('What needs doing'),
+		'the update bar is drawn below the callout that says what needs doing'
+	);
+
+	// Level with the remote, or no clone at all: the page says nothing about updating, rather than saying "up to date".
+	for (const quiet of [
+		overview.html(state()),
+		overview.html(state({ repo: { ...clone, behind: 0 } })),
+		overview.html(state({ repo: { ...clone, ready: false } }))
+	]) {
+		assert.equal(quiet.includes('temcoLearn.site.update'), false, 'the page offers an update with nothing to update');
+	}
+
+	// A clone with edits of its own says why it will not be pulled, instead of offering a pull that would fail.
+	const dirty = overview.html(state({ repo: { ...clone, changes: [{ code: 'M', path: 'src/App.tsx' }] } }));
+	assert.match(dirty, /1 path changed in the clone/u);
 });
 
 test('the brand bar is a short rule beside the title, and the cards sit four in a row', () => {

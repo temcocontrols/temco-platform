@@ -47,8 +47,44 @@ export interface RepoFacts {
 	builtAt?: string;
 }
 
-/** The newest modification under a folder, as an ISO date: "installed two hours ago" without a lockfile to read. */
-async function youngest(folder: string, depth = 2): Promise<string | undefined> {
+/** How long a fetch is trusted, so a page that is opened twice does not ask GitHub twice. */
+const FETCH_EVERY_MS = 3 * 60 * 1000;
+
+/** When each folder was last fetched, by resolved path. */
+const fetchedAt = new Map<string, number>();
+
+/**
+ * Move `origin/main` to where the remote really is.
+ *
+ * Everything the module says about being behind or ahead is a comparison against `origin/main` — a **local** ref, which
+ * only moves when something fetches. Without this the panel cheerfully says "0 commits behind" about a clone that is
+ * weeks old, because nobody had asked the remote since. The answer is cached for a few minutes: the question is "is there
+ * anything new", and asking it on every redraw would spend a network call per repaint.
+ *
+ * A failure is swallowed on purpose. No network is not an error to report here — the facts are still worth reading, they
+ * are simply as current as the last fetch.
+ */
+export async function fetchOrigin(folder = siteRepo()): Promise<boolean> {
+	const key = path.resolve(folder).toLowerCase();
+	const at = fetchedAt.get(key) ?? 0;
+	if (Date.now() - at < FETCH_EVERY_MS) {
+		return false;
+	}
+	fetchedAt.set(key, Date.now());
+	try {
+		await git(folder, ['fetch', '--quiet', 'origin']);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/** Forget the fetch cache: a pull has just moved the ref, so the next read should not wait for the window to lapse. */
+export function forgetFetch(folder = siteRepo()): void {
+	fetchedAt.delete(path.resolve(folder).toLowerCase());
+}
+
+/** The newest modification under a folder, as an ISO date: "installed two hours ago" without a lockfile to read. */async function youngest(folder: string, depth = 2): Promise<string | undefined> {
 	let newest = 0;
 	const walk = async (at: string, left: number): Promise<void> => {
 		let entries: fs.Dirent[];
@@ -75,7 +111,7 @@ async function youngest(folder: string, depth = 2): Promise<string | undefined> 
 }
 
 /** Read the clone, one question at a time, and answer even when there is nothing there. */
-export async function readRepoFacts(folder = siteRepo()): Promise<RepoFacts> {
+export async function readRepoFacts(folder = siteRepo(), options: { fetch?: boolean } = {}): Promise<RepoFacts> {
 	const facts: RepoFacts = { folder, ready: false, cloned: false, behind: 0, ahead: 0, changes: [], installed: false, built: false };
 	facts.ready = repoReady(folder);
 	facts.installed = fs.existsSync(path.join(folder, 'node_modules'));
@@ -92,6 +128,12 @@ export async function readRepoFacts(folder = siteRepo()): Promise<RepoFacts> {
 		facts.cloned = true;
 	} catch {
 		return facts;
+	}
+
+	// Only a clone can be fetched, and only a fetch makes `behind` mean anything: the comparison below reads the local
+	// `origin/main` ref, which moves when something fetches and at no other time.
+	if (options.fetch === true) {
+		await fetchOrigin(folder);
 	}
 
 	const target = await publishingTarget(folder);

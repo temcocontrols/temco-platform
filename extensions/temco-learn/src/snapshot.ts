@@ -6,6 +6,7 @@
 import { Build } from './builds';
 import { ProjectArtifacts } from './artifacts';
 import { Site } from './site';
+import { RepoFacts } from './siteFacts';
 import { PublishedState } from './state';
 
 export interface Snapshot {
@@ -14,4 +15,11 @@ export interface Snapshot {
 	/** What each project's last build wrote: the site, the help file, the pdf, the exports. */
 	artifacts: ProjectArtifacts[];
 	published: PublishedState;
+	/**
+	 * The clone behind all of it, when the caller asked for it.
+	 *
+	 * Optional because reading it costs a fetch: the panel and the tree only need the site, while the Overview says whether
+	 * the repository has moved on since the last pull — and that is a question about the remote, not about the folder.
+	 */
+	repo?: RepoFacts;
 }

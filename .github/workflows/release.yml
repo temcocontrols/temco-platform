@@ -168,6 +168,16 @@ jobs:
           npm run gulp compile-extensions
           npm run build-webviews
 
+      # `npm ci` installs each module's devDependencies as well, and packaging lists **every file in the extension folder** —
+      # so a browser UI library sitting in `node_modules` is still opened one file at a time even though nothing ships it.
+      # That is what killed all three platforms with `EMFILE: too many open files` inside `@fluentui/react-icons`, on
+      # Windows too, where no limit can be raised. The webview bundles are already written to each module's `out/webview/`,
+      # and no extension-host file imports these packages, so they are removed before anything is packaged. What is left —
+      # `marked`, `turndown`, `turndown-plugin-gfm` in the editor — is what the extension host really loads.
+      - name: Drop the libraries the package does not ship
+        run: |
+          node -e "const fs = require('node:fs'); const paths = ['extensions/temco-workbench/node_modules', 'extensions/temco-editor/node_modules/@fluentui', 'extensions/temco-editor/node_modules/@tiptap', 'extensions/temco-editor/node_modules/@radix-ui', 'extensions/temco-editor/node_modules/lowlight']; for (const path of paths) { fs.rmSync(path, { recursive: true, force: true }); }"
+
       - name: Package (Windows)
         if: matrix.platform == 'win32'
         run: |

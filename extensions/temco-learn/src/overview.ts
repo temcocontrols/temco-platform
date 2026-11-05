@@ -9,8 +9,7 @@ import * as vscode from 'vscode';
 import { formatSize } from './artifacts';
 import { workRoot } from './site';
 import { Snapshot } from './snapshot';
-import { ago } from './state';
-import { callout, commandScript, entryRow, escapeHtml, hero, icon, page, pageColumn, runCommand, section } from './ui';
+import { ago } from './state';import { callout, commandScript, entryRow, escapeHtml, hero, icon, page, pageColumn, runCommand, section } from './ui';
 
 export const OVERVIEW_VIEW_TYPE = 'temcoLearn.overview';
 
@@ -73,6 +72,7 @@ const plural = (count: number, one: string, many?: string): string =>
 type PageCommand =
 	| 'temcoLearn.site.preview'
 	| 'temcoLearn.site.page'
+	| 'temcoLearn.site.update'
 	| 'temcoLearn.addBuilds'
 	| 'temcoLearn.publish'
 	| 'temcoLearn.revealArtifact'
@@ -142,8 +142,35 @@ function head(state: Snapshot): string {
 	});
 }
 
-/** The one callout: what to do next, or that there is nothing to do, or that nothing exists yet. */
-function needsYou(state: Snapshot): string {
+/**
+ * The bar that says the repository has moved on.
+ *
+ * This page draws what is on the site, and every one of those facts comes from the clone — so a clone that is behind says
+ * something the website no longer agrees with, and saying it in the place a person arrives at is the whole point. Nothing
+ * is drawn when there is nothing to say: no clone, or a clone level with the remote.
+ */
+function update(state: Snapshot): string {
+	const repo = state.repo;
+	if (repo === undefined || !repo.ready || repo.behind === 0) {
+		return '';
+	}
+	const commits = plural(repo.behind, 'commit');
+	const where = repo.commit === undefined ? 'your clone' : `your clone is on ${repo.commit}, committed ${ago(repo.at)}`;
+	const changes =
+		repo.changes.length === 0
+			? ''
+			: ` ${plural(repo.changes.length, 'path')} changed in the clone, so pull from the Site page once those are committed or discarded.`;
+	return callout({
+		title: `temco-learn has ${commits} you do not have`,
+		desc: `The site repository moved on: ${where}.${changes} Pulling brings the source, then the site is rebuilt from it.`,
+		mark: 'sync',
+		actions:
+			button('Get the latest', 'temcoLearn.site.update', { kind: 'primary' }) +
+			link('Open the Site page', 'temcoLearn.site.page', { mark: 'globe' })
+	});
+}
+
+/** The one callout: what to do next, or that there is nothing to do, or that nothing exists yet. */function needsYou(state: Snapshot): string {
 	const builds = waiting(state).length;
 	const changes = state.published.pending;
 	const parts: string[] = [];
@@ -258,5 +285,5 @@ function whereItStands(state: Snapshot): string {
 
 /** The page: what it is, what to do, the four steps, and where each kind of work lands. */
 export function html(state: Snapshot): string {
-	return [head(state), needsYou(state), workflow(state), whereItStands(state)].join('\n');
+	return [head(state), update(state), needsYou(state), workflow(state), whereItStands(state)].join('\n');
 }

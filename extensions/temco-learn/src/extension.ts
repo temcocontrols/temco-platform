@@ -24,10 +24,11 @@ import { ensureRepo, publishSite, PublishSink } from './publish';
 import { Server } from './server';
 import { importBuild, readSite, Site, workRoot } from './site';
 import { pageUrl, repoReady, sitePort, siteRepo } from './siteRepo';
-import { readRepoFacts } from './siteFacts';
+import { forgetFetch, readRepoFacts } from './siteFacts';
 import { SiteLog } from './siteLog';
 import { SitePage, SitePageFacts, SITE_VIEW_TYPE } from './sitePage';
 import { describe, SiteRunner, SiteStatus } from './siteRunner';
+import { git } from './git';
 import { Snapshot } from './snapshot';
 import { readPublishedState } from './state';
 import { BrowseTree, DownloadTree, OverviewTree, Reads, registerBadges, VIEWS } from './tree';
@@ -121,7 +122,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		};
 	};
 	const reads = new Reads(readSnapshot);
-	const overview = new OverviewPage(readSnapshot);
+	// The Overview is the one surface that says whether the repository has moved on, so it is the one that asks the remote —
+	// through the cached fetch, so a rebuild of the page does not become a request. Everything else reads the folder alone.
+	const overview = new OverviewPage(async () => ({ ...(await readSnapshot()), repo: await readRepoFacts(repo(), { fetch: true }) }));
 	const publishing = new PublishPage(readPublishFacts, publishLog);
 	const sitePage = new SitePage(readSiteFacts);
 	const downloads = new DownloadPage(async () => ({ projects: await findArtifacts(), root: workRoot() }));
@@ -421,6 +424,95 @@ export function activate(context: vscode.ExtensionContext): void {
 		sitePage.refresh();
 	};
 
+	/**
+	 * Bring the clone up to date: clone if there is nothing here, otherwise fetch, pull, and rebuild on request.
+	 *
+	 * Three things this has to get right that a bare `git pull` does not:
+	 *
+	 * - **fetch first.** "Behind" is a comparison against the local `origin/main`, which only moves when something fetches,
+	 *   so without this the answer below would be about a stale ref.
+	 * - **never pull over uncommitted work.** `--ff-only` refuses a divergent clone, and a dirty tree would either block or
+	 *   quietly keep the edits; either way a person should be told rather than surprised.
+	 * - **rebuild after.** The source is not the site: the preview runs the repository's `serve` script, which delivers the
+	 *   built `dist/`, and `content/catalog.json` — the file that says which projects and pages exist — is rewritten by the
+	 *   build too. A pull on its own therefore changes nothing a person can see, which is why the build is offered right
+	 *   here instead of being a second act somebody has to know about.
+	 */
+	const getLatest = async (): Promise<void> => {
+		const folder = repo();
+		if (!repoReady(folder)) {
+			// Nothing cloned: the clone is the whole act, and it refuses a folder that already has something in it.
+			await clone();
+			return;
+		}
+		const facts = await readRepoFacts(folder, { fetch: true });
+		if (facts.changes.length > 0) {
+			complain(
+				'temco-learn has ' +
+					plural(facts.changes.length, 'path') +
+					' changed in ' +
+					folder +
+					', so nothing was pulled — commit or discard them first.'
+			);
+			return;
+		}
+		if (facts.behind === 0) {
+			say('temco-learn is already up to date' + (facts.ahead > 0 ? ' — ' + plural(facts.ahead, 'commit') + ' here are not pushed' : '') + '.');
+			return;
+		}
+
+		const before = (await git(folder, ['rev-parse', 'HEAD']).catch(() => '')).trim();
+		say('Pulling ' + plural(facts.behind, 'commit') + ' into ' + folder + '...');
+		forgetFetch(folder);
+		const pulled = await runner.pull(log);
+		refresh();
+		sitePage.refresh();
+		overview.refresh();
+		if (pulled !== 0) {
+			complain('The pull failed — the log says why. Nothing was rebuilt.');
+			return;
+		}
+
+		// What the new commits touched decides whether the dependencies moved with them.
+		const touched =
+			before === '' ? '' : await git(folder, ['diff', '--name-only', before, 'HEAD']).catch(() => '');
+		const movedDependencies = touched
+			.split(/\r?\n/u)
+			.some((line) => /(^|\/)(package\.json|package-lock\.json)$/u.test(line.trim()));
+
+		const answer = await vscode.window.showInformationMessage(
+			'Pulled ' + plural(facts.behind, 'commit') + ' into temco-learn. The preview still serves the build made before them.',
+			'Build now',
+			'Later'
+		);
+		if (answer !== 'Build now') {
+			return;
+		}
+		if (movedDependencies) {
+			say('The pull changed package.json, so the dependencies are installed again first...');
+			const installed = await runner.run('install', log);
+			if (installed !== 0) {
+				complain('The dependencies could not be installed — the log says why. Nothing was built.');
+				return;
+			}
+		}
+		say('Building the site from the new code...');
+		const built = await runner.run('build', log);
+		if (built !== 0) {
+			complain('The site could not be built from the new code — the log says why.');
+			return;
+		}
+		// `serve` hands out `dist/`, so a preview that is already running has to be restarted to show the new build.
+		if (runner.running) {
+			await runner.stop();
+			await runner.start(log);
+		}
+		say('temco-learn is on the new code and the site is built from it.');
+		refresh();
+		sitePage.refresh();
+		overview.refresh();
+	};
+
 	/** Point the module at a clone that is already on this machine. */
 	const useExisting = async (): Promise<void> => {
 		const chosen = await vscode.window.showOpenDialog({
@@ -440,17 +532,6 @@ export function activate(context: vscode.ExtensionContext): void {
 		}
 		await vscode.workspace.getConfiguration('temcoLearn').update('siteRepo', folder, vscode.ConfigurationTarget.Global);
 		siteLog.append('[site] pointed at ' + folder);
-		refresh();
-		sitePage.refresh();
-	};
-
-	/** Fetch and fast-forward the clone. */
-	const pull = async (): Promise<void> => {
-		if (!repoReady(repo())) {
-			sitePage.open();
-			return;
-		}
-		await runner.pull(log);
 		refresh();
 		sitePage.refresh();
 	};
@@ -581,7 +662,10 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('temcoLearn.site.page', () => sitePage.open()),
 		vscode.commands.registerCommand('temcoLearn.site.clone', clone),
 		vscode.commands.registerCommand('temcoLearn.site.useExisting', useExisting),
-		vscode.commands.registerCommand('temcoLearn.site.pull', pull),
+		// One act under two names: `pull` is what the Site page's button has always called, and `update` is what the Overview
+		// and the palette call. Both do the same thing, so there is one behaviour to trust rather than two that drift.
+		vscode.commands.registerCommand('temcoLearn.site.pull', getLatest),
+		vscode.commands.registerCommand('temcoLearn.site.update', getLatest),
 		vscode.commands.registerCommand('temcoLearn.site.clearLog', () => {
 			siteLog.clear();
 			sitePage.refresh();
