@@ -90,6 +90,16 @@ test('the acts are links, and the second one says where it goes', () => {
 	assert.doesNotMatch(html, /^\s*button \{/mu, 'a bare `button` rule would restyle every act in the bar');
 });
 
+test('the frame asks the site for its own navigation, and the address bar does not', () => {
+	const html = preview.panelDocument(URL_RUNNING, undefined, 'n0nce', 'The site', running);
+	const src = /<iframe[^>]*src="([^"]*)"/u.exec(html)?.[1] ?? '';
+	assert.match(src, /embed=0/u, 'the frame does not ask for the masthead');
+	// The address a person copies, and the one Open in Browser uses, is the site itself — not the frame's request.
+	assert.match(html, new RegExp(`id="addr"[^>]*>${URL_RUNNING}<`, 'u'));
+	const plain = preview.panelDocument(undefined, undefined, 'n0nce', 'The site', { tone: 'stopped', text: 'stopped' });
+	assert.equal(plain.includes('embed=0'), false, 'a panel with no address still asks for something');
+});
+
 test('with no address, the acts that need one are inert and Stop still works', () => {
 	const html = preview.panelDocument(undefined, { level: 'error', text: 'The server did not come up.' }, 'n0nce', 'The site', failed);
 	assert.match(html, /id="addr" type="button" title="" disabled/u, 'an address-less panel offers an address');

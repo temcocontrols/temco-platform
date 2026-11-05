@@ -47,6 +47,24 @@ export interface Status {
 	text: string;
 }
 
+/**
+ * The address the **frame** loads.
+ *
+ * The site stands its own masthead down when it is framed (`Shell.tsx`: `window.self !== window.top`), on the reasoning that
+ * two headers stacked is a page inside a page. That is a good default for a host the site does not know — and the wrong one
+ * here: this pane's bar carries the state, Reload and Stop, while the site's bar carries the *navigation*, and a preview
+ * you cannot navigate is a picture of a site. So the frame asks for the masthead back with `embed=0`, and a site that does
+ * not know the parameter simply ignores it — an older clone loses nothing.
+ */
+function frameAddress(url: string): string {
+	if (!/^https?:/u.test(url)) {
+		return url;
+	}
+	const asked = new URL(url);
+	asked.searchParams.set('embed', '0');
+	return asked.toString();
+}
+
 /** The panel's own document: what is running, the answer strip, and the site below them. Exported for the preview gate. */
 export function panelDocument(url: string | undefined, note: Note | undefined, nonce: string, title: string, status: Status): string {
 	const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -113,7 +131,7 @@ iframe { flex: 1; border: 0; width: 100%; background: #fff; }
 	<button class="note__act" id="note-action" type="button" hidden></button>
 	<button class="note__x" id="note-close" type="button" title="Dismiss" aria-label="Dismiss">✕</button>
 </div>
-${url === undefined ? '<div class="nothing">The site is not running. Start it from the Temco Learn panel, or choose a project and version.</div>' : `<iframe id="page" title="${escape(title)}" src="${address}"></iframe>`}
+${url === undefined ? '<div class="nothing">The site is not running. Start it from the Temco Learn panel, or choose a project and version.</div>' : `<iframe id="page" title="${escape(title)}" src="${escape(frameAddress(url))}"></iframe>`}
 <script nonce="${nonce}">
 (function () {
 	const api = acquireVsCodeApi();
