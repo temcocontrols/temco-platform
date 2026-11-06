@@ -9,11 +9,16 @@
 import * as vscode from 'vscode';
 import { DocsRoot, collectPages, docs } from './docs';
 import { Catalog, CitationRow } from './ai/store';
-import { RestorablePage, commandScript, escapeHtml as esc, callout, hero, icon, page, pageColumn, runCommand, section } from './ui';
+import { askToRun, callTool, listTools } from './ai/agent';
+import { buildHint, platformApi, serverBinary, serverEntry } from './ai/binPath';
+import { toolLog } from './ai/log';
+import { ToolSpec } from './ai/runtime';
+import { PageMessage, RestorablePage, commandScript, escapeHtml as esc, callout, entry, entries, hero, icon, page, pageColumn, runCommand, section } from './ui';
 
 export const ACTIONS_VIEW_TYPE = 'temcoAi.actions';
 export const CITATIONS_VIEW_TYPE = 'temcoAi.citations';
 export const STALE_VIEW_TYPE = 'temcoAi.stale';
+export const TOOLS_VIEW_TYPE = 'temcoAi.tools';
 
 interface ActionOptions {
 	kind?: 'primary' | 'link';
@@ -58,6 +63,13 @@ const AI_CSS = `
 /* A row's second line here is prose about the thing, not a path: the kit sets it in the mono face for paths. */
 .az-entry__meta { font-family: inherit; }
 .ai-foot { margin: var(--sp-6) 0 0; color: var(--ink-3); font-size: 12px; line-height: 18px; }
+/* The runner: one call, from a page, without the model in the way. */
+.ai-tool { display: grid; gap: var(--sp-2); margin: var(--sp-3) 0 0; }
+.ai-tool__row { display: flex; align-items: center; gap: var(--sp-2); }
+.ai-tool select, .ai-tool textarea, .ai-tool__out { font-family: monospace; font-size: 12px; line-height: 18px; }
+.ai-tool textarea { min-height: 96px; resize: vertical; }
+.ai-tool__out { margin: 0; padding: var(--sp-2); border-radius: 4px; background: rgba(127, 127, 127, 0.1); white-space: pre-wrap; }
+.ai-tool__out--bad { color: var(--vscode-errorForeground, inherit); }
 `;
 
 /** The four surfaces, one panel each. */
@@ -84,12 +96,58 @@ export class AiPages {
 		this.open('stale', STALE_VIEW_TYPE, 'Update a Page the Code Moved', staleBody(this.roots()));
 	}
 
+	/** The catalogue of calls, and a box that makes one without the model. */
+	tools(): void {
+		void this.openTools();
+	}
+
+	private async openTools(restored?: vscode.WebviewPanel): Promise<void> {
+		const view = await toolsView(this.context);
+		await this.open(
+			'tools',
+			TOOLS_VIEW_TYPE,
+			'The Tools the Assistant Can Call',
+			view.body,
+			restored,
+			(message, panel) => void this.runTool(message, panel),
+			view.script
+		);
+	}
+
+	/**
+	 * One call, from the page's own runner. It is the second way in to the tool server, so it goes through the
+	 * same gate: a call that changes something asks the person first, here as it does mid-turn.
+	 */
+	private async runTool(message: PageMessage, panel: vscode.WebviewPanel): Promise<void> {
+		if (message.type !== 'run') {
+			return;
+		}
+		const request = message as unknown as { tool?: unknown; arguments?: unknown };
+		const tool = typeof request.tool === 'string' ? request.tool : '';
+		const args =
+			typeof request.arguments === 'object' && request.arguments !== null
+				? (request.arguments as Record<string, unknown>)
+				: {};
+		const log = (line: string): void => toolLog().appendLine(line);
+		try {
+			const text = await callTool(this.context, tool, args, { log, approve: askToRun });
+			void panel.webview.postMessage({ type: 'result', text });
+		} catch (error) {
+			void panel.webview.postMessage({
+				type: 'result',
+				text: error instanceof Error ? error.message : String(error),
+				bad: true
+			});
+		}
+	}
+
 	/** The pages this module can be asked to bring back, one serializer each. */
 	restorable(): RestorablePage[] {
 		return [
 			{ viewType: ACTIONS_VIEW_TYPE, open: (panel) => this.open('actions', ACTIONS_VIEW_TYPE, 'Actions', actionsBody(), panel) },
 			{ viewType: CITATIONS_VIEW_TYPE, open: (panel) => void this.openCitations(panel) },
-			{ viewType: STALE_VIEW_TYPE, open: (panel) => this.open('stale', STALE_VIEW_TYPE, 'Update a Page the Code Moved', staleBody(this.roots()), panel) }
+			{ viewType: STALE_VIEW_TYPE, open: (panel) => this.open('stale', STALE_VIEW_TYPE, 'Update a Page the Code Moved', staleBody(this.roots()), panel) },
+			{ viewType: TOOLS_VIEW_TYPE, open: (panel) => void this.openTools(panel) }
 		];
 	}
 
@@ -109,8 +167,16 @@ export class AiPages {
 		this.panels.clear();
 	}
 
-	private open(key: string, viewType: string, title: string, body: string, restored?: vscode.WebviewPanel): void {
-		const html = page(body, { title, script: commandScript, extraCss: AI_CSS });
+	private open(
+		key: string,
+		viewType: string,
+		title: string,
+		body: string,
+		restored?: vscode.WebviewPanel,
+		onMessage?: (message: PageMessage, panel: vscode.WebviewPanel) => void,
+		script: string = commandScript
+	): void {
+		const html = page(body, { title, script, extraCss: AI_CSS });
 		const existing = this.panels.get(key);
 		if (existing) {
 			existing.reveal(pageColumn());
@@ -124,7 +190,10 @@ export class AiPages {
 		});
 		panel.webview.options = { enableScripts: true, localResourceRoots: [] };
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'ai.svg');
-		panel.webview.onDidReceiveMessage(runCommand);
+		panel.webview.onDidReceiveMessage((message: PageMessage) => {
+			runCommand(message);
+			onMessage?.(message, panel);
+		});
 		panel.webview.html = html;
 		this.panels.set(key, panel);
 		panel.onDidDispose(() => this.panels.delete(key));
@@ -455,6 +524,17 @@ const GROUPS: { id: string; rows: Row[] }[] = [
 		rows: [
 			{ label: 'Server & Prompts', note: 'what answers a draft: the runtime, the model, and what it is told', mark: 'gear', command: 'temcoAi.page' }
 		]
+	},
+	{
+		// What the assistant can reach outside the page in front of it: the conversation itself, the process that
+		// answers a call, the address the device and repository tools ask, and the catalogue of calls.
+		id: 'mcp',
+		rows: [
+			{ label: 'Open the AI panel', note: 'the conversation, in the secondary side bar', mark: 'comment-discussion', command: 'temcoAi.openPanel' },
+			{ label: 'Tool server', note: 'whether it is on this machine, where it lives, and how to build it', mark: 'server-process', command: 'temcoAi.toolServer' },
+			{ label: 'Platform API', note: 'the address the device, repository and project tools ask', mark: 'plug', command: 'temcoAi.configurePlatformApi' },
+			{ label: 'The tools it can call', note: 'the catalogue, the arguments each takes, and a box to run one', mark: 'tools', command: 'temcoAi.tools' }
+		]
 	}
 ];
 
@@ -477,4 +557,167 @@ export function registerAiViews(context: vscode.ExtensionContext): void {
 			})
 		);
 	}
+}
+
+/** The script the Tools page runs: fill the arguments for the chosen call, and post it to the module. */
+const TOOLS_SCRIPT = `
+(function () {
+	const api = window.__temcoApi || (window.__temcoApi = acquireVsCodeApi());
+	const select = document.getElementById('tool');
+	const args = document.getElementById('args');
+	const out = document.getElementById('out');
+	const run = document.getElementById('run');
+	const seeds = window.__toolSeeds || {};
+
+	const fill = () => {
+		if (!select || !args) { return; }
+		args.value = JSON.stringify(seeds[select.value] || {}, undefined, 2);
+	};
+	if (select) { select.addEventListener('change', fill); }
+
+	if (run) {
+		run.addEventListener('click', () => {
+			const tool = select ? select.value : '';
+			let parsed = {};
+			try {
+				parsed = JSON.parse(args && args.value ? args.value : '{}');
+			} catch (error) {
+				if (out) { out.textContent = 'Those arguments are not JSON: ' + error.message; out.classList.add('ai-tool__out--bad'); }
+				return;
+			}
+			if (out) { out.textContent = 'Running ' + tool + '...'; out.classList.remove('ai-tool__out--bad'); }
+			api.postMessage({ type: 'run', tool: tool, arguments: parsed });
+		});
+	}
+
+	document.addEventListener('click', (event) => {
+		const target = event.target.closest('[data-command]');
+		if (!target) { return; }
+		event.preventDefault();
+		const raw = target.dataset.args;
+		api.postMessage({ type: 'command', command: target.dataset.command, args: raw === undefined ? undefined : JSON.parse(raw) });
+	});
+
+	window.addEventListener('message', (event) => {
+		const message = event.data;
+		if (!message || message.type !== 'result' || !out) { return; }
+		out.textContent = message.text || '(nothing came back)';
+		out.classList.toggle('ai-tool__out--bad', Boolean(message.bad));
+	});
+
+	fill();
+})();
+`;
+
+/** A first draft of the arguments one call takes, from its own schema. */
+function seedFor(tool: ToolSpec): Record<string, unknown> {
+	const properties = (tool.parameters.properties ?? {}) as Record<string, { type?: unknown }>;
+	const seed: Record<string, unknown> = {};
+	for (const [name, schema] of Object.entries(properties)) {
+		const type = Array.isArray(schema.type) ? schema.type.find((candidate) => candidate !== 'null') : schema.type;
+		seed[name] = type === 'integer' || type === 'number' ? 0 : type === 'boolean' ? false : '';
+	}
+	return seed;
+}
+
+/**
+ * *Tools* - what the assistant can reach outside the page in front of it.
+ *
+ * Three parts, in the order a reader needs them: where the server lives and what it is told, the catalogue the
+ * server itself reports, and one box that runs a single call without the model. The catalogue is read at open
+ * time rather than kept anywhere, so a tool that is added to the server appears here without being listed by hand.
+ */
+async function toolsView(context: vscode.ExtensionContext): Promise<{ body: string; script: string }> {
+	const catalogEntry = serverEntry();
+	const binary = serverBinary(context);
+	const api = platformApi();
+
+	let tools: readonly ToolSpec[] = [];
+	let problem = '';
+	if (binary) {
+		try {
+			tools = await listTools(context, (line) => toolLog().appendLine(line));
+		} catch (error) {
+			problem = error instanceof Error ? error.message : String(error);
+		}
+	} else {
+		problem = buildHint(context);
+	}
+
+	const status = binary
+		? entry({ mark: 'server-process', tone: 'ok', title: catalogEntry?.label ?? 'Tool server', meta: [binary], state: `${tools.length} tools` })
+		: entry({ mark: 'server-process', tone: 'warn', title: catalogEntry?.label ?? 'Tool server', meta: ['no server on this machine yet'], state: 'not installed' });
+
+	const apiLine =
+		api.length > 0
+			? entry({ mark: 'plug', tone: 'ok', title: 'Platform API', meta: [api], state: 'set' })
+			: entry({ mark: 'plug', tone: 'warn', title: 'Platform API', meta: ['not set - the device, documentation, repository, project and site tools will say so'], state: 'not set' });
+
+	const rowOf = (tool: ToolSpec): string =>
+		entry({
+			mark: tool.readOnly ? 'eye' : 'edit',
+			tone: tool.readOnly ? 'ok' : 'warn',
+			title: tool.name,
+			meta: [tool.description],
+			state: tool.readOnly ? 'reads' : 'writes'
+		});
+
+	const reads = tools.filter((tool) => tool.readOnly === true);
+	const writes = tools.filter((tool) => tool.readOnly !== true);
+
+	const catalogue =
+		tools.length === 0
+			? callout({ title: 'Nothing to list yet', desc: problem || 'The tool server did not answer.', mark: 'warning' })
+			: `${entries(reads.map(rowOf).join(''))}${
+					writes.length === 0
+						? ''
+						: `<div class="mt-24">${section({ title: 'Writes', desc: 'Each of these asks the person at the keyboard first, every time.' })}<div class="mt-8">${entries(writes.map(rowOf).join(''))}</div></div>`
+				}`;
+
+	const runner =
+		tools.length === 0
+			? ''
+			: `<div class="mt-24">
+	${section({ title: 'Run one', desc: 'The same call the model makes, without the model. Useful when a device or a registry is not answering.' })}
+	<div class="ai-tool mt-8">
+		<div class="ai-tool__row"><label for="tool">Tool</label><select id="tool">${tools
+				.map((tool) => `<option value="${esc(tool.name)}">${esc(tool.name)}</option>`)
+				.join('')}</select></div>
+		<textarea id="args" spellcheck="false"></textarea>
+		<div class="ai-tool__row"><button type="button" class="az-btn az-btn--primary az-btn--sm" id="run"><span>Run it</span></button><span class="ai-line">Arguments are sent as JSON, exactly as typed.</span></div>
+		<pre id="out" class="ai-tool__out">Nothing run yet.</pre>
+	</div>
+</div>`;
+
+	const seeds: Record<string, Record<string, unknown>> = {};
+	for (const tool of tools) {
+		seeds[tool.name] = seedFor(tool);
+	}
+	// The seeds travel inside the page's one nonce-carrying script: the policy allows no other, and a second
+	// inline script would simply never run.
+	const script = `window.__toolSeeds = ${JSON.stringify(seeds).replace(/</g, '\\u003c')};\n${TOOLS_SCRIPT}`;
+
+	const body = `${hero({
+		eyebrow: 'Temco AI',
+		title: 'The Tools the Assistant Can Call',
+		mark: 'tools',
+		desc: 'Every call the model can make outside this window, with the arguments each takes. The server answers over stdin: nothing here listens on a port.',
+		descWide: true,
+		actions: [
+			{ label: 'Open the AI Panel', command: 'temcoAi.openPanel', mark: 'comment-discussion', kind: 'primary' },
+			{ label: 'Install the Tool Server', command: 'temcoAi.installToolServer', mark: 'cloud-download' },
+			{ label: 'Platform API', command: 'temcoAi.configurePlatformApi', mark: 'plug' }
+		]
+	})}
+<div class="mt-24">
+	${section({ title: 'Where it lives' })}
+	<div class="mt-8">${entries(status + apiLine)}</div>
+</div>
+<div class="mt-24">
+	${section({ title: 'The catalogue', desc: 'Read from the server itself, so this list cannot drift from what the model is offered.' })}
+	<div class="mt-8">${catalogue}</div>
+</div>
+${runner}`;
+
+	return { body, script };
 }

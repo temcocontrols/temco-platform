@@ -34,7 +34,9 @@
     "onWebviewPanel:temcoAi.page",
     "onWebviewPanel:temcoAi.actions",
     "onWebviewPanel:temcoAi.citations",
-    "onWebviewPanel:temcoAi.stale"
+    "onWebviewPanel:temcoAi.stale",
+    "onView:temcoAi.mcp",
+    "onWebviewPanel:temcoAi.tools"
   ],
   "contributes": {
     "viewsContainers": {
@@ -66,6 +68,10 @@
         {
           "id": "temcoAi.server",
           "name": "Server"
+        },
+        {
+          "id": "temcoAi.mcp",
+          "name": "Tools"
         }
       ]
     },
@@ -159,6 +165,18 @@
         "title": "Ask with Tools",
         "icon": "$(tools)",
         "category": "Temco AI"
+      },
+      {
+        "command": "temcoAi.tools",
+        "title": "The Tools the Assistant Can Call",
+        "icon": "$(list-unordered)",
+        "category": "Temco AI"
+      },
+      {
+        "command": "temcoAi.configurePlatformApi",
+        "title": "Platform API",
+        "icon": "$(plug)",
+        "category": "Temco AI"
       }
     ],
     "menus": {
@@ -169,6 +187,16 @@
         }
       ],
       "view/title": [
+        {
+          "command": "temcoAi.openPanel",
+          "when": "view == temcoAi.mcp",
+          "group": "navigation@1"
+        },
+        {
+          "command": "temcoAi.tools",
+          "when": "view == temcoAi.mcp",
+          "group": "navigation@2"
+        },
         {
           "command": "temcoAi.dockRight",
           "when": "view == temcoAi.panel",

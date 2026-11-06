@@ -15,7 +15,8 @@
 //     broken one.
 
 import * as vscode from 'vscode';
-import { runAgent } from './ai/agent';
+import { askToRun, runAgent } from './ai/agent';
+import { disposeToolLog, toolLog } from './ai/log';
 import { ensureServerBinary, buildHint, serverBinary, serverEntry } from './ai/binPath';
 import { MODELS, RUNTIMES, entryById } from './ai/catalog';
 import { registerAiCommands } from './ai/commands';
@@ -113,7 +114,9 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 		// The tool server: what the assistant can call, and the one command that reaches it today.
 		vscode.commands.registerCommand('temcoAi.toolServer', () => toolServerStatus(context)),
 		vscode.commands.registerCommand('temcoAi.installToolServer', () => ensureServerBinary(context)),
-		vscode.commands.registerCommand('temcoAi.askWithTools', () => askWithTools(context))
+		vscode.commands.registerCommand('temcoAi.askWithTools', () => askWithTools(context)),
+		vscode.commands.registerCommand('temcoAi.tools', () => pages.tools()),
+		vscode.commands.registerCommand('temcoAi.configurePlatformApi', () => configurePlatformApi())
 	);
 
 	return {
@@ -182,14 +185,20 @@ async function topicAnswer(panel: AiPanel, request: unknown): Promise<string> {
 	});
 }
 
-/** The channel the tool loop writes to: what it called, what came back, and what went wrong. */
-let toolOutput: vscode.OutputChannel | undefined;
-
-function toolLog(): vscode.OutputChannel {
-	if (!toolOutput) {
-		toolOutput = vscode.window.createOutputChannel('Temco AI: tools');
+/** Sets the one thing the device, repository and project tools cannot guess: where to ask. */
+async function configurePlatformApi(): Promise<void> {
+	const configuration = vscode.workspace.getConfiguration('temcoAi');
+	const current = configuration.get<string>('platformApi', '');
+	const value = await vscode.window.showInputBox({
+		title: 'Platform API',
+		prompt: 'The address the device, repository and project tools should ask. Leave it empty to turn those tools off.',
+		value: current,
+		placeHolder: 'http://127.0.0.1:3210',
+	});
+	if (value === undefined) {
+		return;
 	}
-	return toolOutput;
+	await configuration.update('platformApi', value.trim(), vscode.ConfigurationTarget.Global);
 }
 
 /**
@@ -250,14 +259,7 @@ async function askWithTools(context: vscode.ExtensionContext): Promise<void> {
 		const result = await runAgent(context, [{ role: 'user', content: question }], {
 			log: (line) => output.appendLine(line),
 			onStep: (step) => output.appendLine(`call ${step.tool} ${JSON.stringify(step.arguments)}`),
-			approve: async (tool, args) => {
-				const yes = await vscode.window.showWarningMessage(
-					`Run ${tool}?`,
-					{ modal: true, detail: JSON.stringify(args, undefined, 2) },
-					'Run'
-				);
-				return yes === 'Run';
-			},
+			approve: askToRun,
 		});
 		output.appendLine('');
 		output.appendLine(result.text);
@@ -269,6 +271,5 @@ async function askWithTools(context: vscode.ExtensionContext): Promise<void> {
 export function deactivate(): void {
 	// The local AI may have left a server process running; nothing else is holding anything open.
 	disposeAi();
-	toolOutput?.dispose();
-	toolOutput = undefined;
+	disposeToolLog();
 }

@@ -18,6 +18,66 @@ const NEEDS_APPROVAL = new Set([
   'project.create',
 ]);
 
+/** Whether one call has to be shown to a person before it runs. */
+export function needsApproval(tool: string): boolean {
+  return NEEDS_APPROVAL.has(tool);
+}
+
+/** An answer to "may this run?", as a caller that has nobody to ask answers it. */
+export type Approval = (tool: string, args: Record<string, unknown>) => Promise<boolean>;
+
+/** Asks the person in front of the window, and takes no for an answer. */
+export async function askToRun(tool: string, args: Record<string, unknown>): Promise<boolean> {
+  const yes = await vscode.window.showWarningMessage(
+    `Run ${tool}?`,
+    { modal: true, detail: JSON.stringify(args, undefined, 2) },
+    'Run'
+  );
+  return yes === 'Run';
+}
+
+/** The tools the server offers, without asking the model anything. */
+export async function listTools(
+  context: vscode.ExtensionContext,
+  log: (line: string) => void
+): Promise<readonly ToolSpec[]> {
+  const binary = await ensureServerBinary(context);
+  const session = new ToolSession(binary, serverEnv(context), log);
+  try {
+    return await session.open();
+  } finally {
+    session.dispose();
+  }
+}
+
+/**
+ * Runs one call outside a turn: the page's runner, and nothing else.
+ *
+ * The approval gate is here rather than in the caller so that no second entry point can skip it.
+ */
+export async function callTool(
+  context: vscode.ExtensionContext,
+  name: string,
+  args: Record<string, unknown>,
+  options: { log: (line: string) => void; approve?: Approval }
+): Promise<string> {
+  if (needsApproval(name)) {
+    const yes = options.approve ? await options.approve(name, args) : false;
+    if (!yes) {
+      return 'The person at the keyboard declined this call.';
+    }
+  }
+
+  const binary = await ensureServerBinary(context);
+  const session = new ToolSession(binary, serverEnv(context), options.log);
+  try {
+    await session.open();
+    return await session.call(name, args);
+  } finally {
+    session.dispose();
+  }
+}
+
 export interface AgentStep {
   tool: string;
   arguments: Record<string, unknown>;

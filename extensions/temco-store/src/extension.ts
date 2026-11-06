@@ -9,7 +9,7 @@
 
 import * as vscode from 'vscode';
 import { registerStoreCommands } from './commands';
-import { Catalog, CatalogUnavailable, sqliteAvailable } from './catalog/store';
+import { CATALOG_FILE, Catalog, CatalogUnavailable, sqliteAvailable } from './catalog/store';
 import { slugOf } from './names';
 import { Selection } from './selection';
 import { TemcoStoreApi } from './api';
@@ -27,6 +27,8 @@ export function activate(context: vscode.ExtensionContext): TemcoStoreApi {
 		},
 
 		catalog: () => Catalog.open(context),
+
+		databasePath: () => vscode.Uri.joinPath(context.globalStorageUri, 'catalog', CATALOG_FILE).fsPath,
 
 		CatalogUnavailable,
 

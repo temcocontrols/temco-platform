@@ -20,6 +20,8 @@ export interface TemcoStoreApi {
 	available(): boolean;
 	/** The platform's database for this window. Opened per use, closed by the caller. */
 	catalog(): Promise<Catalog>;
+	/** Where that database lives, so another process can read the same file. */
+	databasePath(): string;
 	/** The error `catalog()` throws when `available()` is false — for `instanceof` at a call site. */
 	readonly CatalogUnavailable: typeof CatalogUnavailable;
 	/** Which project the window is on, and the page it last opened from it. One instance, one signal. */

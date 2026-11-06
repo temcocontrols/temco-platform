@@ -1092,22 +1092,36 @@ export function registerToolServer(context: vscode.ExtensionContext): vscode.Dis
 
 ## 9. Left panel and pages
 
-The activity-bar group stays `AI` (`temcoAiHub`, owned by `temco-workbench`); `temco-ai` keeps contributing into it and into its own secondary-sidebar view.
+The activity-bar group stays `AI` (`temcoAiHub`, owned by `temco-workbench`); `temco-ai` contributes four group views into it and keeps its own secondary-sidebar view.
 
 | Surface | Id | Content |
 | --- | --- | --- |
 | Activity bar, `AI` | `temcoAiHub` | Group container |
-| └ Draft | `temcoAi.draft` | The turn in progress: assistant text, one row per tool call with its arguments and result |
-| └ What it does | `temcoAi.whatItDoes` | The catalogue from §5.7, grouped, each row with its read/write kind |
-| └ Server | `temcoAi.server` | Installed version and path, tool count, log tail, install/repair action, the settings from §8.3 |
-| Secondary side bar | `temcoAi.panel` (`Temco AI`) | The conversation as it is now, plus an inline approval card when a destructive call is pending |
-| Editor page | `temcoAi.page` | Today's settings page with the server section added |
+| - Draft | `temcoAi.draft` | The turn in progress, and what is waiting to be settled |
+| - What it does | `temcoAi.whatItDoes` | The acts, and the pages the answers leant on |
+| - Server | `temcoAi.server` | The model: runtime, model, and what it is told |
+| - Tools | `temcoAi.mcp` | What the assistant can reach outside this window |
+| Secondary side bar | `temcoAi.panel` (`Temco AI`) | The conversation |
+| Editor page | `temcoAi.page` | Today's settings page: the runtime and its prompts |
+| Editor page | `temcoAi.tools` | The catalogue of calls, and a box that runs one |
 | Editor pages | `temcoAi.actions`, `temcoAi.citations`, `temcoAi.stale` | Unchanged |
 
-Commands added: `temcoAi.toolServer` (reports whether the server is on this machine and where; when it is missing it puts the exact `dotnet publish` command for this checkout on the clipboard, or installs the artifact through the same progress UI as a model), `temcoAi.installToolServer`, and `temcoAi.askWithTools` (asks one question, runs the loop, and writes every call and the final answer to the `Temco AI: tools` channel, asking before a write). `temcoAi.restartToolServer` and `temcoAi.copyToolServerCommand` are not built, and neither are the four views above: today the three palette commands are the whole of the loop's surface.
+The `Tools` group is the way in, four rows and two buttons in its title bar:
 
----
+| Row | Command | What it does |
+| --- | --- | --- |
+| Open the AI panel | `temcoAi.openPanel` | Reveals the conversation in the secondary side bar |
+| Tool server | `temcoAi.toolServer` | Says where the server is; when it is missing, puts the exact `dotnet publish` command for this checkout on the clipboard, or installs it |
+| Platform API | `temcoAi.configurePlatformApi` | Writes `temcoAi.platformApi`, the one address the device, repository and project tools cannot guess |
+| The tools it can call | `temcoAi.tools` | Opens the page below |
 
+The title bar carries the same two ideas as buttons, so the group is useful without opening a page.
+
+`temcoAi.tools` is a page, not a tree view, because a flat list of rows cannot show an argument schema:
+
+- **Where it lives**: the installed server and its path, how many tools it reports, and the platform API in force.
+- **The catalogue**: every tool as a row, reads above writes, each with the description the server itself supplies. It is read through `tools/list` when the page opens, so the list cannot drift from what the model is offered.
+- **Run one**: a picker, the arguments as JSON seeded from the chosen tool's schema, and the answer. It calls the same `callTool()` the loop uses, so a write still asks the person first — the page is a second way in to the same gate, not a way around it.
 ## 10. Security
 
 | Concern | Rule |
@@ -1144,5 +1158,7 @@ Commands added: `temcoAi.toolServer` (reports whether the server is on this mach
 | 7.2, the catalogue entries | `extensions/temco-ai/src/ai/catalog.ts` |
 | 7.3, unpacking a tool server | `extensions/temco-ai/src/ai/install.ts` |
 | 8.3, the environment | `extensions/temco-ai/src/ai/binPath.ts` |
-| 9, the commands | `extensions/temco-ai/src/extension.ts`, `extensions/temco-ai/package.json` |
+| 9, the group and the page | `extensions/temco-ai/src/aiPages.ts`, `extensions/temco-ai/package.json` |
+| 9, the commands | `extensions/temco-ai/src/extension.ts` |
+| the one output channel | `extensions/temco-ai/src/ai/log.ts` |
 | 7.4, the release step (not added) | `.github/workflows/release.yml` |
