@@ -240,7 +240,7 @@ export class AiPanel implements vscode.WebviewViewProvider {
           maxTokens: ANSWER_TOKENS,
         }
       );
-      const text = (answer || streamed).trim();
+      const text = (answer.text || streamed).trim();
       if (text.length === 0) {
         this.post({ type: 'note', text: 'The model returned nothing. Try again, or a different model.' });
         return '';
@@ -313,7 +313,7 @@ export class AiPanel implements vscode.WebviewViewProvider {
         token: tokenSource.token,
         maxTokens: kind === 'draft' ? DRAFT_TOKENS : ANSWER_TOKENS,
       });
-      const text = (answer || streamed).trim();
+      const text = (answer.text || streamed).trim();
       if (text.length === 0) {
         this.post({ type: 'note', text: 'The model returned nothing. Try again, or a different model.' });
       } else if (kind === 'draft') {

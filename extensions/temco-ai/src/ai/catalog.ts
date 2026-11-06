@@ -4,7 +4,7 @@
 // request into a folder of the user's choosing. That is what lets one `.vsix` work on every platform — a
 // compiled runtime is per-OS, a downloaded one is not — and it is what keeps a model out of the repository.
 
-export type ArtifactKind = 'runtime' | 'model';
+export type ArtifactKind = 'runtime' | 'model' | 'tool-server';
 
 export interface CatalogEntry {
   /** Stable id; also the folder the artifact is unpacked into. */
@@ -163,13 +163,47 @@ export const MODELS: readonly CatalogEntry[] = [
   },
 ];
 
+/**
+ * The tool server: the process that gives the model something to call. It is published per platform with the
+ * release, downloaded on first use like a runtime, and verified the same way.
+ */
+export const TOOL_SERVER_RELEASE = 'v1.144.0';
+const TOOL_SERVER_ROOT = `https://github.com/temcocontrols/temco-platform/releases/download/${TOOL_SERVER_RELEASE}`;
+
+function toolServer(rid: string, platform: string, architecture: string, label: string): CatalogEntry {
+  return {
+    id: `temco-mcp-${rid}`,
+    kind: 'tool-server',
+    label,
+    file: `temco-mcp-${rid}.tar.gz`,
+    url: `${TOOL_SERVER_ROOT}/temco-mcp-${rid}.tar.gz`,
+    bytes: 0,
+    sha256: '',
+    licence: 'UNLICENSED',
+    platform,
+    architecture,
+    notes: 'checksum and size pinned at release time',
+  };
+}
+
+export const TOOL_SERVERS: readonly CatalogEntry[] = [
+  toolServer('win-x64', 'win32', 'x64', 'Temco tool server - Windows x64'),
+  toolServer('linux-x64', 'linux', 'x64', 'Temco tool server - Linux x64'),
+  toolServer('osx-arm64', 'darwin', 'arm64', 'Temco tool server - macOS arm64'),
+];
+
+/** The tool server built for this machine, or `undefined` when the catalog has none for it. */
+export function toolServerFor(platform: string, architecture: string): CatalogEntry | undefined {
+  return TOOL_SERVERS.find((entry) => entry.platform === platform && entry.architecture === architecture);
+}
+
 /** The runtime built for this machine, or `undefined` when the catalog has none for it. */
 export function runtimeFor(platform: string, architecture: string): CatalogEntry | undefined {
   return RUNTIMES.find((entry) => entry.platform === platform && entry.architecture === architecture);
 }
 
 export function entryById(id: string): CatalogEntry | undefined {
-  return [...RUNTIMES, ...MODELS].find((entry) => entry.id === id);
+  return [...RUNTIMES, ...MODELS, ...TOOL_SERVERS].find((entry) => entry.id === id);
 }
 
 /** Sizes as a person reads them; an unknown size says so instead of guessing. */

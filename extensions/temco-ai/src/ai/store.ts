@@ -16,6 +16,8 @@ const STORE_EXTENSION_ID = 'temcocontrols.temco-store';
 /** The store's exports — the copy of the part of `extensions/temco-store/src/api.ts` used here. */
 interface StoreApi {
 	catalog(): Promise<Catalog>;
+	/** Where the platform's database lives, for the tool server that reads the same file. */
+	databasePath(): string;
 }
 
 const extension = vscode.extensions.getExtension<StoreApi>(STORE_EXTENSION_ID);
@@ -29,6 +31,11 @@ const store = extension.exports;
 export const Catalog = {
 	open: (): Promise<Catalog> => store.catalog(),
 };
+
+/** Where that database is on disk, asked of the module that owns it. */
+export function catalogDatabasePath(): string {
+	return store.databasePath();
+}
 
 /** The two things this module asks of the platform's memory. */
 export interface Catalog {

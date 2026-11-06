@@ -36,8 +36,34 @@ export interface AiStatus {
 }
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  /** On an assistant message: the calls it asked for. */
+  tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[];
+  /** On a tool message: the call it answers. */
+  tool_call_id?: string;
+}
+
+/** One tool as the model sees it: a name, a sentence, and a JSON Schema for the arguments. */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  /** The server's own claim about the call, when it made one. */
+  readOnly?: boolean;
+  destructive?: boolean;
+}
+
+/** One call the model asked for, answered by whoever owns the tool. */
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface Completion {
+  text: string;
+  toolCalls: readonly ToolCall[];
 }
 
 let child: ChildProcess | undefined;
@@ -109,18 +135,66 @@ export async function complete(
     token?: vscode.CancellationToken;
     /** A ceiling on the answer, so one request cannot run to the model's own limits. */
     maxTokens?: number;
+    /** Omitted for the plain question-and-answer path, which stays exactly as it is. */
+    tools?: readonly ToolSpec[];
   } = {}
-): Promise<string> {
+): Promise<Completion> {
   const server = await startAiServer(context);
+  const streamed = options.onToken !== undefined;
   const payload = JSON.stringify({
     messages,
     temperature: 0.2,
-    stream: options.onToken !== undefined,
+    stream: streamed,
     max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
+    ...(options.tools?.length
+      ? {
+          tools: options.tools.map((tool) => ({
+            type: 'function',
+            function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+          })),
+          tool_choice: 'auto',
+          parallel_tool_calls: true,
+        }
+      : {}),
   });
   const response = await post(server.port, '/v1/chat/completions', payload, options.onToken, options.token);
   touchIdle();
-  return response;
+  return readCompletion(response, streamed);
+}
+
+/**
+ * A streamed turn is text only: a half-rendered call cannot be answered, so a turn that may call a tool is
+ * never streamed. A whole reply carries the calls the model asked for.
+ */
+function readCompletion(raw: string, streamed: boolean): Completion {
+  if (streamed) {
+    return { text: raw, toolCalls: [] };
+  }
+  const parsed = JSON.parse(raw) as {
+    choices?: {
+      message?: {
+        content?: string | null;
+        tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[];
+      };
+    }[];
+  };
+  const message = parsed.choices?.[0]?.message;
+  const toolCalls = (message?.tool_calls ?? []).map((call, index) => ({
+    id: call.id ?? `call_${index}`,
+    name: call.function?.name ?? '',
+    arguments: parseArguments(call.function?.arguments ?? ''),
+  }));
+  return { text: message?.content ?? '', toolCalls };
+}
+
+/** A model that answers with something that is not an object is a model that called no tool. */
+function parseArguments(text: string): Record<string, unknown> {
+  try {
+    const value: unknown = JSON.parse(text || '{}');
+    return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
 }
 
 async function start(context: vscode.ExtensionContext): Promise<AiServerInfo> {
@@ -154,6 +228,9 @@ async function start(context: vscode.ExtensionContext): Promise<AiServerInfo> {
       String(port),
       '--ctx-size',
       '8192',
+      // Without this the server never applies the model's chat template, so a `tools` payload is rejected
+      // and a reply never carries `tool_calls`.
+      '--jinja',
     ],
     { windowsHide: true }
   );
@@ -252,11 +329,8 @@ function post(
             body += chunk;
           });
           response.on('end', () => {
-            try {
-              resolve(contentOf(body));
-            } catch (error) {
-              reject(error);
-            }
+            // The whole body: the caller reads the message, which is where the tool calls are.
+            resolve(body);
           });
           return;
         }
@@ -286,16 +360,6 @@ function post(
     call.on('close', () => cancelled?.dispose());
     call.end(payload);
   });
-}
-
-/** The assistant's text out of a non-streaming OpenAI-shaped reply. */
-function contentOf(body: string): string {
-  const parsed = JSON.parse(body) as { choices?: { message?: { content?: string } }[] };
-  const text = parsed.choices?.[0]?.message?.content;
-  if (typeof text !== 'string') {
-    throw new Error('the local server answered without any text');
-  }
-  return text;
 }
 
 /** One server-sent event line, when it carries an assistant token. */

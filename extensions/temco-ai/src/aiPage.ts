@@ -8,7 +8,7 @@
 // project's pages; this is where the AI itself is set up, and both point at each other.
 
 import * as vscode from 'vscode';
-import { MODELS, RUNTIMES, entryById, formatBytes, runtimeFor } from './ai/catalog';
+import { ArtifactKind, MODELS, RUNTIMES, entryById, formatBytes, runtimeFor, toolServerFor } from './ai/catalog';
 import { install, installedArtifacts, modelRoot, uninstall } from './ai/install';
 import { bestModel, describeMachine, fitsModel, machine } from './ai/machine';
 import { PROMPT_VERSION } from './ai/prompts';
@@ -235,11 +235,12 @@ export class AiPage {
    * Both are answers about *this* computer, so they are read here rather than in the page: `process` and `os`
    * are the extension host's, and a webview that guessed at them would be guessing at the user's own machine.
    */
-  private suggestions(): { runtime?: string; model?: string } {
+  private suggestions(): Record<ArtifactKind, string | undefined> {
     const here = this.machine;
     return {
       runtime: runtimeFor(here.platform, here.architecture)?.id,
       model: bestModel(here)?.id,
+      'tool-server': toolServerFor(here.platform, here.architecture)?.id,
     };
   }
 }

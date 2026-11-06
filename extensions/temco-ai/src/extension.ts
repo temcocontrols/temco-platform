@@ -15,6 +15,8 @@
 //     broken one.
 
 import * as vscode from 'vscode';
+import { runAgent } from './ai/agent';
+import { ensureServerBinary, buildHint, serverBinary, serverEntry } from './ai/binPath';
 import { MODELS, RUNTIMES, entryById } from './ai/catalog';
 import { registerAiCommands } from './ai/commands';
 import { AiPanel, AI_VIEW_ID } from './ai/panel';
@@ -107,7 +109,11 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 		vscode.commands.registerCommand('temcoAi.stale', () => pages.stale()),
 		// One forum thread, answered in the panel so it can be read and followed up: the docs module stores the answer
 		// against the topic and shows it there as well.
-		vscode.commands.registerCommand('temcoAi.suggestTopic', (request?: unknown) => topicAnswer(panel, request))
+		vscode.commands.registerCommand('temcoAi.suggestTopic', (request?: unknown) => topicAnswer(panel, request)),
+		// The tool server: what the assistant can call, and the one command that reaches it today.
+		vscode.commands.registerCommand('temcoAi.toolServer', () => toolServerStatus(context)),
+		vscode.commands.registerCommand('temcoAi.installToolServer', () => ensureServerBinary(context)),
+		vscode.commands.registerCommand('temcoAi.askWithTools', () => askWithTools(context))
 	);
 
 	return {
@@ -125,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 
 		analyse: async (request) => {
 			const prompt = analysePrompt(context, request);
-			return complete(
+			const answer = await complete(
 				context,
 				[
 					{ role: 'system', content: systemPrompt(context, undefined) },
@@ -133,6 +139,7 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 				],
 				{ maxTokens: 700 }
 			);
+			return answer.text;
 		},
 
 		draft: async (request) => {
@@ -175,7 +182,93 @@ async function topicAnswer(panel: AiPanel, request: unknown): Promise<string> {
 	});
 }
 
+/** The channel the tool loop writes to: what it called, what came back, and what went wrong. */
+let toolOutput: vscode.OutputChannel | undefined;
+
+function toolLog(): vscode.OutputChannel {
+	if (!toolOutput) {
+		toolOutput = vscode.window.createOutputChannel('Temco AI: tools');
+	}
+	return toolOutput;
+}
+
+/**
+ * Where the tool server is on this machine, and how to get it. The answer is offered where the user already
+ * reads AI status rather than beside it.
+ */
+async function toolServerStatus(context: vscode.ExtensionContext): Promise<void> {
+	const entry = serverEntry();
+	const binary = serverBinary(context);
+	if (binary) {
+		const choice = await vscode.window.showInformationMessage(
+			`The tool server is ready: ${binary}`,
+			'Show the log'
+		);
+		if (choice === 'Show the log') {
+			toolLog().show(true);
+		}
+		return;
+	}
+	if (!entry) {
+		await vscode.window.showWarningMessage(
+			`No tool server is published for ${process.platform}-${process.arch}, so the assistant cannot call anything here.`
+		);
+		return;
+	}
+
+	const hint = buildHint(context);
+	const choice = await vscode.window.showInformationMessage(
+		`${entry.label} is not on this machine yet.`,
+		{ modal: true, detail: hint },
+		'Build Command',
+		'Install'
+	);
+	if (choice === 'Build Command') {
+		await vscode.env.clipboard.writeText(hint);
+		await vscode.window.showInformationMessage('The command is on the clipboard. Run it in a terminal.');
+	} else if (choice === 'Install') {
+		await ensureServerBinary(context);
+	}
+}
+
+/**
+ * One question, answered with tools. The first surface the loop has: the panel keeps its question-and-answer
+ * path until the tool views in the design are built, and this is reachable from the palette today.
+ */
+async function askWithTools(context: vscode.ExtensionContext): Promise<void> {
+	const question = await vscode.window.showInputBox({
+		title: 'Ask with tools',
+		prompt: 'What should the assistant find out? It can read devices, repositories, documentation and the catalog.',
+		placeHolder: 'read input 1 of device 1234',
+	});
+	if (!question) {
+		return;
+	}
+	const output = toolLog();
+	output.show(true);
+	try {
+		const result = await runAgent(context, [{ role: 'user', content: question }], {
+			log: (line) => output.appendLine(line),
+			onStep: (step) => output.appendLine(`call ${step.tool} ${JSON.stringify(step.arguments)}`),
+			approve: async (tool, args) => {
+				const yes = await vscode.window.showWarningMessage(
+					`Run ${tool}?`,
+					{ modal: true, detail: JSON.stringify(args, undefined, 2) },
+					'Run'
+				);
+				return yes === 'Run';
+			},
+		});
+		output.appendLine('');
+		output.appendLine(result.text);
+	} catch (error) {
+		output.appendLine(error instanceof Error ? error.message : String(error));
+	}
+}
+
 export function deactivate(): void {
 	// The local AI may have left a server process running; nothing else is holding anything open.
 	disposeAi();
+	toolOutput?.dispose();
+	toolOutput = undefined;
 }

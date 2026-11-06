@@ -111,13 +111,19 @@ export async function install(
       }
 
       let installedPath = archive;
-      if (entry.kind === 'runtime') {
+      if (entry.kind === 'runtime' || entry.kind === 'tool-server') {
         const destination = path.join(root, entry.id);
         progress.report({ message: 'unpacking…' });
         await extract(archive, destination);
-        const binary = findFile(destination, 'llama-server');
+        const executable =
+          entry.kind === 'tool-server'
+            ? process.platform === 'win32'
+              ? 'temco-mcp.exe'
+              : 'temco-mcp'
+            : 'llama-server';
+        const binary = findFile(destination, executable);
         if (!binary) {
-          throw new Error(`no llama-server executable was found after unpacking ${entry.file}`);
+          throw new Error(`no ${executable} executable was found after unpacking ${entry.file}`);
         }
         if (process.platform !== 'win32') {
           fs.chmodSync(binary, 0o755);
