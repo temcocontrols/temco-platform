@@ -21,7 +21,7 @@ interface Removal extends vscode.QuickPickItem {
   artifact: InstalledArtifact;
 }
 
-export function registerAiCommands(context: vscode.ExtensionContext): void {
+export function registerAiCommands(context: vscode.ExtensionContext, panel: { isVisible(): boolean }): void {
   const page = new AiPage(context);
   context.subscriptions.push(
     // An argument from a caller that knows what the reader came for: the panel's "choose a model" means the
@@ -32,7 +32,7 @@ export function registerAiCommands(context: vscode.ExtensionContext): void {
     // Focusing the panel, and optionally bringing a page with it: a triage tab or the stale list knows which page it
     // means, and the panel answers about the page that is open — so the hand-off is an open, not a second way of
     // naming a page.
-    vscode.commands.registerCommand('temcoAi.openPanel', (target?: unknown) => openPanel(target)),
+    vscode.commands.registerCommand('temcoAi.openPanel', (target?: unknown) => openPanel(panel, target)),
     vscode.commands.registerCommand('temcoAi.models', () => chooseModel(context)),
     vscode.commands.registerCommand('temcoAi.removeModel', () => removeModel(context)),
     vscode.commands.registerCommand('temcoAi.openModelFolder', async () => {
@@ -71,14 +71,22 @@ function fileOf(target: unknown): string | undefined {
 }
 
 /**
- * Focuses the AI panel, opening the page a caller named first.
+ * Focuses the AI panel, opening the page a caller named first, or closes it when it is already on screen.
  *
  * The panel answers about the page that is open, and the documentation module owns how a page opens (one group, never
  * a split) — so this asks it rather than choosing a column here. A module that is not installed leaves the page
  * unopened, and the panel still gets the focus.
+ *
+ * A plain open toggles: the row that opens the conversation is the row a reader reaches for again to put it away, and
+ * a button that only ever opened would leave them hunting the side bar's own close control. A caller that names a
+ * page is asking to *see that page*, so it never closes anything.
  */
-async function openPanel(target?: unknown): Promise<void> {
+async function openPanel(panel: { isVisible(): boolean }, target?: unknown): Promise<void> {
 	const file = fileOf(target);
+	if (file === undefined && panel.isVisible()) {
+		await vscode.commands.executeCommand('workbench.action.closeAuxiliaryBar');
+		return;
+	}
 	if (file !== undefined) {
 		await vscode.commands.executeCommand('temcoDocs.openFile', file).then(undefined, () => undefined);
 	}

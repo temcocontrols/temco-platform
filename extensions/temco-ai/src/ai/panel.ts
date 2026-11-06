@@ -77,6 +77,11 @@ export class AiPanel implements vscode.WebviewViewProvider {
     this.flush();
   }
 
+  /** Whether the conversation is on screen right now, which is what makes the panel's open a toggle. */
+  isVisible(): boolean {
+    return this.view?.visible === true;
+  }
+
   /** Re-states what the header shows: the page, the model, whether a draft is waiting. */
   refresh(): void {
     const page = this.page();

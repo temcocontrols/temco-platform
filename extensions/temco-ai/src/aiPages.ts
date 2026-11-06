@@ -10,10 +10,10 @@ import * as vscode from 'vscode';
 import { DocsRoot, collectPages, docs } from './docs';
 import { Catalog, CitationRow } from './ai/store';
 import { askToRun, callTool, listTools } from './ai/agent';
-import { buildHint, platformApi, serverBinary, serverEntry } from './ai/binPath';
+import { buildHint, platformApi, serverBinary, serverEntry, serverFolder } from './ai/binPath';
 import { toolLog } from './ai/log';
 import { ToolSpec } from './ai/runtime';
-import { PageMessage, RestorablePage, commandScript, escapeHtml as esc, callout, entry, entries, hero, icon, page, pageColumn, runCommand, section } from './ui';
+import { PageMessage, RestorablePage, commandScript, escapeHtml as esc, callout, hero, icon, page, pageColumn, runCommand, section } from './ui';
 
 export const ACTIONS_VIEW_TYPE = 'temcoAi.actions';
 export const CITATIONS_VIEW_TYPE = 'temcoAi.citations';
@@ -63,13 +63,34 @@ const AI_CSS = `
 /* A row's second line here is prose about the thing, not a path: the kit sets it in the mono face for paths. */
 .az-entry__meta { font-family: inherit; }
 .ai-foot { margin: var(--sp-6) 0 0; color: var(--ink-3); font-size: 12px; line-height: 18px; }
+/* The catalogue: two columns, no rules, nothing drawn around a call. A name is a link to the box that runs it. */
+.ai-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
+@media (max-width: 780px) { .ai-split { grid-template-columns: minmax(0, 1fr); } }
+.ai-calls { display: grid; margin: var(--sp-2) 0 0; }
+.ai-call { display: grid; grid-template-columns: minmax(132px, 44%) minmax(0, 1fr); gap: var(--sp-3); padding: 3px 0; align-items: baseline; }
+.ai-call--more { display: none; }
+.ai-link { appearance: none; background: none; border: 0; margin: 0; padding: 0; font-family: monospace; font-size: 12px; line-height: 18px; text-align: left; color: var(--vscode-textLink-foreground, inherit); cursor: pointer; }
+.ai-link:hover { text-decoration: underline; }
+.ai-link:focus-visible { outline: 1px solid var(--vscode-focusBorder, currentColor); outline-offset: 2px; }
+.ai-call__desc { font-size: 12px; line-height: 18px; color: var(--ink-3); }
+.ai-toggle { appearance: none; background: none; border: 0; margin: 0; padding: 0; font-size: 12px; line-height: 18px; color: var(--vscode-textLink-foreground, inherit); cursor: pointer; white-space: nowrap; }
+.ai-toggle:hover { text-decoration: underline; }
+.ai-toggle:focus-visible { outline: 1px solid var(--vscode-focusBorder, currentColor); outline-offset: 2px; }
 /* The runner: one call, from a page, without the model in the way. */
-.ai-tool { display: grid; gap: var(--sp-2); margin: var(--sp-3) 0 0; }
-.ai-tool__row { display: flex; align-items: center; gap: var(--sp-2); }
-.ai-tool select, .ai-tool textarea, .ai-tool__out { font-family: monospace; font-size: 12px; line-height: 18px; }
-.ai-tool textarea { min-height: 96px; resize: vertical; }
-.ai-tool__out { margin: 0; padding: var(--sp-2); border-radius: 4px; background: rgba(127, 127, 127, 0.1); white-space: pre-wrap; }
-.ai-tool__out--bad { color: var(--vscode-errorForeground, inherit); }
+.ai-run { display: grid; gap: var(--sp-2); margin: var(--sp-3) 0 0; }
+.ai-run__row { display: flex; align-items: center; gap: var(--sp-2); }
+.ai-run select, .ai-run textarea, .ai-run__out { font-family: monospace; font-size: 12px; line-height: 18px; }
+.ai-run textarea { min-height: 96px; resize: vertical; }
+.ai-run__out { margin: 0; padding: var(--sp-2); border-radius: 4px; background: rgba(127, 127, 127, 0.1); white-space: pre-wrap; }
+.ai-run__out--bad { color: var(--vscode-errorForeground, inherit); }
+/* What this page is answerable for: a key, a value, and nothing around them. */
+.ai-fact { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-2) 0; font-size: 12px; line-height: 18px; }
+.ai-fact__key { color: var(--ink-3); }
+.ai-fact__value { font-family: monospace; overflow-wrap: anywhere; }
+.ai-field { display: flex; align-items: center; gap: var(--sp-2); margin: var(--sp-3) 0 0; }
+.ai-field label { flex: 0 0 104px; color: var(--ink-3); font-size: 12px; }
+.ai-field input { flex: 1 1 auto; font-family: monospace; font-size: 12px; }
+.ai-note { margin: var(--sp-2) 0 0; font-size: 12px; line-height: 18px; color: var(--ink-3); }
 `;
 
 /** The four surfaces, one panel each. */
@@ -96,22 +117,40 @@ export class AiPages {
 		this.open('stale', STALE_VIEW_TYPE, 'Update a Page the Code Moved', staleBody(this.roots()));
 	}
 
-	/** The catalogue of calls, and a box that makes one without the model. */
-	tools(): void {
-		void this.openTools();
+	/** The catalogue of calls, the server behind them, and the address some of them ask. */
+	tools(section?: unknown): void {
+		void this.openTools(undefined, typeof section === 'string' ? section : undefined);
 	}
 
-	private async openTools(restored?: vscode.WebviewPanel): Promise<void> {
-		const view = await toolsView(this.context);
+	private async openTools(restored?: vscode.WebviewPanel, anchor?: string): Promise<void> {
+		const view = await toolsView(this.context, anchor);
 		await this.open(
 			'tools',
 			TOOLS_VIEW_TYPE,
 			'The Tools the Assistant Can Call',
 			view.body,
 			restored,
-			(message, panel) => void this.runTool(message, panel),
+			(message, panel) => void this.handlePageMessage(message, panel),
 			view.script
 		);
+	}
+
+	private async handlePageMessage(message: PageMessage, panel: vscode.WebviewPanel): Promise<void> {
+		if (message.type === 'run') {
+			await this.runTool(message, panel);
+		} else if (message.type === 'saveApi') {
+			await this.saveApi(message, panel);
+		}
+	}
+
+	/** The one setting a person has to know about gets a field on the page rather than a box over it. */
+	private async saveApi(message: PageMessage, panel: vscode.WebviewPanel): Promise<void> {
+		const value = (message as unknown as { value?: unknown }).value;
+		const address = typeof value === 'string' ? value.trim() : '';
+		await vscode.workspace
+			.getConfiguration('temcoAi')
+			.update('platformApi', address, vscode.ConfigurationTarget.Global);
+		void panel.webview.postMessage({ type: 'savedApi', value: address });
 	}
 
 	/**
@@ -493,6 +532,8 @@ interface Row {
 	note: string;
 	mark: string;
 	command: string;
+	/** Arguments the command takes: a page that should open on one of its parts, and nothing else yet. */
+	args?: readonly unknown[];
 }
 
 /**
@@ -530,10 +571,9 @@ const GROUPS: { id: string; rows: Row[] }[] = [
 		// answers a call, the address the device and repository tools ask, and the catalogue of calls.
 		id: 'mcp',
 		rows: [
-			{ label: 'Open the AI panel', note: 'the conversation, in the secondary side bar', mark: 'comment-discussion', command: 'temcoAi.openPanel' },
-			{ label: 'Tool server', note: 'whether it is on this machine, where it lives, and how to build it', mark: 'server-process', command: 'temcoAi.toolServer' },
-			{ label: 'Platform API', note: 'the address the device, repository and project tools ask', mark: 'plug', command: 'temcoAi.configurePlatformApi' },
-			{ label: 'The tools it can call', note: 'the catalogue, the arguments each takes, and a box to run one', mark: 'tools', command: 'temcoAi.tools' }
+			{ label: 'Open the AI panel', note: 'the conversation, in the secondary side bar; once more puts it away', mark: 'comment-discussion', command: 'temcoAi.openPanel' },
+			{ label: 'Connection', note: 'the program that answers a call, and the address it asks', mark: 'server-process', command: 'temcoAi.tools', args: ['connection'] },
+			{ label: 'The tools it can call', note: 'what reads, what writes, and a box to run one', mark: 'tools', command: 'temcoAi.tools' }
 		]
 	}
 ];
@@ -550,7 +590,7 @@ export function registerAiViews(context: vscode.ExtensionContext): void {
 						const item = new vscode.TreeItem(row.label, vscode.TreeItemCollapsibleState.None);
 						item.iconPath = new vscode.ThemeIcon(row.mark);
 						item.tooltip = `${row.label} — ${row.note}`;
-						item.command = { command: row.command, title: row.label };
+						item.command = { command: row.command, title: row.label, arguments: row.args === undefined ? undefined : [...row.args] };
 						return item;
 					})
 				}
@@ -559,14 +599,19 @@ export function registerAiViews(context: vscode.ExtensionContext): void {
 	}
 }
 
-/** The script the Tools page runs: fill the arguments for the chosen call, and post it to the module. */
+/** How many calls a column shows before it offers the rest. */
+const VISIBLE_CALLS = 6;
+
+/** The script the Tools page runs: link a name to the runner, unfold a long column, run one call, save one field. */
 const TOOLS_SCRIPT = `
 (function () {
 	const api = window.__temcoApi || (window.__temcoApi = acquireVsCodeApi());
 	const select = document.getElementById('tool');
 	const args = document.getElementById('args');
 	const out = document.getElementById('out');
-	const run = document.getElementById('run');
+	const run = document.getElementById('run-it');
+	const field = document.getElementById('api');
+	const note = document.getElementById('api-note');
 	const seeds = window.__toolSeeds || {};
 
 	const fill = () => {
@@ -575,6 +620,31 @@ const TOOLS_SCRIPT = `
 	};
 	if (select) { select.addEventListener('change', fill); }
 
+	// A name is a link to the box that runs it: pick the call, seed its arguments, and put the caret in them.
+	document.querySelectorAll('[data-tool]').forEach((link) => {
+		link.addEventListener('click', () => {
+			const name = link.getAttribute('data-tool');
+			if (select && name) { select.value = name; }
+			fill();
+			const box = document.getElementById('run');
+			if (box) { box.scrollIntoView({ block: 'start' }); }
+			if (args) { args.focus(); }
+		});
+	});
+
+	// The fold lives in the section's heading: it names what is left, and puts back what it took away.
+	document.querySelectorAll('[data-toggle]').forEach((button) => {
+		const list = document.getElementById(button.getAttribute('data-toggle'));
+		if (!list) { return; }
+		const folded = list.querySelectorAll('.ai-call--more');
+		button.addEventListener('click', () => {
+			const expanded = button.getAttribute('aria-expanded') === 'true';
+			folded.forEach((row) => row.classList.toggle('ai-call--more', expanded));
+			button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+			button.textContent = expanded ? 'Show ' + folded.length + ' more' : 'Show less';
+		});
+	});
+
 	if (run) {
 		run.addEventListener('click', () => {
 			const tool = select ? select.value : '';
@@ -582,12 +652,17 @@ const TOOLS_SCRIPT = `
 			try {
 				parsed = JSON.parse(args && args.value ? args.value : '{}');
 			} catch (error) {
-				if (out) { out.textContent = 'Those arguments are not JSON: ' + error.message; out.classList.add('ai-tool__out--bad'); }
+				if (out) { out.textContent = 'Those arguments are not JSON: ' + error.message; out.classList.add('ai-run__out--bad'); }
 				return;
 			}
-			if (out) { out.textContent = 'Running ' + tool + '...'; out.classList.remove('ai-tool__out--bad'); }
+			if (out) { out.textContent = 'Running ' + tool + '...'; out.classList.remove('ai-run__out--bad'); }
 			api.postMessage({ type: 'run', tool: tool, arguments: parsed });
 		});
+	}
+
+	const save = document.getElementById('save');
+	if (save && field) {
+		save.addEventListener('click', () => api.postMessage({ type: 'saveApi', value: field.value }));
 	}
 
 	document.addEventListener('click', (event) => {
@@ -600,12 +675,25 @@ const TOOLS_SCRIPT = `
 
 	window.addEventListener('message', (event) => {
 		const message = event.data;
-		if (!message || message.type !== 'result' || !out) { return; }
-		out.textContent = message.text || '(nothing came back)';
-		out.classList.toggle('ai-tool__out--bad', Boolean(message.bad));
+		if (!message) { return; }
+		if (message.type === 'result' && out) {
+			out.textContent = message.text || '(nothing came back)';
+			out.classList.toggle('ai-run__out--bad', Boolean(message.bad));
+		}
+		if (message.type === 'savedApi' && note) {
+			note.textContent = message.value
+				? 'Saved. The calls that need it will ask ' + message.value + ' from now on.'
+				: 'Saved as empty: those calls will answer that the service is not configured.';
+		}
 	});
 
 	fill();
+
+	const anchor = window.__temcoAnchor;
+	if (anchor) {
+		const target = document.getElementById(anchor);
+		if (target) { target.scrollIntoView({ block: 'start' }); }
+	}
 })();
 `;
 
@@ -621,13 +709,55 @@ function seedFor(tool: ToolSpec): Record<string, unknown> {
 }
 
 /**
- * *Tools* - what the assistant can reach outside the page in front of it.
- *
- * Three parts, in the order a reader needs them: where the server lives and what it is told, the catalogue the
- * server itself reports, and one box that runs a single call without the model. The catalogue is read at open
- * time rather than kept anywhere, so a tool that is added to the server appears here without being listed by hand.
+ * One call: its name as a link to the runner, and the sentence the server wrote about it. Beyond the first few the
+ * row is folded away, because a column of twenty is a wall rather than a catalogue.
  */
-async function toolsView(context: vscode.ExtensionContext): Promise<{ body: string; script: string }> {
+function callRow(tool: ToolSpec, index: number): string {
+	const folded = index >= VISIBLE_CALLS ? ' ai-call--more' : '';
+	return `<div class="ai-call${folded}"><button type="button" class="ai-link" data-tool="${esc(
+		tool.name
+	)}" title="Run ${esc(tool.name)}">${esc(tool.name)}</button><span class="ai-call__desc">${esc(
+		tool.description
+	)}</span></div>`;
+}
+
+/** The control that unfolds a column, in the section's own heading so it is found before the wall rather than after it. */
+function toggleLink(id: string, total: number, shown: number): string {
+	const more = Math.max(total - shown, 0);
+	return `<button type="button" class="ai-toggle" data-toggle="${esc(id)}" aria-expanded="false" aria-controls="${esc(
+		id
+	)}">Show ${more} more</button>`;
+}
+
+/** One half of the catalogue: a heading with its fold control, and its calls. */
+function callColumn(id: string, title: string, desc: string, items: readonly ToolSpec[]): string {
+	const rows = items.map(callRow).join('');
+	const actions = items.length > VISIBLE_CALLS ? toggleLink(id, items.length, VISIBLE_CALLS) : undefined;
+	return `<div>${section({ title, desc, actions })}<div class="ai-calls" id="${esc(id)}">${rows}</div></div>`;
+}
+
+/** One fact the page is answerable for, told apart from the prose around it by its face, not a border. */
+function fact(key: string, value: string): string {
+	return `<div class="ai-fact"><span class="ai-fact__key">${esc(key)}</span><span class="ai-fact__value">${esc(value)}</span></div>`;
+}
+
+/** A button the page's own script listens for, rather than one that names a command. */
+function localButton(id: string, label: string, primary = false): string {
+	return `<button type="button" class="az-btn az-btn--sm${primary ? ' az-btn--primary' : ''}" id="${id}"><span>${esc(label)}</span></button>`;
+}
+
+/**
+ * *Tools* - what the assistant can reach outside the page in front of it, and the two things that decide whether it
+ * reaches anything at all.
+ *
+ * Three parts: the catalogue, split into what reads and what writes so the second half is never a surprise; one box
+ * that runs a single call; and one part for the server and the address it asks, because they are one question, can
+ * this reach anything and where, and a reader who has one of them open has the other in front of them anyway.
+ */
+async function toolsView(
+	context: vscode.ExtensionContext,
+	anchor?: string
+): Promise<{ body: string; script: string }> {
 	const catalogEntry = serverEntry();
 	const binary = serverBinary(context);
 	const api = platformApi();
@@ -644,49 +774,51 @@ async function toolsView(context: vscode.ExtensionContext): Promise<{ body: stri
 		problem = buildHint(context);
 	}
 
-	const status = binary
-		? entry({ mark: 'server-process', tone: 'ok', title: catalogEntry?.label ?? 'Tool server', meta: [binary], state: `${tools.length} tools` })
-		: entry({ mark: 'server-process', tone: 'warn', title: catalogEntry?.label ?? 'Tool server', meta: ['no server on this machine yet'], state: 'not installed' });
-
-	const apiLine =
-		api.length > 0
-			? entry({ mark: 'plug', tone: 'ok', title: 'Platform API', meta: [api], state: 'set' })
-			: entry({ mark: 'plug', tone: 'warn', title: 'Platform API', meta: ['not set - the device, documentation, repository, project and site tools will say so'], state: 'not set' });
-
-	const rowOf = (tool: ToolSpec): string =>
-		entry({
-			mark: tool.readOnly ? 'eye' : 'edit',
-			tone: tool.readOnly ? 'ok' : 'warn',
-			title: tool.name,
-			meta: [tool.description],
-			state: tool.readOnly ? 'reads' : 'writes'
-		});
-
 	const reads = tools.filter((tool) => tool.readOnly === true);
 	const writes = tools.filter((tool) => tool.readOnly !== true);
 
 	const catalogue =
 		tools.length === 0
 			? callout({ title: 'Nothing to list yet', desc: problem || 'The tool server did not answer.', mark: 'warning' })
-			: `${entries(reads.map(rowOf).join(''))}${
-					writes.length === 0
-						? ''
-						: `<div class="mt-24">${section({ title: 'Writes', desc: 'Each of these asks the person at the keyboard first, every time.' })}<div class="mt-8">${entries(writes.map(rowOf).join(''))}</div></div>`
-				}`;
+			: `<div class="ai-split">
+	${callColumn('reads', 'Reads', `${reads.length} calls that change nothing.`, reads)}
+	${callColumn('writes', 'Writes', writes.length === 0 ? 'None.' : 'Each asks the person at the keyboard first, every time.', writes)}
+</div>`;
 
 	const runner =
 		tools.length === 0
 			? ''
-			: `<div class="mt-24">
+			: `<div id="run" class="mt-24">
 	${section({ title: 'Run one', desc: 'The same call the model makes, without the model. Useful when a device or a registry is not answering.' })}
-	<div class="ai-tool mt-8">
-		<div class="ai-tool__row"><label for="tool">Tool</label><select id="tool">${tools
+	<div class="ai-run mt-8">
+		<div class="ai-run__row"><label for="tool">Tool</label><select id="tool">${tools
 				.map((tool) => `<option value="${esc(tool.name)}">${esc(tool.name)}</option>`)
 				.join('')}</select></div>
 		<textarea id="args" spellcheck="false"></textarea>
-		<div class="ai-tool__row"><button type="button" class="az-btn az-btn--primary az-btn--sm" id="run"><span>Run it</span></button><span class="ai-line">Arguments are sent as JSON, exactly as typed.</span></div>
-		<pre id="out" class="ai-tool__out">Nothing run yet.</pre>
+		<div class="ai-run__row">${localButton('run-it', 'Run it', true)}<span class="ai-note">Arguments go as JSON, exactly as typed.</span></div>
+		<pre id="out" class="ai-run__out">Nothing run yet.</pre>
 	</div>
+</div>`;
+
+	const connection = `<div id="connection" class="mt-24">
+	${section({ title: 'Connection', desc: 'The local program that answers a call, and the address it asks when the answer is not on this machine. It speaks the Model Context Protocol over stdin and never listens on a port.' })}
+	<div class="mt-8">
+		${fact('server', binary ? `ready, ${tools.length} calls` : 'not installed on this machine')}
+		${fact('path', binary ?? serverFolder(context) ?? '')}
+		${fact('platform', `${process.platform}-${process.arch}`)}
+	</div>
+	<div class="ai-run__row mt-8">${act('Install or repair', 'temcoAi.installToolServer')}${act('Show the log', 'temcoAi.showToolLog')}</div>
+	${binary ? '' : `<p class="ai-note">${esc(problem)}</p>`}
+	<div class="ai-field mt-24">
+		<label for="api">Platform API</label>
+		<input id="api" type="text" spellcheck="false" placeholder="http://127.0.0.1:3210" value="${esc(api)}" />
+		${localButton('save', 'Save', true)}
+	</div>
+	<p class="ai-note" id="api-note">${esc(
+		api.length > 0
+			? `Set to ${api}. Devices, documentation, repositories, projects and the site are asked there.`
+			: 'Not set, so the calls that need it answer that the service is not configured. The catalog calls read a file on this machine and carry on.'
+	)}</p>
 </div>`;
 
 	const seeds: Record<string, Record<string, unknown>> = {};
@@ -695,29 +827,29 @@ async function toolsView(context: vscode.ExtensionContext): Promise<{ body: stri
 	}
 	// The seeds travel inside the page's one nonce-carrying script: the policy allows no other, and a second
 	// inline script would simply never run.
-	const script = `window.__toolSeeds = ${JSON.stringify(seeds).replace(/</g, '\\u003c')};\n${TOOLS_SCRIPT}`;
+	const script =
+		`window.__toolSeeds = ${JSON.stringify(seeds).replace(/</g, '\\u003c')};` +
+		`window.__temcoAnchor = ${JSON.stringify(anchor ?? '')};\n${TOOLS_SCRIPT}`;
 
 	const body = `${hero({
 		eyebrow: 'Temco AI',
 		title: 'The Tools the Assistant Can Call',
 		mark: 'tools',
-		desc: 'Every call the model can make outside this window, with the arguments each takes. The server answers over stdin: nothing here listens on a port.',
+		desc: catalogEntry
+			? `${catalogEntry.label}. Every call the model can make outside this window, what it is told, and the two things that decide whether it can reach anything.`
+			: 'Every call the model can make outside this window.',
 		descWide: true,
 		actions: [
 			{ label: 'Open the AI Panel', command: 'temcoAi.openPanel', mark: 'comment-discussion', kind: 'primary' },
-			{ label: 'Install the Tool Server', command: 'temcoAi.installToolServer', mark: 'cloud-download' },
-			{ label: 'Platform API', command: 'temcoAi.configurePlatformApi', mark: 'plug' }
+			{ label: 'Install the Tool Server', command: 'temcoAi.installToolServer', mark: 'cloud-download' }
 		]
 	})}
-<div class="mt-24">
-	${section({ title: 'Where it lives' })}
-	<div class="mt-8">${entries(status + apiLine)}</div>
-</div>
-<div class="mt-24">
-	${section({ title: 'The catalogue', desc: 'Read from the server itself, so this list cannot drift from what the model is offered.' })}
+<div id="catalogue" class="mt-24">
+	${section({ title: 'The catalogue', desc: 'Read from the server itself, so this list cannot drift from what the model is offered. Pick a name to run that call.' })}
 	<div class="mt-8">${catalogue}</div>
 </div>
-${runner}`;
+${runner}
+${connection}`;
 
 	return { body, script };
 }

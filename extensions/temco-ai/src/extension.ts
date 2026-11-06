@@ -17,7 +17,7 @@
 import * as vscode from 'vscode';
 import { askToRun, runAgent } from './ai/agent';
 import { disposeToolLog, toolLog } from './ai/log';
-import { ensureServerBinary, buildHint, serverBinary, serverEntry } from './ai/binPath';
+import { ensureServerBinary } from './ai/binPath';
 import { MODELS, RUNTIMES, entryById } from './ai/catalog';
 import { registerAiCommands } from './ai/commands';
 import { AiPanel, AI_VIEW_ID } from './ai/panel';
@@ -95,7 +95,7 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 		documentation.onDidChange(() => panel.refresh())
 	);
 
-	registerAiCommands(context);
+	registerAiCommands(context, panel);
 
 	// The AI Hub's four surfaces and its three side-bar groups: what is being drafted, what can be asked for and what
 	// those acts rested on, and what answers at all. The chat is the panel, not a page.
@@ -111,12 +111,13 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 		// One forum thread, answered in the panel so it can be read and followed up: the docs module stores the answer
 		// against the topic and shows it there as well.
 		vscode.commands.registerCommand('temcoAi.suggestTopic', (request?: unknown) => topicAnswer(panel, request)),
-		// The tool server: what the assistant can call, and the one command that reaches it today.
-		vscode.commands.registerCommand('temcoAi.toolServer', () => toolServerStatus(context)),
+		// The tool server and the tools: one page answers both, and each row opens it on its own part.
+		vscode.commands.registerCommand('temcoAi.toolServer', () => pages.tools('server')),
 		vscode.commands.registerCommand('temcoAi.installToolServer', () => ensureServerBinary(context)),
 		vscode.commands.registerCommand('temcoAi.askWithTools', () => askWithTools(context)),
-		vscode.commands.registerCommand('temcoAi.tools', () => pages.tools()),
-		vscode.commands.registerCommand('temcoAi.configurePlatformApi', () => configurePlatformApi())
+		vscode.commands.registerCommand('temcoAi.tools', (section?: unknown) => pages.tools(section)),
+		vscode.commands.registerCommand('temcoAi.configurePlatformApi', () => pages.tools('api')),
+		vscode.commands.registerCommand('temcoAi.showToolLog', () => toolLog().show(true))
 	);
 
 	return {
@@ -183,61 +184,6 @@ async function topicAnswer(panel: AiPanel, request: unknown): Promise<string> {
 		pageTitle: typeof input.pageTitle === 'string' ? input.pageTitle : undefined,
 		url: typeof input.url === 'string' ? input.url : undefined,
 	});
-}
-
-/** Sets the one thing the device, repository and project tools cannot guess: where to ask. */
-async function configurePlatformApi(): Promise<void> {
-	const configuration = vscode.workspace.getConfiguration('temcoAi');
-	const current = configuration.get<string>('platformApi', '');
-	const value = await vscode.window.showInputBox({
-		title: 'Platform API',
-		prompt: 'The address the device, repository and project tools should ask. Leave it empty to turn those tools off.',
-		value: current,
-		placeHolder: 'http://127.0.0.1:3210',
-	});
-	if (value === undefined) {
-		return;
-	}
-	await configuration.update('platformApi', value.trim(), vscode.ConfigurationTarget.Global);
-}
-
-/**
- * Where the tool server is on this machine, and how to get it. The answer is offered where the user already
- * reads AI status rather than beside it.
- */
-async function toolServerStatus(context: vscode.ExtensionContext): Promise<void> {
-	const entry = serverEntry();
-	const binary = serverBinary(context);
-	if (binary) {
-		const choice = await vscode.window.showInformationMessage(
-			`The tool server is ready: ${binary}`,
-			'Show the log'
-		);
-		if (choice === 'Show the log') {
-			toolLog().show(true);
-		}
-		return;
-	}
-	if (!entry) {
-		await vscode.window.showWarningMessage(
-			`No tool server is published for ${process.platform}-${process.arch}, so the assistant cannot call anything here.`
-		);
-		return;
-	}
-
-	const hint = buildHint(context);
-	const choice = await vscode.window.showInformationMessage(
-		`${entry.label} is not on this machine yet.`,
-		{ modal: true, detail: hint },
-		'Build Command',
-		'Install'
-	);
-	if (choice === 'Build Command') {
-		await vscode.env.clipboard.writeText(hint);
-		await vscode.window.showInformationMessage('The command is on the clipboard. Run it in a terminal.');
-	} else if (choice === 'Install') {
-		await ensureServerBinary(context);
-	}
 }
 
 /**

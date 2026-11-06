@@ -177,6 +177,12 @@
         "title": "Platform API",
         "icon": "$(plug)",
         "category": "Temco AI"
+      },
+      {
+        "command": "temcoAi.showToolLog",
+        "title": "Show the Tool Log",
+        "icon": "$(output)",
+        "category": "Temco AI"
       }
     ],
     "menus": {

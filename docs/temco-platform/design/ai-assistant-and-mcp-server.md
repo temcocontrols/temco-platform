@@ -1103,25 +1103,28 @@ The activity-bar group stays `AI` (`temcoAiHub`, owned by `temco-workbench`); `t
 | - Tools | `temcoAi.mcp` | What the assistant can reach outside this window |
 | Secondary side bar | `temcoAi.panel` (`Temco AI`) | The conversation |
 | Editor page | `temcoAi.page` | Today's settings page: the runtime and its prompts |
-| Editor page | `temcoAi.tools` | The catalogue of calls, and a box that runs one |
+| Editor page | `temcoAi.tools` | One page with four parts: the catalogue, the runner, the server, the platform address |
 | Editor pages | `temcoAi.actions`, `temcoAi.citations`, `temcoAi.stale` | Unchanged |
 
-The `Tools` group is the way in, four rows and two buttons in its title bar:
+The `Tools` group is the way in. Three rows: the conversation, the connection, and the calls. The second and third open `temcoAi.tools` and hand it the anchor of the part they are about, so the page arrives scrolled to the answer instead of at its top.
 
 | Row | Command | What it does |
 | --- | --- | --- |
-| Open the AI panel | `temcoAi.openPanel` | Reveals the conversation in the secondary side bar |
-| Tool server | `temcoAi.toolServer` | Says where the server is; when it is missing, puts the exact `dotnet publish` command for this checkout on the clipboard, or installs it |
-| Platform API | `temcoAi.configurePlatformApi` | Writes `temcoAi.platformApi`, the one address the device, repository and project tools cannot guess |
-| The tools it can call | `temcoAi.tools` | Opens the page below |
+| Open the AI panel | `temcoAi.openPanel` | Reveals the conversation; **the same row puts it away.** A plain open toggles, because the row a reader opens a thing with is the row they reach for again. A caller that names a page never closes anything |
+| Connection | `temcoAi.tools`, anchor `connection` | One part under one name, because the two are one question: can the assistant reach anything, and where does it ask when the answer is not on this machine |
+| The tools it can call | `temcoAi.tools` | The page itself |
 
 The title bar carries the same two ideas as buttons, so the group is useful without opening a page.
 
-`temcoAi.tools` is a page, not a tree view, because a flat list of rows cannot show an argument schema:
+`temcoAi.tools` is a page, not a tree view, because a flat list of rows cannot show an argument schema. Three parts, in the order a reader needs them:
 
-- **Where it lives**: the installed server and its path, how many tools it reports, and the platform API in force.
-- **The catalogue**: every tool as a row, reads above writes, each with the description the server itself supplies. It is read through `tools/list` when the page opens, so the list cannot drift from what the model is offered.
-- **Run one**: a picker, the arguments as JSON seeded from the chosen tool's schema, and the answer. It calls the same `callTool()` the loop uses, so a write still asks the person first — the page is a second way in to the same gate, not a way around it.
+- **The catalogue**: two columns, reads on the left and writes on the right, no rules and no boxes drawn around a call. Each entry is the call's name and the sentence the server supplies, and the name is a **link**: picking it selects that call in the runner, seeds its arguments and scrolls there, which is the only thing a reader clicking a name could have wanted. A column shows six entries and carries the way to the rest **in its own heading**, where it is found before the wall rather than after it: `Show 14 more`, which names how many are left, and `Show less` once they are out. The writes column is usually short enough to have no such control, and says once, above it, that everything under it asks first. Fetched through `tools/list` when the page opens, so the list cannot drift from what the model is offered.
+- **Run one**: the picker the links drive, the arguments as JSON seeded from the chosen tool's schema, and the answer. It calls the same `callTool()` the loop uses, so a write still asks the person first, the page is a second way in to the same gate rather than around it.
+- **Connection**: one part under one name. The facts are the server's (ready or not, its path, the platform) with install/repair and the log beside them; under them the one field a person has to set, saved in place, with the sentence that says what it is for: the address the calls ask for what this window cannot see, devices, documentation, repositories, projects and the site. The catalog calls read a file on this machine and need nothing there.
+
+Where the two used to be two rows and two dialogs, they are now one row, one heading and one field: the name says what the part is for rather than listing the two things it happens to contain.
+
+Three dialogs were removed in favour of this page: a status toast that said only that the server was ready, an input box that asked for an address without saying what it was for, and a second row for each of the two.
 ## 10. Security
 
 | Concern | Rule |
