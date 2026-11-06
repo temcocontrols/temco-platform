@@ -56,3 +56,9 @@ dist
 # Local agent validation evidence
 .agent-validation/
 .vs
+
+# The tool server's build output, and the archives the release publishes
+tools/temco-mcp/bin/
+tools/temco-mcp/obj/
+artifacts/
+extensions/temco-ai/bin/

@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- A trimmed build breaks WithToolsFromAssembly(); a single-file build extracts e_sqlite3.dll at run
+         time. The publish output is a plain folder instead. -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <AssemblyName>temco-mcp</AssemblyName>
+    <RootNamespace>Temco.Mcp</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" Version="2.3.1" />
+    <!-- Explicit: ModelContextProtocol does not flow the assembly that declares Host. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <!-- 10.0.0 restores SQLitePCLRaw.lib.e_sqlite3 2.1.11, which NuGet flags NU1903 (high). -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+  </ItemGroup>
+</Project>
