@@ -63,16 +63,26 @@ const AI_CSS = `
 /* A row's second line here is prose about the thing, not a path: the kit sets it in the mono face for paths. */
 .az-entry__meta { font-family: inherit; }
 .ai-foot { margin: var(--sp-6) 0 0; color: var(--ink-3); font-size: 12px; line-height: 18px; }
-/* The catalogue: two columns, no rules, nothing drawn around a call. A name is a link to the box that runs it. */
-.ai-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
-@media (max-width: 780px) { .ai-split { grid-template-columns: minmax(0, 1fr); } }
-.ai-calls { display: grid; margin: var(--sp-2) 0 0; }
-.ai-call { display: grid; grid-template-columns: minmax(132px, 44%) minmax(0, 1fr); gap: var(--sp-3); padding: 3px 0; align-items: baseline; }
-.ai-call--more { display: none; }
-.ai-link { appearance: none; background: none; border: 0; margin: 0; padding: 0; font-family: monospace; font-size: 12px; line-height: 18px; text-align: left; color: var(--vscode-textLink-foreground, inherit); cursor: pointer; }
+/* The catalogue as a plain row of tabs: words, counts, and one hairline under the open one. No boxes, no tint. */
+.ai-tabs { display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--sp-4); border-bottom: 1px solid var(--vscode-panel-border, rgba(127, 127, 127, 0.25)); }
+.ai-tabs__list { display: flex; flex: 1 1 auto; flex-wrap: wrap; gap: var(--sp-4); }
+.ai-tab { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 6px 2px 10px; border: 0; background: none; font-family: inherit; font-size: 12px; font-weight: 600; line-height: 16px; color: var(--fg-muted); cursor: pointer; white-space: nowrap; transition: color 100ms ease; }
+.ai-tab:hover { color: var(--ink-1); }
+.ai-tab[aria-selected='true'] { color: var(--ink-1); }
+.ai-tab[aria-selected='true']::after { content: ''; position: absolute; left: 2px; right: 2px; bottom: -1px; height: 1px; background: var(--vscode-focusBorder, currentColor); }
+.ai-tab:focus-visible { outline: 1px solid var(--vscode-focusBorder, currentColor); outline-offset: 3px; border-radius: 2px; }
+.ai-tab__count { font-size: 10px; font-weight: 600; line-height: 16px; color: var(--fg-muted); }
+.ai-tab[aria-selected='true'] .ai-tab__count { color: var(--ink-1); }
+.ai-panel[hidden] { display: none; }
+/* The calls of one tab, across the row: a name with the sentence under it, cells as wide as they need. */
+.ai-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--sp-4) var(--sp-5); margin: var(--sp-4) 0 0; }
+.ai-cell { display: grid; gap: 2px; align-content: start; }
+.ai-item--more { display: none; }
+.ai-panel--expanded .ai-item--more { display: grid; }
+.ai-cell__desc { font-size: 12px; line-height: 18px; color: var(--ink-3); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ai-link { appearance: none; background: none; border: 0; margin: 0; padding: 0; font-family: inherit; font-size: 12px; font-weight: 600; line-height: 18px; text-align: left; color: var(--vscode-textLink-foreground, inherit); cursor: pointer; }
 .ai-link:hover { text-decoration: underline; }
 .ai-link:focus-visible { outline: 1px solid var(--vscode-focusBorder, currentColor); outline-offset: 2px; }
-.ai-call__desc { font-size: 12px; line-height: 18px; color: var(--ink-3); }
 .ai-toggle { appearance: none; background: none; border: 0; margin: 0; padding: 0; font-size: 12px; line-height: 18px; color: var(--vscode-textLink-foreground, inherit); cursor: pointer; white-space: nowrap; }
 .ai-toggle:hover { text-decoration: underline; }
 .ai-toggle:focus-visible { outline: 1px solid var(--vscode-focusBorder, currentColor); outline-offset: 2px; }
@@ -573,7 +583,7 @@ const GROUPS: { id: string; rows: Row[] }[] = [
 		rows: [
 			{ label: 'Open the AI panel', note: 'the conversation, in the secondary side bar; once more puts it away', mark: 'comment-discussion', command: 'temcoAi.openPanel' },
 			{ label: 'Connection', note: 'the program that answers a call, and the address it asks', mark: 'server-process', command: 'temcoAi.tools', args: ['connection'] },
-			{ label: 'The tools it can call', note: 'what reads, what writes, and a box to run one', mark: 'tools', command: 'temcoAi.tools' }
+			{ label: 'The tools it can call', note: 'every call it can make, by the part of the API it belongs to', mark: 'tools', command: 'temcoAi.tools' }
 		]
 	}
 ];
@@ -599,10 +609,10 @@ export function registerAiViews(context: vscode.ExtensionContext): void {
 	}
 }
 
-/** How many calls a column shows before it offers the rest. */
+/** How many calls a tab shows before its heading offers the rest. */
 const VISIBLE_CALLS = 6;
 
-/** The script the Tools page runs: link a name to the runner, unfold a long column, run one call, save one field. */
+/** The script the Tools page runs: tabs, a fold, the links into the runner, one call, one field. */
 const TOOLS_SCRIPT = `
 (function () {
 	const api = window.__temcoApi || (window.__temcoApi = acquireVsCodeApi());
@@ -613,12 +623,27 @@ const TOOLS_SCRIPT = `
 	const field = document.getElementById('api');
 	const note = document.getElementById('api-note');
 	const seeds = window.__toolSeeds || {};
+	const fold = document.getElementById('fold');
+	const tabs = Array.prototype.slice.call(document.querySelectorAll('[data-tab]'));
+	const panels = Array.prototype.slice.call(document.querySelectorAll('.ai-panel'));
 
 	const fill = () => {
 		if (!select || !args) { return; }
 		args.value = JSON.stringify(seeds[select.value] || {}, undefined, 2);
 	};
 	if (select) { select.addEventListener('change', fill); }
+
+	const activePanel = () => panels.filter((panel) => !panel.hasAttribute('hidden'))[0];
+
+	// One fold control for the tab in front of the reader: it names what that tab is holding back.
+	const updateFold = () => {
+		if (!fold) { return; }
+		const panel = activePanel();
+		const folded = panel ? panel.querySelectorAll('.ai-item--more').length : 0;
+		if (!panel || folded === 0) { fold.hidden = true; return; }
+		fold.hidden = false;
+		fold.textContent = panel.classList.contains('ai-panel--expanded') ? 'Show less' : 'Show ' + folded + ' more';
+	};
 
 	// A name is a link to the box that runs it: pick the call, seed its arguments, and put the caret in them.
 	document.querySelectorAll('[data-tool]').forEach((link) => {
@@ -632,18 +657,26 @@ const TOOLS_SCRIPT = `
 		});
 	});
 
-	// The fold lives in the section's heading: it names what is left, and puts back what it took away.
-	document.querySelectorAll('[data-toggle]').forEach((button) => {
-		const list = document.getElementById(button.getAttribute('data-toggle'));
-		if (!list) { return; }
-		const folded = list.querySelectorAll('.ai-call--more');
-		button.addEventListener('click', () => {
-			const expanded = button.getAttribute('aria-expanded') === 'true';
-			folded.forEach((row) => row.classList.toggle('ai-call--more', expanded));
-			button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-			button.textContent = expanded ? 'Show ' + folded.length + ' more' : 'Show less';
+	const showTab = (name) => {
+		tabs.forEach((tab) => tab.setAttribute('aria-selected', tab.getAttribute('data-tab') === name ? 'true' : 'false'));
+		panels.forEach((panel) => {
+			if (panel.getAttribute('data-panel') === name) { panel.removeAttribute('hidden'); }
+			else { panel.setAttribute('hidden', ''); }
 		});
-	});
+		updateFold();
+	};
+
+	tabs.forEach((tab) => tab.addEventListener('click', () => showTab(tab.getAttribute('data-tab'))));
+
+	if (fold) {
+		fold.addEventListener('click', () => {
+			const panel = activePanel();
+			if (!panel) { return; }
+			panel.classList.toggle('ai-panel--expanded');
+			updateFold();
+		});
+	}
+	updateFold();
 
 	if (run) {
 		run.addEventListener('click', () => {
@@ -708,32 +741,81 @@ function seedFor(tool: ToolSpec): Record<string, unknown> {
 	return seed;
 }
 
+/** The first part of a call's name: the thing it is about, which is what a reader looks a call up by. */
+function areaOf(tool: ToolSpec): string {
+	const name = tool.name.split('.')[0];
+	return name.length > 0 ? name : 'other';
+}
+
+/** The calls, in the order the server lists them, cut into the parts their names share. */
+function byArea(tools: readonly ToolSpec[]): { name: string; items: readonly ToolSpec[] }[] {
+	const order: string[] = [];
+	const groups = new Map<string, ToolSpec[]>();
+	for (const tool of tools) {
+		const area = areaOf(tool);
+		const list = groups.get(area);
+		if (list) {
+			list.push(tool);
+		} else {
+			groups.set(area, [tool]);
+			order.push(area);
+		}
+	}
+	return order.map((name) => ({ name, items: groups.get(name) ?? [] }));
+}
+
 /**
- * One call: its name as a link to the runner, and the sentence the server wrote about it. Beyond the first few the
- * row is folded away, because a column of twenty is a wall rather than a catalogue.
+ * One call as a cell: the name on top, the sentence the server wrote under it, cut to three lines because cells
+ * sit side by side and a long sentence in one of them would set the height of the whole row.
  */
-function callRow(tool: ToolSpec, index: number): string {
-	const folded = index >= VISIBLE_CALLS ? ' ai-call--more' : '';
-	return `<div class="ai-call${folded}"><button type="button" class="ai-link" data-tool="${esc(
+function callCell(tool: ToolSpec, index: number): string {
+	const folded = index >= VISIBLE_CALLS ? ' ai-item--more' : '';
+	return `<div class="ai-cell${folded}"><button type="button" class="ai-link" data-tool="${esc(
 		tool.name
-	)}" title="Run ${esc(tool.name)}">${esc(tool.name)}</button><span class="ai-call__desc">${esc(
+	)}" title="Run ${esc(tool.name)}">${esc(tool.name)}</button><div class="ai-cell__desc" title="${esc(
 		tool.description
-	)}</span></div>`;
+	)}">${esc(tool.description)}</div></div>`;
 }
 
-/** The control that unfolds a column, in the section's own heading so it is found before the wall rather than after it. */
-function toggleLink(id: string, total: number, shown: number): string {
-	const more = Math.max(total - shown, 0);
-	return `<button type="button" class="ai-toggle" data-toggle="${esc(id)}" aria-expanded="false" aria-controls="${esc(
-		id
-	)}">Show ${more} more</button>`;
+/** `device` reads `Device` on the tab, while the data attribute keeps the name the server used. */
+function tabLabel(area: string): string {
+	return area.length === 0 ? area : area.charAt(0).toUpperCase() + area.slice(1);
 }
 
-/** One half of the catalogue: a heading with its fold control, and its calls. */
-function callColumn(id: string, title: string, desc: string, items: readonly ToolSpec[]): string {
-	const rows = items.map(callRow).join('');
-	const actions = items.length > VISIBLE_CALLS ? toggleLink(id, items.length, VISIBLE_CALLS) : undefined;
-	return `<div>${section({ title, desc, actions })}<div class="ai-calls" id="${esc(id)}">${rows}</div></div>`;
+/**
+ * The catalogue as tabs: one per part of the API, in the order the server lists them, with the count beside the
+ * name. The alternative, a single list of twenty, made the reader scroll past three subjects to find a fourth.
+ */
+function catalogueTabs(tools: readonly ToolSpec[]): string {
+	const areas = byArea(tools);
+	const tabs = areas
+		.map(
+			(area, index) =>
+				`<button type="button" role="tab" class="ai-tab" data-tab="${esc(area.name)}" aria-selected="${
+					index === 0 ? 'true' : 'false'
+				}" aria-controls="panel-${esc(area.name)}">${esc(tabLabel(area.name))}<span class="ai-tab__count">${
+					area.items.length
+				}</span></button>`
+		)
+		.join('');
+	const panels = areas
+		.map(
+			(area, index) =>
+				`<div class="ai-panel" id="panel-${esc(area.name)}" role="tabpanel" data-panel="${esc(area.name)}"${
+					index === 0 ? '' : ' hidden'
+				}><div class="ai-grid">${area.items.map(callCell).join('')}</div></div>`
+		)
+		.join('');
+	return `<div class="ai-tabs"><div class="ai-tabs__list" role="tablist" aria-label="The API each call belongs to">${tabs}</div><button type="button" class="ai-toggle" id="fold" hidden></button></div>${panels}`;
+}
+
+/** The calls that stop for a person, said once, because they are the reason this page has a gate at all. */
+function askingNote(tools: readonly ToolSpec[]): string {
+	const asking = tools.filter((tool) => tool.readOnly === false).map((tool) => tool.name);
+	if (asking.length === 0) {
+		return '';
+	}
+	return `<p class="ai-note">These ask the person at the keyboard before they run, every time: ${esc(asking.join(', '))}.</p>`;
 }
 
 /** One fact the page is answerable for, told apart from the prose around it by its face, not a border. */
@@ -747,12 +829,11 @@ function localButton(id: string, label: string, primary = false): string {
 }
 
 /**
- * *Tools* - what the assistant can reach outside the page in front of it, and the two things that decide whether it
- * reaches anything at all.
+ * *Tools* - what the assistant can reach outside the page in front of it, and the one question that decides whether
+ * it reaches anything at all.
  *
- * Three parts: the catalogue, split into what reads and what writes so the second half is never a surprise; one box
- * that runs a single call; and one part for the server and the address it asks, because they are one question, can
- * this reach anything and where, and a reader who has one of them open has the other in front of them anyway.
+ * Three parts: the catalogue as tabs, one part of the API each; one box that runs a single call; and the connection,
+ * which is the server and the address it asks, because those are one question rather than two.
  */
 async function toolsView(
 	context: vscode.ExtensionContext,
@@ -774,16 +855,10 @@ async function toolsView(
 		problem = buildHint(context);
 	}
 
-	const reads = tools.filter((tool) => tool.readOnly === true);
-	const writes = tools.filter((tool) => tool.readOnly !== true);
-
 	const catalogue =
 		tools.length === 0
 			? callout({ title: 'Nothing to list yet', desc: problem || 'The tool server did not answer.', mark: 'warning' })
-			: `<div class="ai-split">
-	${callColumn('reads', 'Reads', `${reads.length} calls that change nothing.`, reads)}
-	${callColumn('writes', 'Writes', writes.length === 0 ? 'None.' : 'Each asks the person at the keyboard first, every time.', writes)}
-</div>`;
+			: `${catalogueTabs(tools)}${askingNote(tools)}`;
 
 	const runner =
 		tools.length === 0
@@ -836,7 +911,7 @@ async function toolsView(
 		title: 'The Tools the Assistant Can Call',
 		mark: 'tools',
 		desc: catalogEntry
-			? `${catalogEntry.label}. Every call the model can make outside this window, what it is told, and the two things that decide whether it can reach anything.`
+			? `${catalogEntry.label}. Every call the model can make outside this window, what it is told, and the one question that decides whether it can reach anything.`
 			: 'Every call the model can make outside this window.',
 		descWide: true,
 		actions: [
