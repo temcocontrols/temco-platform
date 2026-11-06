@@ -4,6 +4,8 @@
 // request into a folder of the user's choosing. That is what lets one `.vsix` work on every platform — a
 // compiled runtime is per-OS, a downloaded one is not — and it is what keeps a model out of the repository.
 
+import * as vscode from 'vscode';
+
 export type ArtifactKind = 'runtime' | 'model' | 'tool-server';
 
 export interface CatalogEntry {
@@ -166,8 +168,11 @@ export const MODELS: readonly CatalogEntry[] = [
 /**
  * The tool server: the process that gives the model something to call. It is published per platform with the
  * release, downloaded on first use like a runtime, and verified the same way.
+ *
+ * The release is read from the running application rather than pinned, because every release attaches its own
+ * `temco-mcp-<rid>.tar.gz`: a fixed tag would send a newer application to an older build, or to nothing at all.
  */
-export const TOOL_SERVER_RELEASE = 'v1.144.0';
+export const TOOL_SERVER_RELEASE = `v${vscode.version.split('-')[0]}`;
 const TOOL_SERVER_ROOT = `https://github.com/temcocontrols/temco-platform/releases/download/${TOOL_SERVER_RELEASE}`;
 
 function toolServer(rid: string, platform: string, architecture: string, label: string): CatalogEntry {

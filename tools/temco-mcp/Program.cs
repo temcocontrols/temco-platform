@@ -1,39 +1,104 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Temco.Mcp;
 using Temco.Mcp.Tools;
 
-var builder = Host.CreateApplicationBuilder(args);
+// Two ways to be asked. `stdio` is one request at a time on a pipe, which is what an inspector or a script
+// wants. `http` is one long-lived process on loopback, which is what the application manages: the Connection
+// page starts it, stops it and shows its address. Neither mode listens anywhere but 127.0.0.1.
+var mode = (Environment.GetEnvironmentVariable("TEMCO_MCP_TRANSPORT") ?? "stdio").Trim().ToLowerInvariant();
+if (mode == "http")
+{
+    await RunHttpAsync();
+}
+else
+{
+    await RunStdioAsync();
+}
 
-// stdout is the protocol. Every log line must go to stderr, or the first write breaks the stream.
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
-// Warning by default: the extension pipes stderr into its own channel, and a per-call info line there would
-// bury the tool calls the reader is looking for. `TEMCO_MCP_LOG=information` turns it all back on.
-builder.Logging.SetMinimumLevel(
-    Enum.TryParse<LogLevel>(Environment.GetEnvironmentVariable("TEMCO_MCP_LOG"), true, out var level)
-        ? level
-        : LogLevel.Warning);
+static void Describe(ILoggingBuilder logging)
+{
+    logging.ClearProviders();
+    logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
+    // Warning by default: the application pipes stderr into its own channel, and a per-call info line there
+    // would bury the calls the reader is looking for. TEMCO_MCP_LOG=information turns it all back on.
+    logging.SetMinimumLevel(
+        Enum.TryParse<LogLevel>(Environment.GetEnvironmentVariable("TEMCO_MCP_LOG"), true, out var level)
+            ? level
+            : LogLevel.Warning);
+}
 
-builder.Services.AddSingleton<IPlatformApi>(_ => new HttpPlatformApi(
-    Environment.GetEnvironmentVariable("TEMCO_PLATFORM_API") ?? "http://127.0.0.1:3210",
-    TimeSpan.FromSeconds(20)));
-builder.Services.AddSingleton(_ => new Audit(
-    Environment.GetEnvironmentVariable("TEMCO_MCP_STATE")
-        ?? Path.Combine(Path.GetTempPath(), "temco-mcp")));
+static void Provide(IServiceCollection services)
+{
+    services.AddSingleton<IPlatformApi>(_ => new HttpPlatformApi(
+        Environment.GetEnvironmentVariable("TEMCO_PLATFORM_API") ?? "http://127.0.0.1:3210",
+        TimeSpan.FromSeconds(20)));
+    services.AddSingleton(_ => new Audit(
+        Environment.GetEnvironmentVariable("TEMCO_MCP_STATE")
+            ?? Path.Combine(Path.GetTempPath(), "temco-mcp")));
+    services.AddSingleton(_ => new CatalogDb(
+        Environment.GetEnvironmentVariable("TEMCO_CATALOG_DB")));
+}
 
-// The catalog is optional: the extension passes its path, and a machine without one still gets every tool
-// that does not read it.
-builder.Services.AddSingleton(provider => new CatalogDb(
-    Environment.GetEnvironmentVariable("TEMCO_CATALOG_DB")));
+static async Task RunStdioAsync()
+{
+    var builder = Host.CreateApplicationBuilder();
+    Describe(builder.Logging);
+    Provide(builder.Services);
 
-builder.Services
-    .AddMcpServer(options =>
+    builder.Services
+        .AddMcpServer(options => { options.ServerInfo = new() { Name = "temco-mcp", Version = "1.0.0" }; })
+        .WithStdioServerTransport()
+        .WithToolsFromAssembly();
+
+    await builder.Build().RunAsync();
+}
+
+static async Task RunHttpAsync()
+{
+    // The caller picks the port: it is the one that has to know the address before anything starts.
+    var port = int.TryParse(Environment.GetEnvironmentVariable("TEMCO_MCP_PORT"), out var wanted) && wanted > 0
+        ? wanted
+        : 3210;
+    var token = (Environment.GetEnvironmentVariable("TEMCO_MCP_TOKEN") ?? string.Empty).Trim();
+
+    var builder = WebApplication.CreateBuilder();
+    Describe(builder.Logging);
+    // Loopback by name, not by default: the server must never be reachable from the network.
+    builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+    Provide(builder.Services);
+
+    builder.Services
+        .AddMcpServer(options => { options.ServerInfo = new() { Name = "temco-mcp", Version = "1.0.0" }; })
+        .WithHttpTransport()
+        .WithToolsFromAssembly();
+
+    var app = builder.Build();
+
+    // `/health` is how the application knows the process is up. It says nothing worth hiding and needs no token.
+    app.MapGet("/health", () => Results.Json(new { ok = true, name = "temco-mcp", version = "1.0.0" }));
+
+    // Everything else needs the token the application generated for this window: a loopback port is reachable by
+    // every process on the machine, including the three calls that write.
+    if (token.Length > 0)
     {
-        options.ServerInfo = new() { Name = "temco-mcp", Version = "1.0.0" };
-    })
-    .WithStdioServerTransport()
-    .WithToolsFromAssembly();
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/health")
+                || context.Request.Headers.Authorization.ToString() == $"Bearer {token}")
+            {
+                await next();
+                return;
+            }
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        });
+    }
 
-await builder.Build().RunAsync();
+    app.MapMcp("/mcp");
+
+    await app.RunAsync();
+}

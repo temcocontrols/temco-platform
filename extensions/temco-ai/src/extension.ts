@@ -17,7 +17,7 @@
 import * as vscode from 'vscode';
 import { askToRun, runAgent } from './ai/agent';
 import { disposeToolLog, toolLog } from './ai/log';
-import { ensureServerBinary } from './ai/binPath';
+import { toolServer, disposeToolServer } from './ai/server';
 import { MODELS, RUNTIMES, entryById } from './ai/catalog';
 import { registerAiCommands } from './ai/commands';
 import { AiPanel, AI_VIEW_ID } from './ai/panel';
@@ -111,12 +111,14 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 		// One forum thread, answered in the panel so it can be read and followed up: the docs module stores the answer
 		// against the topic and shows it there as well.
 		vscode.commands.registerCommand('temcoAi.suggestTopic', (request?: unknown) => topicAnswer(panel, request)),
-		// The tool server and the tools: one page answers both, and each row opens it on its own part.
-		vscode.commands.registerCommand('temcoAi.toolServer', () => pages.tools('server')),
-		vscode.commands.registerCommand('temcoAi.installToolServer', () => ensureServerBinary(context)),
+		// The tool server and the tools: two pages, because a status and a list are two questions. Each command
+		// opens the one it names, and the panel's rows name them.
+		vscode.commands.registerCommand('temcoAi.connection', (section?: unknown) => pages.connection(section)),
+		vscode.commands.registerCommand('temcoAi.toolServer', () => pages.connection()),
+		vscode.commands.registerCommand('temcoAi.installToolServer', () => startToolServer(context)),
 		vscode.commands.registerCommand('temcoAi.askWithTools', () => askWithTools(context)),
-		vscode.commands.registerCommand('temcoAi.tools', (section?: unknown) => pages.tools(section)),
-		vscode.commands.registerCommand('temcoAi.configurePlatformApi', () => pages.tools('api')),
+		vscode.commands.registerCommand('temcoAi.tools', () => pages.tools()),
+		vscode.commands.registerCommand('temcoAi.configurePlatformApi', () => pages.connection('api')),
 		vscode.commands.registerCommand('temcoAi.showToolLog', () => toolLog().show(true))
 	);
 
@@ -214,8 +216,49 @@ async function askWithTools(context: vscode.ExtensionContext): Promise<void> {
 	}
 }
 
+/**
+ * Start the tool server from the palette, with a report: the button that used to say "install" and do nothing now
+ * does the whole job — downloads it on a machine that has none, starts it, and names the address it answers on.
+ */
+async function startToolServer(context: vscode.ExtensionContext): Promise<void> {
+	const output = toolLog();
+	try {
+		await vscode.window.withProgress(
+			{ location: vscode.ProgressLocation.Notification, title: 'Starting the tool server', cancellable: false },
+			() => toolServer().start(context)
+		);
+		const status = toolServer().status();
+		const address = toolServer().url() ?? '';
+		void vscode.window
+			.showInformationMessage(
+				`The tool server is running at ${address} with ${status.calls ?? 0} tools.`,
+				'Open Connection'
+			)
+			.then((choice) => {
+				if (choice === 'Open Connection') {
+					void vscode.commands.executeCommand('temcoAi.connection');
+				}
+			});
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error);
+		output.appendLine(reason);
+		const choice = await vscode.window.showErrorMessage(
+			`The tool server did not start: ${reason}`,
+			'Show the Log',
+			'Open Connection'
+		);
+		if (choice === 'Show the Log') {
+			output.show(true);
+		} else if (choice === 'Open Connection') {
+			void vscode.commands.executeCommand('temcoAi.connection');
+		}
+	}
+}
+
 export function deactivate(): void {
-	// The local AI may have left a server process running; nothing else is holding anything open.
+	// The tool server is a process this window owns: it goes when the window does. The local AI may have left a
+	// server of its own running too; nothing else is holding anything open.
+	disposeToolServer();
 	disposeAi();
 	disposeToolLog();
 }

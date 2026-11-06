@@ -133,6 +133,13 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # The assistant's tool server is a .NET program (`tools/temco-mcp`). It is built here and attached to the
+      # release as `temco-mcp-<rid>.tar.gz` — the name `extensions/temco-ai/src/ai/catalog.ts` asks for — rather
+      # than bundled into the application: it is downloaded on first use, like a runtime, and verified the same way.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
       # The packaging steps run the repository's own scripts; a missing toolchain fails later and less clearly.
       #
       # `g++-13` on purpose: Electron 43 ships V8 headers the image's default g++ 11 cannot parse — `native-keymap` dies
@@ -246,6 +253,24 @@ jobs:
           npm run gulp vscode-darwin-arm64-min
 
       # One staging folder per platform, so the release job has one shape to collect.
+      - name: Stage the tool server
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.platform }}-${{ matrix.arch }}" in
+            win32-x64) rid=win-x64 ;;
+            linux-x64) rid=linux-x64 ;;
+            darwin-arm64) rid=osx-arm64 ;;
+            *) echo "::error::No tool server is published for ${{ matrix.platform }}-${{ matrix.arch }}."; exit 1 ;;
+          esac
+          # Self-contained and not trimmed, because `WithToolsFromAssembly()` reflects over the tool classes and a
+          # single-file build extracts the SQLite native library at run time. A plain folder is what ships.
+          dotnet publish tools/temco-mcp/Temco.Mcp.csproj -c Release -r "$rid" --self-contained true \
+            -p:PublishSingleFile=false -o "tool-server/$rid"
+          mkdir -p staging
+          tar -czf "staging/temco-mcp-$rid.tar.gz" -C "tool-server/$rid" .
+          ls -l "staging/temco-mcp-$rid.tar.gz"
+
       - name: Stage (Windows)
         if: matrix.platform == 'win32'
         shell: pwsh
@@ -307,6 +332,8 @@ jobs:
           - a Windows installer `.exe` — per-user install, no admin rights
           - `temco-platform_<version>_amd64.deb` and `temco-platform-linux-x64-<version>.tar.gz`
           - `TemcoPlatform-darwin-arm64-<version>.zip` — Apple silicon only
+          - `temco-mcp-<platform>.tar.gz` — the assistant's tool server, per platform; the application downloads
+            and verifies the one for its own machine the first time the assistant needs it
 
           Nothing here updates itself: a new version is a new download.
           EOF

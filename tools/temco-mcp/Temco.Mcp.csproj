@@ -15,6 +15,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="2.3.1" />
+    <!-- The HTTP transport, for the managed server the Connection page starts and stops. -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.1" />
     <!-- Explicit: ModelContextProtocol does not flow the assembly that declares Host. -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
     <!-- 10.0.0 restores SQLitePCLRaw.lib.e_sqlite3 2.1.11, which NuGet flags NU1903 (high). -->

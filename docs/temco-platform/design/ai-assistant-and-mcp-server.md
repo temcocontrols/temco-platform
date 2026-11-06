@@ -64,9 +64,11 @@ The state it already keeps, which the server reuses rather than replaces:
 | Something that executes a call | The extension host could, but then the tool surface is private to the assistant | done: `tools/temco-mcp` |
 | A loop over `tool_calls` | One turn is one request, so a call cannot be answered | done: `ai/agent.ts` |
 | A service for the tools to ask | The device, repository and project tools need one HTTP surface | not built (open decision 1) |
-| The release step that publishes the server | There is nothing to download until a release carries it | not built (section 7.4) |
+| The release step that publishes the server | There is nothing to download until a release carries it | done: section 7.4 |
 
 ## 3. What is proven, and what is not
+
+> This section is the record of the first end-to-end run, over `stdio`. The application no longer uses that transport: it starts the server in `http` mode and manages the process (§6.5, §8.4). The transcripts below are kept because they are what established that the server, the tool list and the schema are right — and because the `stdio` mode still exists and still behaves this way.
 
 ### 3.1 The server, and the client, over stdio
 
@@ -684,18 +686,18 @@ The client is written in `ai/mcp.ts` rather than pulled in as a dependency. `@mo
 
 ### 6.2 `ai/mcp.ts`
 
-One class, `ToolSession`, over the four messages in section 8.4:
+Two functions over two messages, section 8.4:
 
-| Member | What it does |
+| Export | What it does |
 | --- | --- |
-| `open()` | Spawns the executable with a curated environment, then sends `initialize`, `notifications/initialized` and `tools/list`; answers with `ToolSpec[]` built from each tool's `name`, `title`, `inputSchema` and annotations |
-| `call(name, arguments, token)` | Sends `tools/call` and joins the `content[].text` it gets back. A failed call is not special-cased: the server already returns its reason as text, and that text is what the model should read |
-| `dispose()` | Ends stdin and kills the process |
-| `fail(error)` | Keeps one reason, so every later call fails the same way instead of hanging |
+| `fetchTools(endpoint, token, log)` | Posts `tools/list` and answers with `ToolSpec[]` built from each tool's `name`, `title`, `inputSchema` and annotations |
+| `runTool(endpoint, token, name, args, token)` | Posts `tools/call` and joins the `content[].text` it gets back. A failed call is not special-cased: the server already returns its reason as text, and that text is what the model should read |
 
-Reading stdout is a buffer split on newlines: an `id` resolves the request waiting under it, a line that is not JSON is logged as `[mcp] not protocol: ...` and skipped, and stderr is forwarded to the AI output channel line by line.
+Both go through one `post()`: an `http.request` to the endpoint with `Authorization: Bearer <token>`, `Accept: application/json, text/event-stream`, and the answer read to the end. The transport frames the answer either way — the ASP.NET implementation streams it as a server-sent event with one `data:` line — so `unwrap()` takes the `data:` lines when the content type says `text/event-stream` and the whole body otherwise, then reads `result` or throws the server's `error.message`.
 
-Timeouts are 15 s for the handshake and 30 s per call, and a `CancellationToken` aborts the call it belongs to. Nothing about the session is cached between turns: `runAgent` opens one, uses it, and disposes it.
+There is no session to open and nothing to dispose: the server runs in its default stateless mode, so each POST carries everything and a request that arrives while another is in flight is unaffected. That is why the client has no class any more — the two things that made one necessary, a pipe to write to and a handshake to replay, are gone.
+
+Timeouts are 15 s for the list and 30 s per call, both enforced by the socket's own `timeout`, and a `CancellationToken` destroys the request it belongs to. A `401` is reported as it is: the token belongs to the window's process, and a token the server refuses means the process was restarted behind the caller's back.
 
 ### 6.3 `ai/binPath.ts` — where the binary is
 
@@ -771,129 +773,72 @@ Three consequences, all of them wanted:
 
 ### 6.4 `ai/agent.ts`, the loop
 
+The loop keeps its shape — ask, run what it asked for, ask again, with a six-step budget and a set of calls that need a person's yes. What changed is where the server comes from: it is not opened and disposed per turn any more, because it is a process the window owns and the Connection page shows.
+
 ```ts
-// The loop that lets the model act.
-//
-// Ask, run what it asked for, ask again. Two things bound it: a step budget, and a list of calls that need a
-// person's yes. The budget is not a nicety: a local model that keeps calling the same tool would otherwise
-// spend the afternoon in a loop nobody asked for.
-
-import * as vscode from 'vscode';
-import { ensureServerBinary, platformApi, serverBinary, serverEnv } from './binPath';
-import { ToolSession } from './mcp';
+import { platformApi, serverBinary } from './binPath';
 import { ChatMessage, ToolSpec, complete } from './runtime';
+import { callThroughServer, toolServer } from './server';
 
-const MAX_STEPS = 6;
-
-/** The calls that change something outside this conversation. Nothing in here runs without a yes. */
-const NEEDS_APPROVAL = new Set([
-  'device.write_point',
-  'device.alarm_acknowledge',
-  'project.create',
-]);
-
-export interface AgentStep {
-  tool: string;
-  arguments: Record<string, unknown>;
-  result: string;
+/** The tools the server offers, without asking the model anything. Starts the server when it is not up. */
+export async function listTools(context: vscode.ExtensionContext): Promise<readonly ToolSpec[]> {
+  return toolServer().tools(context);
 }
 
-export interface AgentResult {
-  text: string;
-  steps: readonly AgentStep[];
-}
-
-export interface AgentOptions {
-  onToken?: (text: string) => void;
-  onStep?: (step: { tool: string; arguments: Record<string, unknown> }) => void;
-  /** Answers whether one call may run. Absent means a call that needs approval does not run. */
-  approve?: (tool: string, args: Record<string, unknown>) => Promise<boolean>;
-  token?: vscode.CancellationToken;
-  log: (line: string) => void;
-}
-
-/** Whether the assistant can call anything at all on this machine. */
-export function toolsAvailable(context: vscode.ExtensionContext): boolean {
-  return serverBinary(context) !== undefined;
-}
-
-/**
- * Runs one turn to its end, calling whatever the model asks for on the way.
- *
- * The instruction to use tools is here rather than in the prompt files because it belongs to the loop: the
- * prompt files describe how to answer, and this decides whether answering means calling.
- */
-export async function runAgent(
+export async function callTool(
   context: vscode.ExtensionContext,
-  messages: readonly ChatMessage[],
-  options: AgentOptions
-): Promise<AgentResult> {
+  name: string,
+  args: Record<string, unknown>,
+  options: { log?: (line: string) => void; approve?: Approval; token?: vscode.CancellationToken } = {}
+): Promise<string> {
+  if (needsApproval(name)) {
+    const yes = options.approve ? await options.approve(name, args) : false;
+    if (!yes) {
+      options.log?.(`[mcp] ${name} declined`);
+      return 'The person at the keyboard declined this call.';
+    }
+  }
+  return callThroughServer(context, name, args, options.token);
+}
+
+export async function runAgent(context, messages, options): Promise<AgentResult> {
+  // No platform service is no longer fatal: the catalog tools answer from this machine.
   if (platformApi().length === 0) {
-    throw new Error(
-      'No platform service is configured. Set "Temco AI: Platform API" to the address the device, repository and project tools should ask.'
-    );
+    options.log('[mcp] no platform service is configured (temcoAi.platformApi); tools that need one will say so');
   }
 
-  const binary = await ensureServerBinary(context);
-  const session = new ToolSession(binary, serverEnv(context), options.log);
-  const steps: AgentStep[] = [];
-  const thread: ChatMessage[] = [
-    {
-      role: 'system',
-      content:
-        'You are the Temco Platform assistant. When a question can be answered from a tool, call the tool; do not guess a value a tool can read. Answer in words once you have what you need.',
-    },
-    ...messages,
-  ];
-
-  try {
-    const tools: readonly ToolSpec[] = await session.open();
-    for (let step = 0; step < MAX_STEPS; step++) {
-      const reply = await complete(context, thread, { tools, token: options.token });
-      if (reply.toolCalls.length === 0) {
-        options.onToken?.(reply.text);
-        return { text: reply.text, steps };
-      }
-      thread.push({
-        role: 'assistant',
-        content: reply.text,
-        tool_calls: reply.toolCalls.map((call) => ({
-          id: call.id,
-          type: 'function',
-          function: { name: call.name, arguments: JSON.stringify(call.arguments) },
-        })),
-      });
-      for (const call of reply.toolCalls) {
-        options.onStep?.({ tool: call.name, arguments: call.arguments });
-        const allowed = NEEDS_APPROVAL.has(call.name)
-          ? await (options.approve?.(call.name, call.arguments) ?? Promise.resolve(false))
-          : true;
-        const result = allowed
-          ? await session.call(call.name, call.arguments, options.token)
-          : 'The person at the keyboard declined this call.';
-        steps.push({ tool: call.name, arguments: call.arguments, result });
-        thread.push({ role: 'tool', tool_call_id: call.id, content: result });
-      }
-    }
-    return {
-      text: `I stopped after ${MAX_STEPS} steps without a final answer. The last thing I did was ${steps[steps.length - 1]?.tool ?? 'nothing'}.`,
-      steps,
-    };
-  } finally {
-    session.dispose();
+  const tools = await listTools(context);
+  for (let step = 0; step < MAX_STEPS; step++) {
+    const reply = await complete(context, thread, { tools, token: options.token });
+    // ... unchanged: push the assistant turn, gate each call, run it through callThroughServer, push the result
   }
 }
 ```
 
+Three properties are worth naming, because each was a decision:
+
+- **Both entry points still pass one gate.** `callTool()` asks before a write, and `runAgent` asks before a write, and both are in this file so a third caller cannot arrive without one.
+- **The approval set stays in the extension.** It is not read from the server's `destructiveHint`, which a tampered server could set to `false`.
+- **A missing platform service is a sentence, not a throw.** It used to stop the turn; now the catalog tools answer and the rest say the service did not answer, which is something the model can pass on to a person.
+
+
 ### 6.5 Lifecycle
+
+`ai/server.ts` owns the process. It is the one place that starts it, so the panel, the Tools page's runner and the Connection page all talk to the same thing.
 
 | Event | What happens |
 | --- | --- |
-| A turn that may need data | `runAgent` ensures the binary, opens a session, lists the tools, and keeps the process for the turn |
-| The turn ends | `session.dispose()` closes the client, the transport closes, the process exits |
-| The model runtime goes idle (`temcoAi.idleMinutes`) | The runtime stops as it does now; the tool server is already gone |
-| The window closes | `deactivate()` stops the runtime and disposes any open session |
-| No binary for this platform | `serverEntry()` returns undefined, the panel shows why, and the plain answer path still runs |
+| Nothing needs the server | It is not running. Opening a page never starts it, and `status()` says `stopped` |
+| A turn, or the Tools page, needs the catalogue | `toolServer().tools(context)` calls `ensure()`, which starts it if it is not up and reuses the process if it is |
+| First start on a machine with no server | `start()` downloads it through `install()`, then starts it — "Start" is the button that installs |
+| Port | `temcoAi.serverPort`, or a free port found by binding one and releasing it. Never a fixed default: two windows must not collide |
+| Token | 24 random bytes per start, passed in `TEMCO_MCP_TOKEN`, required on every request but `/health`. It is not a secret to be stored: it dies with the process |
+| Readiness | `/health` is polled every 250 ms for up to 30 s. Only a 200 counts; a process that is up but silent is not running |
+| The process exits on its own | State `failed`, with the last three lines it wrote, so the page can say what happened instead of "stopped" |
+| `temcoAi.serverIdleMinutes` | `0` (the default) keeps it for the window. Anything else stops it after that long without a call |
+| The window closes | `deactivate()` calls `disposeToolServer()`, which kills the child. Nothing is left behind |
+| No artifact for this platform | `serverEntry()` is undefined, `start()` fails with that sentence, and the plain answer path still runs |
+
 
 ---
 
@@ -924,7 +869,7 @@ The three RIDs are the three rows of the release matrix in `.github/workflows/re
 
 ### 7.2 What it produces
 
-230 files and 82.9 MB for one platform (§3.2), because a self-contained publish carries the runtime with it. The whole folder is the artifact: apphost, `temco-mcp.dll`, `e_sqlite3.dll`, and the framework. Nothing is written next to it at run time, so it may sit in a read-only store.
+344 files and 108 MB for one platform, because a self-contained publish carries the runtime with it — and, since the HTTP transport arrived, ASP.NET Core with it. The whole folder is the artifact: apphost, `temco-mcp.dll`, `e_sqlite3.dll`, and the framework. Nothing is written next to it at run time, so it may sit in a read-only store.
 
 ### 7.3 Into an archive, and its checksum
 
@@ -937,44 +882,70 @@ tar -czf artifacts/temco-mcp-win-x64.tar.gz -C artifacts temco-mcp-win-x64
 
 The hash and the byte count go into the `TOOL_SERVERS` entry in `catalog.ts`, with `kind: 'tool-server'`, `platform`, `architecture` and `licence`. Until they are pinned the entry says so and the existing `temcoAi.allowUnpinned` gate asks before downloading code. The unpacked folder `temco-mcp-win-x64` is what `install()` records, and `artifact.path` is the executable inside it.
 
-`.gitignore` carries `artifacts/`, `tools/temco-mcp/bin/` and `tools/temco-mcp/obj/`: build output of the machine, never of git.
+`.gitignore` carries `tools/temco-mcp/bin/`, `tools/temco-mcp/obj/` and `extensions/temco-ai/bin/`: build output of the machine, never of git.
 
 ### 7.4 In CI
 
-In `.github/workflows/release.yml`, in the build job, as the last step — after the installers are built, because the artifact rides in the release rather than in the installer:
+In `.github/workflows/release.yml`, in the build job. The SDK is installed next to Node, and the publish happens after the application is packaged and before the platform's staging step, so the archive lands in the same `staging/` folder the release collects:
 
 ```yaml
-      - name: Install the .NET SDK the tool server is built with
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: 10.0.x
 
-      - name: Build the tool server for this platform
+      - name: Stage the tool server
         shell: bash
-        env:
-          RID: ${{ matrix.platform == 'darwin' && 'osx-arm64' || format('{0}-{1}', matrix.platform == 'win32' && 'win' || matrix.platform, matrix.arch) }}
         run: |
-          dotnet publish tools/temco-mcp/Temco.Mcp.csproj \
-            -c Release -r "$RID" --self-contained true -p:PublishSingleFile=false \
-            -o "artifacts/temco-mcp-$RID"
-          cd artifacts && 7z a "temco-mcp-$RID.zip" "temco-mcp-$RID"   # `zip` on Linux and macOS
+          set -euo pipefail
+          case "${{ matrix.platform }}-${{ matrix.arch }}" in
+            win32-x64) rid=win-x64 ;;
+            linux-x64) rid=linux-x64 ;;
+            darwin-arm64) rid=osx-arm64 ;;
+            *) echo "::error::No tool server is published for ${{ matrix.platform }}-${{ matrix.arch }}."; exit 1 ;;
+          esac
+          dotnet publish tools/temco-mcp/Temco.Mcp.csproj -c Release -r "$rid" --self-contained true \
+            -p:PublishSingleFile=false -o "tool-server/$rid"
+          mkdir -p staging
+          tar -czf "staging/temco-mcp-$rid.tar.gz" -C "tool-server/$rid" .
+          ls -l "staging/temco-mcp-$rid.tar.gz"
 ```
 
-The archive is then uploaded as a release asset next to the installers, so one release carries three of them. The catalog in `catalog.ts` names the release asset URLs and pins their checksums; the extension downloads only the one for the machine it is on.
+The existing `softprops/action-gh-release` step already collects `release/*.tar.gz`, so the three archives ride in the release next to the installers without a second upload step.
 
 Two properties matter:
 
 1. It runs on the same runner as the build, so the RID matches the artefact the release publishes. There is no cross-compilation and no RID guessing.
 2. It is a separate step with its own exit code, so a broken tool server fails the release instead of hiding behind a later command — the failure mode that the Windows `pwsh` steps in this workflow were split to avoid.
 
+The catalogue does not pin the tag. `TOOL_SERVER_RELEASE` in `catalog.ts` is `` `v${vscode.version.split('-')[0]}` ``, because every release attaches its own three archives: a pinned tag would send a newer application to an older build, or to a tag that never carried one.
+
+
 ### 7.5 During development
 
 ```powershell
 dotnet publish tools/temco-mcp/Temco.Mcp.csproj -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=false -o "$env:APPDATA\temco-platform\User\globalStorage\temcocontrols.temco-ai\temco-mcp-win-x64"
+  -p:PublishSingleFile=false -o extensions/temco-ai/bin/win-x64
 ```
 
-That folder is `modelRoot(context)`'s default, and `temco-ai.modelFolder` points it anywhere else. The manifest is what makes `installedArtifacts()` see the artifact, so during development the panel's "Install the tool server" path is exercised by pointing `temcoAi.modelFolder` at a folder with a matching manifest entry — or by publishing straight into it. The server is looked for in three places, in order: what the installer recorded, `<modelRoot>/<entry.id>`, and `extensions/temco-ai/bin/<rid>` beside this extension. The third is what a source checkout uses, so `dotnet publish ... -o extensions/temco-ai/bin/win-x64` is enough to make the loop runnable before any release carries an artifact; that folder is in `.gitignore`, and a packaged application has it only if someone put it there.
+That folder is the third place `serverBinary()` looks, and it is in `.gitignore`. A source checkout therefore runs the server from its own tree, before any release carries an artifact; a packaged application has it only if the installer put one there, which it does not. The three places are tried in order: what the installer recorded (`installedArtifacts()`), `<modelRoot>/<entry.id>` — which is what `temcoAi.modelFolder` moves, and where a manifest entry makes `installedArtifacts()` see a hand-placed copy — and `extensions/temco-ai/bin/<rid>` beside this extension.
+
+The server answers two ways, and both are testable without the application:
+
+```powershell
+# stdio: one request at a time on a pipe, for an inspector or a script
+npx @modelcontextprotocol/inspector extensions\temco-ai\bin\win-x64\temco-mcp.exe
+
+# HTTP: the mode the application manages
+$env:TEMCO_MCP_TRANSPORT='http'; $env:TEMCO_MCP_PORT='7391'; $env:TEMCO_MCP_TOKEN='abc'
+extensions\temco-ai\bin\win-x64\temco-mcp.exe
+curl.exe http://127.0.0.1:7391/health
+#   -> {"ok":true,"name":"temco-mcp","version":"1.0.0"} without a token
+curl.exe -X POST http://127.0.0.1:7391/mcp -H "Content-Type: application/json" `
+  -H "Accept: application/json, text/event-stream" `
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+#   -> 401 without the header, and the 23 tools with -H "Authorization: Bearer abc"
+```
+
 
 ---
 
@@ -986,11 +957,12 @@ That folder is `modelRoot(context)`'s default, and `temco-ai.modelFolder` points
 temco-platform.exe                    the window
  └─ extension host (Node, type: commonjs)
      ├─ llama-server                   ai/runtime.ts:144    one model, loopback HTTP
-     └─ temco-mcp                      ai/mcp.ts            one per turn, stdio JSON-RPC
+     └─ temco-mcp                      ai/server.ts         one per window, loopback HTTP, managed
          └─ (HTTP) the platform service on 127.0.0.1:3210
 ```
 
-Neither child starts at activation. `llama-server` starts on the first `complete()`; `temco-mcp` starts on the first turn that needs tools. Both are stopped explicitly, so a closed window leaves no processes behind.
+Neither child starts at activation. `llama-server` starts on the first `complete()`; `temco-mcp` starts the first time something needs the catalogue — a turn, the Tools page, or the Start button — and then stays until the idle setting or the closing window says otherwise. Both are stopped explicitly, so a closed window leaves no processes behind.
+
 
 ### 8.2 Where the binary is, per layout
 
@@ -1021,17 +993,35 @@ if (process.platform !== 'win32') {
 | `TEMCO_CATALOG_DB` | `temco-store`'s `databasePath()` | The catalog, opened `ReadOnly`, WAL already on. Asked of the module that owns the file, not derived from this extension's own storage |
 | `TEMCO_MCP_STATE` | `<globalStorage>` | Where `audit.db` is created |
 | `TEMCO_PLATFORM_API` | `temcoAi.platformApi`, default `http://127.0.0.1:3210` | Where the device, repo, and project tools get their answers |
+| `TEMCO_MCP_TRANSPORT` | `http` | Which of the two transports to serve. Absent means `stdio` |
+| `TEMCO_MCP_PORT` | `temcoAi.serverPort`, or a free port the supervisor found | Where to listen, on `127.0.0.1` only |
+| `TEMCO_MCP_TOKEN` | 24 random bytes per start | The bearer token every request but `/health` must carry |
 | `PATH`, `HOME`/`USERPROFILE`, `SystemRoot`, `TEMP*`, `LANG` | copied from the extension host | Nothing else is inherited; a curated list is auditable |
 
-Everything else is a setting read with `vscode.workspace.getConfiguration('temcoAi')` in `serverEnv()`, never a file next to the binary.
+Everything else is a setting read with `vscode.workspace.getConfiguration('temcoAi')` in `serverEnv()` and `server.ts`, never a file next to the binary. `TEMCO_MCP_LOG` is honoured if it is set (`information` puts the server's own per-call logging back); the extension leaves it alone, so the channel carries calls rather than the framework's chatter.
 
-### 8.4 The stdio contract
+### 8.4 The wire contract
 
-Newline-delimited JSON-RPC on stdin/stdout; stderr is for logs only. The transcript in §3.1 is the real thing. One rule follows from it and from a failure observed while writing this document:
+The server speaks both transports, chosen by `TEMCO_MCP_TRANSPORT`; the application uses `http`.
 
-**The client must keep stdin open for the life of the session.** Driving the server from a file that ends immediately produced a full stderr log, executed tool calls, and *zero* responses on stdout: the transport saw end-of-input, finished the session, and the answers had nowhere to go. `StdioClientTransport` holds the pipe open; a hand-written probe must too.
+**`stdio`** — newline-delimited JSON-RPC on stdin/stdout, stderr for logs. One rule follows from a failure observed while writing this document: **the client must keep stdin open for the life of the session.** Driving the server from a file that ends immediately produced a full stderr log, executed tool calls, and *zero* responses on stdout. `StdioClientTransport` holds the pipe open; a hand-written probe must too. The server also never writes to stdout outside the protocol, which is why §5.3 sends logs to stderr.
 
-The server also never writes to stdout outside the protocol, which is why §5.3 clears the logging providers and sends them to stderr.
+**`http`** — `WebApplication` on `http://127.0.0.1:<TEMCO_MCP_PORT>`, with `WithHttpTransport()` in its default *stateless* mode:
+
+| Route | Behaviour |
+| --- | --- |
+| `GET /health` | `{"ok":true,"name":"temco-mcp","version":"1.0.0"}`. No token: it is how the supervisor knows the process is up, and it says nothing worth hiding |
+| `POST /mcp` | JSON-RPC. `tools/list` and `tools/call` work as the first request on a connection, because there is no session to establish |
+| Any other path | 401 unless `Authorization: Bearer <TEMCO_MCP_TOKEN>` |
+
+Three details the client depends on, each verified against the running server:
+
+1. **No `Mcp-Session-Id`.** Stateless mode rejects the header outright (`400 … not supported in stateless mode`), so the client keeps no session state and one POST is one question.
+2. **Answers arrive framed as events.** The content type is `text/event-stream` and the JSON is on one `data:` line, even for a plain request. A client that only tries `JSON.parse(body)` sees an empty answer.
+3. **`/health` is not the same thing as ready.** It answers before the tool list does, which is why the supervisor polls it rather than the catalogue.
+
+The listening socket is bound to `127.0.0.1` by name, never to `0.0.0.0`, and the token is generated per start: a loopback port is reachable by every process on the machine, including the three tools that write.
+
 
 ### 8.5 Verifying it end to end
 
@@ -1060,6 +1050,8 @@ Step 2 decides whether `--jinja` alone is enough for the chosen model. If the re
 
 The server is a plain MCP server, so the application can also declare it to the language model that ships with the product — same binary, same environment, started by the editor instead of by `temco-ai`.
 
+Two ways to declare it, and they are different products: `McpStdioServerDefinition` gives the editor its own `stdio` process (the mode is still there, and needs no token because nothing else can reach a pipe), while `McpHttpServerDefinition` points at the managed process — which is only right while it is running, and is why the definition provider below would have to be re-registered when the state changes. The `stdio` one is the simpler contract for a second consumer.
+
 ```ts
 export function registerToolServer(context: vscode.ExtensionContext): vscode.Disposable {
   return vscode.lm.registerMcpServerDefinitionProvider('temcoAi.tools', {
@@ -1079,10 +1071,12 @@ export function registerToolServer(context: vscode.ExtensionContext): vscode.Dis
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `spawn … ENOENT` | The artifact is not installed, or the manifest has no entry for this platform | `serverEntry()` in the panel; install it for this RID (§7.1) |
+| `spawn … ENOENT` | The artifact is not installed, or the manifest has no entry for this platform | Press Start on the Connection page; it installs for this RID (§7.1) |
 | `spawn … EACCES` on macOS or Linux | The executable bit was lost in a copy | The `chmod` guard in §8.2 |
-| The handshake hangs, then times out | Something wrote to stdout before the protocol | A `Console.WriteLine`, or a logger without `LogToStandardErrorThreshold` (§5.3) |
-| Requests answered by nothing, log full of tool activity | stdin closed early | Keep the pipe open (§8.4) |
+| `Failed` with `address already in use` in the log | `temcoAi.serverPort` names a port something else holds | Set it back to `0`, or pick another |
+| `did not answer … within 30s` | The process started and never served — a port it could not bind, or a crash before `app.RunAsync()` | The three lines the page shows are the end of stderr; the whole log is behind **Show the log** |
+| The page says `failed` with `stopped (exit 1)` | The server exited on its own; the message carries the last lines it wrote | Read them first — an ASP.NET host failure names itself |
+| `the tool server refused this window's token` | The process was replaced while a request was in flight (a restart) | Press Restart, or just ask again: the next call starts it |
 | `SQLITE_BUSY` | A writer holds the catalog longer than 5 s | The `busy_timeout` in §5.6; a long write in `temco-store` is the real cause |
 | The model reads `An error occurred invoking …` | The tool threw instead of returning `CallToolResult` — including a refused connection to the platform service | §5.4 rule 1 |
 | Tools listed, calls return prose | The model answered instead of calling | Tighten the tool descriptions; the prompt's instruction to call is the other half |
@@ -1103,49 +1097,76 @@ The activity-bar group stays `AI` (`temcoAiHub`, owned by `temco-workbench`); `t
 | - Tools | `temcoAi.mcp` | What the assistant can reach outside this window |
 | Secondary side bar | `temcoAi.panel` (`Temco AI`) | The conversation |
 | Editor page | `temcoAi.page` | Today's settings page: the runtime and its prompts |
-| Editor page | `temcoAi.tools` | One page with four parts: the catalogue, the runner, the server, the platform address |
+| Editor page | `temcoAi.tools` | The catalogue of calls, and the box that runs one |
+| Editor page | `temcoAi.connection` | The tool server: its state, its address, Start/Stop/Restart, the port, the platform address, the log |
 | Editor pages | `temcoAi.actions`, `temcoAi.citations`, `temcoAi.stale` | Unchanged |
 
-The `Tools` group is the way in. Three rows: the conversation, the connection, and the calls. The second and third open `temcoAi.tools` and hand it the anchor of the part they are about, so the page arrives scrolled to the answer instead of at its top.
+The `Tools` group is the way in. Three rows: the conversation, the connection, and the calls. Two of them open pages of their own, one each.
 
 | Row | Command | What it does |
 | --- | --- | --- |
 | Open the AI panel | `temcoAi.openPanel` | Reveals the conversation; **the same row puts it away.** A plain open toggles, because the row a reader opens a thing with is the row they reach for again. A caller that names a page never closes anything |
-| Connection | `temcoAi.tools`, anchor `connection` | One part under one name, because the two are one question: can the assistant reach anything, and where does it ask when the answer is not on this machine |
-| The tools it can call | `temcoAi.tools` | The page itself |
+| Connection | `temcoAi.connection` | The program behind every call: whether it is running, where it answers, how to stop it, and the two settings it reads |
+| The tools it can call | `temcoAi.tools` | The catalogue itself |
 
-The title bar carries the same two ideas as buttons, so the group is useful without opening a page.
+The title bar carries the same two ideas as buttons, so the group is useful without opening a page. The log is **not** a fourth row: it is a button on the Connection page, where the rest of the program's state is.
 
-`temcoAi.tools` is a page, not a tree view, because a flat list of rows cannot show an argument schema. Three parts, in the order a reader needs them:
+Two pages rather than one, because a status and a list are different questions and the first one is asked when something is wrong. A page that answered both put a **Start** button under a catalogue that had to be loaded before the button could be seen — which is exactly the state (nothing is running) in which the catalogue cannot load.
 
-- **The catalogue**: tabs, one per part of the API, taken from the first word of each call's name and kept in the order the server lists them, with a count in a pill beside each: `device 8`, `docs 4`, `repo 5`. The strip is a plain row of words with their counts: twelve-pixel labels in the section's own face at six hundred weight, the first letter capitalised, no background under the pointer or under the open tab, and a single hairline in the theme's primary colour along the bottom of the tab that is open. The strip wraps rather than scrolling, so no tab is ever hidden past its right edge. The calls of the open tab run across the row as cells: `device.list` over `Every T3000 device…`, `device.describe` over `One device in full…`, as many per row as fit, each description cut to three lines with the whole sentence on hover, so one long sentence cannot set the height of every row. The name is a **link** that selects that call in the runner, seeds its arguments and scrolls there, which is the only thing a reader clicking a name could have wanted. The open tab shows six cells and carries the way to the rest at the right end of the strip: `Show 2 more`, which names what is held back, and `Show less` once it is out. There is no reads-and-writes split any more; the calls that stop for a person are named in one line under the strip instead of being a heading. Fetched through `tools/list` when the page opens, so the list cannot drift from what the model is offered.
-- **Run one**: the picker the links drive, the arguments as JSON seeded from the chosen tool's schema, and the answer. It calls the same `callTool()` the loop uses, so a write still asks the person first, the page is a second way in to the same gate rather than around it.
-- **Connection**: one part under one name. The facts are the server's (ready or not, its path, the platform) with install/repair and the log beside them; under them the one field a person has to set, saved in place, with the sentence that says what it is for: the address the calls ask for what this window cannot see, devices, documentation, repositories, projects and the site. The catalog calls read a file on this machine and need nothing there.
+`temcoAi.tools` is a page, not a tree view, because a flat list of rows cannot show an argument schema. Two parts:
 
-Where the two used to be two rows and two dialogs, they are now one row, one heading and one field: the name says what the part is for rather than listing the two things it happens to contain.
+- **The catalogue**: tabs, one per part of the API, taken from the first word of each call's name and kept in the order the server lists them, with a count beside each: `Device 8`, `Docs 4`, `Repo 5`. The strip is a plain row of words with their counts: twelve-pixel labels in the section's own face at six hundred weight, the first letter capitalised, no background under the pointer or under the open tab, and a single hairline in the theme's primary colour along the bottom of the tab that is open. The strip wraps rather than scrolling, so no tab is ever hidden past its right edge. The calls of the open tab run across the row as cells: `device.list` over `Every T3000 device…`, `device.describe` over `One device in full…`, as many per row as fit, each description cut to three lines with the whole sentence on hover, so one long sentence cannot set the height of every row. The name and its sentence share one face — a name in monospace read as code, and these are not code. The name is a **link** that selects that call in the runner, seeds its arguments and scrolls there, which is the only thing a reader clicking a name could have wanted. The open tab shows six cells and carries the way to the rest at the right end of the strip: `Show 2 more`, which names what is held back, and `Show less` once it is out. There is no reads-and-writes split; the calls that stop for a person are named in one line under the strip instead of being a heading. Fetched through `tools/list` when the page opens — which starts the server if it is not up — so the list cannot drift from what the model is offered.
+- **Run one**: the picker the links drive, the arguments as JSON seeded from the chosen tool's schema, and the answer. It calls the same `callTool()` the loop uses, so a write still asks the person first: the page is a second way in to the same gate, not around it.
 
-Three dialogs were removed in favour of this page: a status toast that said only that the server was ready, an input box that asked for an address without saying what it was for, and a second row for each of the two.
+When the catalogue cannot be read, the page says why **and offers the Connection page** rather than an install button: the reason is almost always that nothing is running, and starting it is a decision that belongs where its state is shown.
+
+`temcoAi.connection` is the other half:
+
+- **Status**: a word with a dot beside it — `Running`, `Starting`, `Failed`, `Stopped` — then the address it answers on (`http://127.0.0.1:<port>/mcp`), how many tools it offers, its process id, and how long it has been up. Under them **Start**, **Stop**, **Restart**, and **Show the log**. The buttons disable themselves while a start is in flight and when they are the wrong verb for the state, so nothing offers "Stop" to something that is not running.
+- **The program**: installed or not, where, the platform, and the artifact id — with the `dotnet publish` line when there is nothing installed, because a source checkout is the case that has no release to download from.
+- **Where it answers**: the port field (`0` means a free port per start) and the sentence that says which way it behaves.
+- **Platform API**: the address the device, documentation, repository and project tools ask, saved in place.
+
+Four things the page does not do, each a decision:
+
+1. **Nothing starts on open.** A status page that changes what it reports is not a status page.
+2. **Nothing is guessed.** A stop and a crash both end in a process that is gone; only the exit itself separates them, which is why the failure branch carries the last lines the process wrote.
+3. **The log is a button, not a row.** It is a page about one program, and the log is one of the things that program produces.
+4. **The state is repainted from the module, not re-rendered.** Start, stop and restart each answer with a `status` message that the page's own script paints into the four facts it owns, so a field halfway through being typed is never thrown away.
+
+Three older dialogs were removed in favour of these pages: a status toast that said only that the server was ready, an input box that asked for an address without saying what it was for, and a row that opened a page with no status on it.
 ## 10. Security
 
 | Concern | Rule |
 | --- | --- |
 | The model decides what to call | The loop is the boundary, not the model's goodwill: `DESTRUCTIVE` is a set in the extension, not a property read from the server |
 | A write reaches equipment | Only after an explicit yes in the panel, and the yes is recorded with the arguments |
-| The server is reachable from the network | It is not: stdio only, started by us, never listening |
+| The server is reachable from the network | It is not: the socket is bound to `127.0.0.1` by name, never `0.0.0.0` |
+| Another process on this machine calls it | Every request but `/health` needs the bearer token this window generated at start. The token lives in memory, is passed in the child's environment rather than its arguments, and dies with the process |
 | The catalog is modified | Opened `ReadOnly` (§5.6); writes stay in `temco-store` |
 | A tool result is code | Results are text and are rendered as text, never evaluated |
 | A downloaded server is tampered with | Pinned sha256 per platform, and the `temcoAi.allowUnpinned` gate that already guards the models |
-| Secrets | None are passed; the environment is a curated list, not a copy of the host's |
+| Secrets | None are passed but the per-start token; the environment is a curated list, not a copy of the host's |
 
 ---
 
-## 11. Open decisions
+## 11. Decisions
+
+Settled, with the reason each one was settled that way:
+
+1. **The server is HTTP, and the window manages it.** `TEMCO_MCP_TRANSPORT=http` is what the application starts, on loopback, with a per-start token. The reason is not throughput: a pipe has no address and no state, so a page could only ever say "ready" or nothing. A program that writes needs a stop button, and a stop button needs a process someone owns. `stdio` stays as the second mode, because it is what an inspector and a script want, and it is one `switch` in `Program.cs`.
+2. **The server is downloaded, not bundled.** 108 MB and 344 files per platform in every installer is worse than a verified download on first use through the machinery that already installs models. A release attaches `temco-mcp-<rid>.tar.gz` for each of its three platforms, and the catalogue asks for the one that matches the running application's version. Bundling stays available for an air-gapped build by adding the artifact to the catalogue with a `file://` URL.
+3. **Two pages, not one.** The catalogue and the connection were one page for a while. They are two questions asked at different times, and the state in which the catalogue cannot be read is the state in which the connection is the only thing worth showing.
+4. **The log is a button on the Connection page, not a row in the panel.** The panel names things a person goes to; a log is what a person goes to *after* something on a page has gone wrong.
+5. **The supervisor starts the server, not the loop.** `runAgent` used to own the process because it was the only consumer. It has three now — the loop, the runner, the catalogue — and the page that shows the address has to be looking at the process the others use.
+
+Still open:
 
 1. **Who answers `TEMCO_PLATFORM_API`.** The device, repo, and project tools need one HTTP surface. Either a service in the product answers it, or `IPlatformApi` gains an implementation that speaks T3000 protocols directly and the URL becomes a connection setting. Only `HttpPlatformApi` changes either way.
-2. **Settled by measurement: the server is installed, not bundled.** An 82.9 MB, 230-file folder per platform in every installer is worse than a verified download on first use through the machinery that already installs models. Bundling stays available for an air-gapped build by adding the artifact to the catalogue with a `file://` URL.
-3. **Where the audit lives.** The server owns `audit.db` in this document, while the extension already owns the store schema. One has to be authoritative before the first release.
-4. **Whether the 7B model may act by default.** The 1.5B model may not; the catalogue can carry a per-model `maxTools` and a `mayCallDestructive` flag.
-5. **HTTP transport.** `ModelContextProtocol.AspNetCore` would let one server process serve several windows. Not needed for one window, and not in this design.
+2. **Where the audit lives.** The server owns `audit.db` in this document, while the extension already owns the store schema. One has to be authoritative before the first release.
+3. **Whether the 7B model may act by default.** The 1.5B model may not; the catalogue can carry a per-model `maxTools` and a `mayCallDestructive` flag.
+4. **Whether one process should serve several windows.** The token is per window and the port is per window, so two windows run two processes. A shared process would need a shared token and a supervisor outside the extension host; nothing needs it yet.
+5. **Whether `/health` should need the token.** It does not, so the supervisor can poll it before it knows anything. It exposes the name and version of a program whose binary is on the same disk.
 
 ---
 
@@ -1154,14 +1175,15 @@ Three dialogs were removed in favour of this page: a status toast that said only
 | Section | File |
 | --- | --- |
 | 4, the runtime | `extensions/temco-ai/src/ai/runtime.ts` |
-| 5.1 to 5.8, the server | `tools/temco-mcp/**` |
+| 5.1 to 5.8, the server | `tools/temco-mcp/**` (both transports: `Program.cs`) |
 | 6.1, 6.2, the client | `extensions/temco-ai/src/ai/mcp.ts` |
 | 6.3, where the binary is | `extensions/temco-ai/src/ai/binPath.ts` |
 | 6.4, the loop | `extensions/temco-ai/src/ai/agent.ts` |
+| 6.5, the process, its port and its token | `extensions/temco-ai/src/ai/server.ts` |
 | 7.2, the catalogue entries | `extensions/temco-ai/src/ai/catalog.ts` |
 | 7.3, unpacking a tool server | `extensions/temco-ai/src/ai/install.ts` |
-| 8.3, the environment | `extensions/temco-ai/src/ai/binPath.ts` |
-| 9, the group and the page | `extensions/temco-ai/src/aiPages.ts`, `extensions/temco-ai/package.json` |
+| 8.3, the environment | `extensions/temco-ai/src/ai/binPath.ts`, `extensions/temco-ai/src/ai/server.ts` |
+| 9, the groups and the two pages | `extensions/temco-ai/src/aiPages.ts`, `extensions/temco-ai/package.json` |
 | 9, the commands | `extensions/temco-ai/src/extension.ts` |
 | the one output channel | `extensions/temco-ai/src/ai/log.ts` |
-| 7.4, the release step (not added) | `.github/workflows/release.yml` |
+| 7.4, the release step | `.github/workflows/release.yml` |
