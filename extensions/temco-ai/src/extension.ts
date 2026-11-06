@@ -118,7 +118,11 @@ export function activate(context: vscode.ExtensionContext): TemcoAiApi {
 		vscode.commands.registerCommand('temcoAi.installToolServer', () => startToolServer(context)),
 		vscode.commands.registerCommand('temcoAi.askWithTools', () => askWithTools(context)),
 		vscode.commands.registerCommand('temcoAi.tools', () => pages.tools()),
-		vscode.commands.registerCommand('temcoAi.configurePlatformApi', () => pages.connection('api')),
+		// The platform address is no longer a field on a page: it names a service that does not answer yet, so it
+		// lives where settings live, and the command that used to open the field opens the setting instead.
+		vscode.commands.registerCommand('temcoAi.configurePlatformApi', () =>
+			vscode.commands.executeCommand('workbench.action.openSettings', 'temcoAi.platformApi')
+		),
 		vscode.commands.registerCommand('temcoAi.showToolLog', () => toolLog().show(true))
 	);
 
@@ -232,10 +236,10 @@ async function startToolServer(context: vscode.ExtensionContext): Promise<void> 
 		void vscode.window
 			.showInformationMessage(
 				`The tool server is running at ${address} with ${status.calls ?? 0} tools.`,
-				'Open Connection'
+				'Open The Tool Server'
 			)
 			.then((choice) => {
-				if (choice === 'Open Connection') {
+				if (choice === 'Open The Tool Server') {
 					void vscode.commands.executeCommand('temcoAi.connection');
 				}
 			});
@@ -245,11 +249,11 @@ async function startToolServer(context: vscode.ExtensionContext): Promise<void> 
 		const choice = await vscode.window.showErrorMessage(
 			`The tool server did not start: ${reason}`,
 			'Show the Log',
-			'Open Connection'
+			'Open The Tool Server'
 		);
 		if (choice === 'Show the Log') {
 			output.show(true);
-		} else if (choice === 'Open Connection') {
+		} else if (choice === 'Open The Tool Server') {
 			void vscode.commands.executeCommand('temcoAi.connection');
 		}
 	}

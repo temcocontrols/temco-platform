@@ -82,13 +82,18 @@ static async Task RunHttpAsync()
     // `/health` is how the application knows the process is up. It says nothing worth hiding and needs no token.
     app.MapGet("/health", () => Results.Json(new { ok = true, name = "temco-mcp", version = "1.0.0" }));
 
+    // A browser pointed at this port gets a sentence instead of a 401: the address is printed on a page, and someone
+    // will paste it into one. GET only — the protocol itself is POST on /mcp.
+    app.MapGet("/", () => Results.Json(Newcomer()));
+    app.MapGet("/mcp", () => Results.Json(Newcomer()));
+
     // Everything else needs the token the application generated for this window: a loopback port is reachable by
     // every process on the machine, including the three calls that write.
     if (token.Length > 0)
     {
         app.Use(async (context, next) =>
         {
-            if (context.Request.Path.StartsWithSegments("/health")
+            if (Public(context.Request)
                 || context.Request.Headers.Authorization.ToString() == $"Bearer {token}")
             {
                 await next();
@@ -101,4 +106,21 @@ static async Task RunHttpAsync()
     app.MapMcp("/mcp");
 
     await app.RunAsync();
+
+    // What a browser is told when it opens the address: enough to understand what it is looking at, nothing that
+    // would let it call anything.
+    static object Newcomer() => new
+    {
+        name = "temco-mcp",
+        version = "1.0.0",
+        protocol = "Model Context Protocol",
+        transport = "streamable HTTP, stateless",
+        endpoint = "POST /mcp with JSON-RPC and 'Authorization: Bearer <token>'",
+        health = "GET /health",
+        note = "This is not a web page. The application starts this process and holds the token.",
+    };
+
+    // The readiness probe and the two descriptions above; everything that can act needs the token.
+    static bool Public(HttpRequest request) =>
+        HttpMethods.IsGet(request.Method) && request.Path.Value is "/health" or "/" or "/mcp";
 }

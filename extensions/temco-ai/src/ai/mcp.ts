@@ -100,7 +100,7 @@ function post(
 /** The JSON-RPC answer inside a reply, whether the transport framed it as JSON or as an event. */
 function unwrap(reply: Reply): unknown {
 	if (reply.status === 401) {
-		throw new Error('the tool server refused this window\'s token; start it again from the Connection page');
+		throw new Error('the tool server refused this window\'s token; start it again from The Tool Server page');
 	}
 	if (reply.status !== 200) {
 		throw new Error(`the tool server answered ${reply.status}: ${reply.text.slice(0, 300) || '(nothing)'}`);

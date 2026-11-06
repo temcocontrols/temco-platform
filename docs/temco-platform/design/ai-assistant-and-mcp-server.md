@@ -284,7 +284,7 @@ function parseArguments(text: string): Record<string, unknown> {
 ```
 tools/temco-mcp/
   Temco.Mcp.csproj
-  Program.cs                 host, logging to stderr, stdio transport
+  Program.cs                 host, logging to stderr, stdio and http transports
   Platform/
     IPlatformApi.cs          the outside world, as one interface
     HttpPlatformApi.cs       the implementation: base URL from the environment
@@ -767,13 +767,13 @@ export function platformApi(): string {
 
 Three consequences, all of them wanted:
 
-- The installer stays the size it is; the server arrives on first use, the same way a model does, with the same checksum gate (`temcoAi.allowUnpinned`).
+- The installer stays the size it is; the server arrives on first use, the same way a model does, and asks once before it does.
 - `ArtifactKind` in `catalog.ts:7` becomes `'runtime' | 'model' | 'tool-server'`, and one `install()` serves all three. `modelRoot(context)` stays the single root, so `temcoAi.modelFolder` moves the server too.
-- A missing binary is an ordinary state, not an error: the panel offers "Install the tool server", and until then the plain answer path runs unchanged.
+- A missing binary is an ordinary state, not an error: the Tool Server page's **Start** downloads and starts it, and until then the plain answer path runs unchanged.
 
 ### 6.4 `ai/agent.ts`, the loop
 
-The loop keeps its shape — ask, run what it asked for, ask again, with a six-step budget and a set of calls that need a person's yes. What changed is where the server comes from: it is not opened and disposed per turn any more, because it is a process the window owns and the Connection page shows.
+The loop keeps its shape — ask, run what it asked for, ask again, with a six-step budget and a set of calls that need a person's yes. What changed is where the server comes from: it is not opened and disposed per turn any more, because it is a process the window owns and the Tool Server page shows.
 
 ```ts
 import { platformApi, serverBinary } from './binPath';
@@ -824,7 +824,7 @@ Three properties are worth naming, because each was a decision:
 
 ### 6.5 Lifecycle
 
-`ai/server.ts` owns the process. It is the one place that starts it, so the panel, the Tools page's runner and the Connection page all talk to the same thing.
+`ai/server.ts` owns the process. It is the one place that starts it, so the panel, the Tools page's runner and the Tool Server page all talk to the same thing.
 
 | Event | What happens |
 | --- | --- |
@@ -880,7 +880,9 @@ tar -czf artifacts/temco-mcp-win-x64.tar.gz -C artifacts temco-mcp-win-x64
 (Get-FileHash artifacts/temco-mcp-win-x64.tar.gz -Algorithm SHA256).Hash.ToLowerInvariant()
 ```
 
-The hash and the byte count go into the `TOOL_SERVERS` entry in `catalog.ts`, with `kind: 'tool-server'`, `platform`, `architecture` and `licence`. Until they are pinned the entry says so and the existing `temcoAi.allowUnpinned` gate asks before downloading code. The unpacked folder `temco-mcp-win-x64` is what `install()` records, and `artifact.path` is the executable inside it.
+The hash and the byte count go into the `TOOL_SERVERS` entry in `catalog.ts`, with `kind: 'tool-server'`, `platform`, `architecture` and `licence`. **They are not pinned yet**, and until they are, `install()` asks once before it downloads: a modal naming the file, the exact URL, the size (or "not published in the catalog") and the folder it lands in, with one **Download** button. The checksum the file turns out to have is recorded in the manifest either way, so a later change is still noticed. `temcoAi.allowUnpinned` skips the question for a machine that installs unattended — it no longer *is* the question. The unpacked folder `temco-mcp-win-x64` is what `install()` records, and `artifact.path` is the executable inside it.
+
+That is the whole first run, and it was exercised end to end against a local HTTP server serving the real archive: cancel installs nothing; **Download** fetches 49,248,480 bytes, writes the manifest (`id, kind, file, sha256, bytes, url, path, installedAt`) and leaves `temco-mcp.exe` where `serverBinary()` looks; a second install asks nothing; `allowUnpinned` asks nothing.
 
 `.gitignore` carries `tools/temco-mcp/bin/`, `tools/temco-mcp/obj/` and `extensions/temco-ai/bin/`: build output of the machine, never of git.
 
@@ -1011,6 +1013,7 @@ The server speaks both transports, chosen by `TEMCO_MCP_TRANSPORT`; the applicat
 | Route | Behaviour |
 | --- | --- |
 | `GET /health` | `{"ok":true,"name":"temco-mcp","version":"1.0.0"}`. No token: it is how the supervisor knows the process is up, and it says nothing worth hiding |
+| `GET /` and `GET /mcp` | The same facts in words: what this process is, that the protocol is `POST /mcp`, and that the application holds the token. No token, because someone who pasted the address into a browser was going to see *something*, and a bare 401 taught them nothing |
 | `POST /mcp` | JSON-RPC. `tools/list` and `tools/call` work as the first request on a connection, because there is no session to establish |
 | Any other path | 401 unless `Authorization: Bearer <TEMCO_MCP_TOKEN>` |
 
@@ -1021,6 +1024,8 @@ Three details the client depends on, each verified against the running server:
 3. **`/health` is not the same thing as ready.** It answers before the tool list does, which is why the supervisor polls it rather than the catalogue.
 
 The listening socket is bound to `127.0.0.1` by name, never to `0.0.0.0`, and the token is generated per start: a loopback port is reachable by every process on the machine, including the three tools that write.
+
+**Pasting the address into a browser** used to give 401 — correct, and useless. It now answers with the description above (`GET /` and `GET /mcp`, verified: 200 with the JSON, while `POST /mcp` without the header still answers 401 and with it answers the 23 tools). The Tool Server page says the same thing in one sentence, so nobody has to discover it from a status code.
 
 
 ### 8.5 Verifying it end to end
@@ -1071,7 +1076,7 @@ export function registerToolServer(context: vscode.ExtensionContext): vscode.Dis
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `spawn … ENOENT` | The artifact is not installed, or the manifest has no entry for this platform | Press Start on the Connection page; it installs for this RID (§7.1) |
+| `spawn … ENOENT` | The artifact is not installed, or the manifest has no entry for this platform | Press Start on the Tool Server page; it installs for this RID (§7.1) |
 | `spawn … EACCES` on macOS or Linux | The executable bit was lost in a copy | The `chmod` guard in §8.2 |
 | `Failed` with `address already in use` in the log | `temcoAi.serverPort` names a port something else holds | Set it back to `0`, or pick another |
 | `did not answer … within 30s` | The process started and never served — a port it could not bind, or a crash before `app.RunAsync()` | The three lines the page shows are the end of stderr; the whole log is behind **Show the log** |
@@ -1106,10 +1111,10 @@ The `Tools` group is the way in. Three rows: the conversation, the connection, a
 | Row | Command | What it does |
 | --- | --- | --- |
 | Open the AI panel | `temcoAi.openPanel` | Reveals the conversation; **the same row puts it away.** A plain open toggles, because the row a reader opens a thing with is the row they reach for again. A caller that names a page never closes anything |
-| Connection | `temcoAi.connection` | The program behind every call: whether it is running, where it answers, how to stop it, and the two settings it reads |
+| The Tool Server | `temcoAi.connection` | The program behind every call: whether it is running, where it answers, how to stop it, and the two settings it reads |
 | The tools it can call | `temcoAi.tools` | The catalogue itself |
 
-The title bar carries the same two ideas as buttons, so the group is useful without opening a page. The log is **not** a fourth row: it is a button on the Connection page, where the rest of the program's state is.
+The title bar carries the same two ideas as buttons, so the group is useful without opening a page. The log is **not** a fourth row: it is a button on the Tool Server page, where the rest of the program's state is.
 
 Two pages rather than one, because a status and a list are different questions and the first one is asked when something is wrong. A page that answered both put a **Start** button under a catalogue that had to be loaded before the button could be seen — which is exactly the state (nothing is running) in which the catalogue cannot load.
 
@@ -1118,14 +1123,20 @@ Two pages rather than one, because a status and a list are different questions a
 - **The catalogue**: tabs, one per part of the API, taken from the first word of each call's name and kept in the order the server lists them, with a count beside each: `Device 8`, `Docs 4`, `Repo 5`. The strip is a plain row of words with their counts: twelve-pixel labels in the section's own face at six hundred weight, the first letter capitalised, no background under the pointer or under the open tab, and a single hairline in the theme's primary colour along the bottom of the tab that is open. The strip wraps rather than scrolling, so no tab is ever hidden past its right edge. The calls of the open tab run across the row as cells: `device.list` over `Every T3000 device…`, `device.describe` over `One device in full…`, as many per row as fit, each description cut to three lines with the whole sentence on hover, so one long sentence cannot set the height of every row. The name and its sentence share one face — a name in monospace read as code, and these are not code. The name is a **link** that selects that call in the runner, seeds its arguments and scrolls there, which is the only thing a reader clicking a name could have wanted. The open tab shows six cells and carries the way to the rest at the right end of the strip: `Show 2 more`, which names what is held back, and `Show less` once it is out. There is no reads-and-writes split; the calls that stop for a person are named in one line under the strip instead of being a heading. Fetched through `tools/list` when the page opens — which starts the server if it is not up — so the list cannot drift from what the model is offered.
 - **Run one**: the picker the links drive, the arguments as JSON seeded from the chosen tool's schema, and the answer. It calls the same `callTool()` the loop uses, so a write still asks the person first: the page is a second way in to the same gate, not around it.
 
-When the catalogue cannot be read, the page says why **and offers the Connection page** rather than an install button: the reason is almost always that nothing is running, and starting it is a decision that belongs where its state is shown.
+When the catalogue cannot be read, the page says why **and offers the Tool Server page** rather than an install button: the reason is almost always that nothing is running, and starting it is a decision that belongs where its state is shown.
 
 `temcoAi.connection` is the other half:
 
 - **Status**: a word with a dot beside it — `Running`, `Starting`, `Failed`, `Stopped` — then the address it answers on (`http://127.0.0.1:<port>/mcp`), how many tools it offers, its process id, and how long it has been up. Under them **Start**, **Stop**, **Restart**, and **Show the log**. The buttons disable themselves while a start is in flight and when they are the wrong verb for the state, so nothing offers "Stop" to something that is not running.
 - **The program**: installed or not, where, the platform, and the artifact id — with the `dotnet publish` line when there is nothing installed, because a source checkout is the case that has no release to download from.
-- **Where it answers**: the port field (`0` means a free port per start) and the sentence that says which way it behaves.
-- **Platform API**: the address the device, documentation, repository and project tools ask, saved in place.
+
+Both **Where it answers** and **Platform API** were removed from this page, and each for the same reason: a page about one program should describe that program, not ask the reader to configure something they cannot yet use.
+
+| Removed | Why it was there | Where it lives now |
+| --- | --- | --- |
+| Port field | A fixed port is only needed by something *outside* this window that has to reach a known address — an inspector, a script. Everyone else gets a free port per start, which is what stops two windows colliding | `temcoAi.serverPort`, in Settings. The address it produces is still shown, read-only, in **Status** |
+| Platform API field | It names the HTTP service the device, repository and project tools ask. **No such service exists yet** (open decision 1), so the field asked a person to configure an address that could not answer | `temcoAi.platformApi`, in Settings; the `Temco AI: Platform API` command now opens the setting instead of a page |
+
 
 Four things the page does not do, each a decision:
 
@@ -1145,7 +1156,7 @@ Three older dialogs were removed in favour of these pages: a status toast that s
 | Another process on this machine calls it | Every request but `/health` needs the bearer token this window generated at start. The token lives in memory, is passed in the child's environment rather than its arguments, and dies with the process |
 | The catalog is modified | Opened `ReadOnly` (§5.6); writes stay in `temco-store` |
 | A tool result is code | Results are text and are rendered as text, never evaluated |
-| A downloaded server is tampered with | Pinned sha256 per platform, and the `temcoAi.allowUnpinned` gate that already guards the models |
+| A downloaded server is tampered with | Pinned sha256 per platform where the catalogue has one; where it does not, the download is confirmed once with the file's origin and size in front of the person, and the checksum it had is recorded |
 | Secrets | None are passed but the per-start token; the environment is a curated list, not a copy of the host's |
 
 ---
@@ -1157,8 +1168,9 @@ Settled, with the reason each one was settled that way:
 1. **The server is HTTP, and the window manages it.** `TEMCO_MCP_TRANSPORT=http` is what the application starts, on loopback, with a per-start token. The reason is not throughput: a pipe has no address and no state, so a page could only ever say "ready" or nothing. A program that writes needs a stop button, and a stop button needs a process someone owns. `stdio` stays as the second mode, because it is what an inspector and a script want, and it is one `switch` in `Program.cs`.
 2. **The server is downloaded, not bundled.** 108 MB and 344 files per platform in every installer is worse than a verified download on first use through the machinery that already installs models. A release attaches `temco-mcp-<rid>.tar.gz` for each of its three platforms, and the catalogue asks for the one that matches the running application's version. Bundling stays available for an air-gapped build by adding the artifact to the catalogue with a `file://` URL.
 3. **Two pages, not one.** The catalogue and the connection were one page for a while. They are two questions asked at different times, and the state in which the catalogue cannot be read is the state in which the connection is the only thing worth showing.
-4. **The log is a button on the Connection page, not a row in the panel.** The panel names things a person goes to; a log is what a person goes to *after* something on a page has gone wrong.
+4. **The log is a button on the Tool Server page, not a row in the panel.** The panel names things a person goes to; a log is what a person goes to *after* something on a page has gone wrong.
 5. **The supervisor starts the server, not the loop.** `runAgent` used to own the process because it was the only consumer. It has three now — the loop, the runner, the catalogue — and the page that shows the address has to be looking at the process the others use.
+6. **A missing checksum is a question, not a refusal.** The entry used to demand a setting be found before the first download, which made "Start" a dead end on a machine that had never enabled it. The confirmation carries more information than the setting ever did — the exact URL, the size, the destination — and the observed checksum is recorded either way, so nothing is lost by asking instead of refusing. Pinning the hashes stays the goal; it is a data task that needs one build to exist first, and `allowUnpinned` now means only "do not ask".
 
 Still open:
 

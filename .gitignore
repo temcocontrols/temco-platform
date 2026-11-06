@@ -62,3 +62,4 @@ tools/temco-mcp/bin/
 tools/temco-mcp/obj/
 artifacts/
 extensions/temco-ai/bin/
+tool-server/

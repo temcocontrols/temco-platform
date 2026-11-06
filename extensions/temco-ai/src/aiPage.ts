@@ -143,17 +143,15 @@ export class AiPage {
       }
       void vscode.window.showInformationMessage(`Temco AI: ${entry.label} is installed.`);
     } catch (error) {
+      // A cancel is an answer, not a failure: the person said no to the question `install()` asked.
       const message = String(error instanceof Error ? error.message : error);
-      const answer = await vscode.window.showWarningMessage(`Temco AI: ${message}`, 'Open Settings');
-      if (answer === 'Open Settings') {
-        await vscode.commands.executeCommand('workbench.action.openSettings', 'temcoAi.allowUnpinned');
+      if (!/cancelled/i.test(message)) {
+        void vscode.window.showWarningMessage(`Temco AI: ${message}`);
       }
     }
     this.busy = '';
     await this.seed();
   }
-
-  /** Whether the catalogue pins checksums for this kind at all — the wording of a refusal depends on it. */
 
   private async seed(): Promise<void> {
     if (!this.panel) {

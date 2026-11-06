@@ -196,6 +196,10 @@
         {
           "command": "temcoAi.suggestTopic",
           "when": "false"
+        },
+        {
+          "command": "temcoAi.toolServer",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -252,7 +256,7 @@
         "temcoAi.allowUnpinned": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Allow downloading a catalog entry whose checksum is not pinned yet. Each such download asks for confirmation first, and the checksum it turns out to have is recorded, so a later change is still noticed."
+          "markdownDescription": "Skip the confirmation shown before downloading a catalog entry whose checksum is not pinned yet. Off, each such download asks once, naming the file, its address and its size; the checksum it turns out to have is recorded either way, so a later change is still noticed."
         },
         "temcoAi.runtime": {
           "type": "string",
@@ -273,14 +277,14 @@
         "temcoAi.platformApi": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Address of the service the assistant's tools ask for devices, repositories, projects, documentation and the site. Empty keeps the assistant to questions it can answer from the page in front of it."
+          "markdownDescription": "Address of the service the assistant's tools ask for devices, repositories, projects, documentation and the site. **No service answers this yet**: left empty, those calls report that the service is not configured, and the catalog and documentation calls — which read this machine — carry on. Written for the day the service exists; nothing in this build needs it."
         },
         "temcoAi.serverPort": {
           "type": "number",
           "default": 0,
           "minimum": 0,
           "maximum": 65535,
-          "markdownDescription": "Port the tool server listens on at `127.0.0.1`. `0` lets the application pick a free port on each start, so two windows never collide."
+          "markdownDescription": "Port the tool server listens on at `127.0.0.1`. `0` lets the application pick a free port on each start, so two windows never collide. Set it only when something outside this window has to reach a fixed address."
         },
         "temcoAi.serverIdleMinutes": {
           "type": "number",

@@ -3,7 +3,7 @@
 // One program on loopback, with an address a page can show and a stop button that means stopped. The alternative —
 // a `stdio` child per turn — needed no supervisor, but it also had no address and no state, and both are what a
 // person asks for the moment a program runs on their machine on their behalf. So: started on demand, kept while the
-// window is open, stopped when it closes, and described on the Connection page by what it is actually doing.
+// window is open, stopped when it closes, and described on The Tool Server page by what it is actually doing.
 
 import { ChildProcess, spawn } from 'child_process';
 import * as crypto from 'crypto';
@@ -24,7 +24,7 @@ const TAIL_LINES = 40;
 
 export type ServerState = 'stopped' | 'starting' | 'running' | 'failed';
 
-/** What the Connection page says, and what the panel's row turns into when it is not running. */
+/** What The Tool Server page says, and what the panel's row turns into when it is not running. */
 export interface ServerStatus {
 	state: ServerState;
 	binary?: string;
@@ -88,7 +88,7 @@ function healthy(port: number): Promise<boolean> {
 /**
  * The managed server.
  *
- * Every state change is broadcast, because two surfaces read this one object: the Connection page draws it, and the
+ * Every state change is broadcast, because two surfaces read this one object: The Tool Server page draws it, and the
  * Tools page decides from it whether a catalogue can be read at all.
  */
 export class ToolServer implements vscode.Disposable {

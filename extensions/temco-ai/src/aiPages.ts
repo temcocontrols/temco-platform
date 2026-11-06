@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { DocsRoot, collectPages, docs } from './docs';
 import { Catalog, CitationRow } from './ai/store';
 import { askToRun, callTool, listTools } from './ai/agent';
-import { buildHint, platformApi, serverBinary, serverEntry, serverFolder } from './ai/binPath';
+import { buildHint, serverBinary, serverEntry, serverFolder } from './ai/binPath';
 import { toolLog } from './ai/log';
 import { ServerStatus, toolServer } from './ai/server';
 import { ToolSpec } from './ai/runtime';
@@ -178,12 +178,6 @@ export class AiPages {
 			case 'run':
 				await this.runTool(message, panel);
 				return;
-			case 'saveApi':
-				await this.saveSetting(message, panel, 'platformApi', 'savedApi');
-				return;
-			case 'savePort':
-				await this.saveSetting(message, panel, 'serverPort', 'savedPort');
-				return;
 			case 'start':
 			case 'restart':
 				await this.control(panel, message.type);
@@ -198,22 +192,6 @@ export class AiPages {
 			default:
 				return;
 		}
-	}
-
-	/** One setting, from the field that shows it, back to the field that shows it. */
-	private async saveSetting(
-		message: PageMessage,
-		panel: vscode.WebviewPanel,
-		key: 'platformApi' | 'serverPort',
-		reply: string
-	): Promise<void> {
-		const value = (message as unknown as { value?: unknown }).value;
-		const raw = typeof value === 'string' ? value.trim() : '';
-		const stored = key === 'serverPort' ? Number.parseInt(raw, 10) : raw;
-		await vscode.workspace
-			.getConfiguration('temcoAi')
-			.update(key, Number.isFinite(stored) ? stored : 0, vscode.ConfigurationTarget.Global);
-		void panel.webview.postMessage({ type: reply, value: raw });
 	}
 
 	/** Start, or restart: the answer is the status, whether it came up or not. */
@@ -665,7 +643,7 @@ const GROUPS: { id: string; rows: Row[] }[] = [
 		id: 'mcp',
 		rows: [
 			{ label: 'Open the AI panel', note: 'the conversation, in the secondary side bar; once more puts it away', mark: 'comment-discussion', command: 'temcoAi.openPanel' },
-			{ label: 'Connection', note: 'the tool server: whether it is running, where it answers, and the address it asks', mark: 'server-process', command: 'temcoAi.connection' },
+			{ label: 'The Tool Server', note: 'whether it is running, where it answers, and how to stop it', mark: 'server-process', command: 'temcoAi.connection' },
 			{ label: 'The tools it can call', note: 'every call it can make, by the part of the API it belongs to', mark: 'tools', command: 'temcoAi.tools' }
 		]
 	}
@@ -801,7 +779,7 @@ const TOOLS_SCRIPT = `
 })();
 `;
 
-/** The script the Connection page runs: four buttons, two fields, and the status painted where it is read. */
+/** The script The Tool Server page runs: status painted where it is read, and the four controls that change it. */
 const CONNECTION_SCRIPT = `
 (function () {
 	const api = window.__temcoApi || (window.__temcoApi = acquireVsCodeApi());
@@ -841,6 +819,11 @@ const CONNECTION_SCRIPT = `
 		setFact('calls', status.calls === undefined ? 'not asked yet' : status.calls + ' tools');
 		setFact('process', status.pid === undefined ? 'none' : String(status.pid));
 		setFact('since', status.since === undefined ? 'not running' : spell(status.since));
+		// A start on a machine that had none has just installed it: the artifact facts move with the truth.
+		if (status.binary) {
+			setFact('installed', 'yes');
+			setFact('path', status.binary);
+		}
 		if (note) { note.textContent = sentence(status); }
 		const busy = state === 'starting';
 		if (start) { start.disabled = busy || state === 'running'; }
@@ -860,20 +843,6 @@ const CONNECTION_SCRIPT = `
 	press(stop, { type: 'stop' });
 	press(restart, { type: 'restart' });
 
-	const port = document.getElementById('port');
-	const savePort = document.getElementById('save-port');
-	const portNote = document.getElementById('port-note');
-	if (savePort && port) {
-		savePort.addEventListener('click', () => api.postMessage({ type: 'savePort', value: port.value }));
-	}
-
-	const address = document.getElementById('api-address');
-	const saveApi = document.getElementById('save-api');
-	const apiNote = document.getElementById('api-note');
-	if (saveApi && address) {
-		saveApi.addEventListener('click', () => api.postMessage({ type: 'saveApi', value: address.value }));
-	}
-
 	document.addEventListener('click', (event) => {
 		const target = event.target.closest('[data-command]');
 		if (!target) { return; }
@@ -884,18 +853,7 @@ const CONNECTION_SCRIPT = `
 
 	window.addEventListener('message', (event) => {
 		const message = event.data;
-		if (!message) { return; }
-		if (message.type === 'status' && message.status) { paint(message.status); }
-		if (message.type === 'savedPort' && portNote) {
-			portNote.textContent = Number(message.value) > 0
-				? 'Fixed at ' + message.value + '; a start fails if anything else holds it. The next start uses it.'
-				: 'Chosen at each start, so two windows never collide.';
-		}
-		if (message.type === 'savedApi' && apiNote) {
-			apiNote.textContent = message.value
-				? 'Set to ' + message.value + '. Devices, documentation, repositories, projects and the site are asked there.'
-				: 'Not set, so the calls that need it answer that the service is not configured. The catalog calls read a file on this machine and carry on.';
-		}
+		if (message && message.type === 'status' && message.status) { paint(message.status); }
 	});
 
 	paint(window.__temcoStatus || { state: 'stopped' });
@@ -1025,7 +983,7 @@ function localButton(id: string, label: string, primary = false): string {
  * *Tools* - every call the assistant can make, and one box that makes one without the model in the way.
  *
  * The catalogue as tabs, one part of the API each; then the runner. What sits behind all of it - the program, its
- * address, whether it is up - is the Connection page, because a status is not a list and reading a catalogue should
+ * address, whether it is up - is The Tool Server page, because a status is not a list and reading a catalogue should
  * not start anything.
  */
 async function toolsView(context: vscode.ExtensionContext): Promise<{ body: string; script: string }> {
@@ -1042,7 +1000,7 @@ async function toolsView(context: vscode.ExtensionContext): Promise<{ body: stri
 			problem = error instanceof Error ? error.message : String(error);
 		}
 	} else {
-		problem = `No tool server on this machine yet. Open the Connection page and press Start; it downloads one.\n\n${buildHint(context)}`;
+		problem = `No tool server on this machine yet. Open The Tool Server page and press Start; it downloads one.\n\n${buildHint(context)}`;
 	}
 
 	const catalogue =
@@ -1051,7 +1009,7 @@ async function toolsView(context: vscode.ExtensionContext): Promise<{ body: stri
 					title: 'Nothing to list yet',
 					desc: problem || 'The tool server did not answer.',
 					mark: 'warning',
-					actions: button('Open Connection', 'temcoAi.connection', { kind: 'primary' })
+					actions: button('Open The Tool Server', 'temcoAi.connection', { kind: 'primary' })
 				})
 			: `${catalogueTabs(tools)}${askingNote(tools)}`;
 
@@ -1088,7 +1046,7 @@ async function toolsView(context: vscode.ExtensionContext): Promise<{ body: stri
 		descWide: true,
 		actions: [
 			{ label: 'Open the AI Panel', command: 'temcoAi.openPanel', mark: 'comment-discussion', kind: 'primary' },
-			{ label: 'Connection', command: 'temcoAi.connection', mark: 'server-process' }
+			{ label: 'The Tool Server', command: 'temcoAi.connection', mark: 'server-process' }
 		]
 	})}
 <div id="catalogue" class="mt-24">
@@ -1101,7 +1059,7 @@ ${runner}`;
 }
 
 /**
- * *Connection* — the program behind every call: whether it is running, where it answers, and how to stop it.
+ * *The Tool Server* — the program behind every call: whether it is running, where it answers, and how to stop it.
  *
  * A page rather than a toast because a person who runs a program on their own machine is entitled to see it, its
  * address and its way out in one place. Nothing here starts it on open: a status page that changes what it reports
@@ -1114,8 +1072,6 @@ function connectionView(
 	const status = toolServer().status();
 	const binary = serverBinary(context);
 	const entry = serverEntry();
-	const api = platformApi();
-	const port = vscode.workspace.getConfiguration('temcoAi').get<number>('serverPort', 0);
 
 	const statusBlock = `<div id="status-block">
 	${stateFact(status)}
@@ -1133,8 +1089,8 @@ function connectionView(
 <p class="ai-note" id="status-note">${esc(noteFor(status))}</p>`;
 
 	const artifact = `<div class="mt-8">
-	${fact('installed', binary ? 'yes' : 'no')}
-	${fact('path', binary ?? serverFolder(context) ?? '')}
+	${fact('installed', binary ? 'yes' : 'no', 'installed')}
+	${fact('path', binary ?? serverFolder(context) ?? '', 'path')}
 	${fact('platform', `${process.platform}-${process.arch}`)}
 	${fact('artifact', entry ? entry.id : 'nothing is published for this platform')}
 </div>
@@ -1151,36 +1107,12 @@ ${binary ? '' : `<p class="ai-note">${esc(buildHint(context))}</p>`}`;
 		]
 	})}
 <div id="status" class="mt-24">
-	${section({ title: 'Status', desc: 'Started on demand, kept while this window is open, stopped when it closes. Nothing else on the machine is allowed in without the token.' })}
+	${section({ title: 'Status', desc: 'Started on demand, kept while this window is open, stopped when it closes. Nothing else on the machine is allowed in without the token. The address is not a web page: open it in a browser and it says what it is, but it answers calls only by POST, with this window\'s token.' })}
 	<div class="mt-8">${statusBlock}</div>
 </div>
 <div class="mt-24">
 	${section({ title: 'The program', desc: 'A .NET program published for this platform. Start downloads it the first time and repairs it after that.' })}
 	${artifact}
-</div>
-<div class="mt-24">
-	${section({ title: 'Where it answers', desc: 'The port it listens on, when this machine needs a fixed one. Zero lets the application pick a free port each start.' })}
-	<div class="ai-field ai-field--short">
-		<label for="port">Port</label>
-		<input id="port" type="number" min="0" max="65535" spellcheck="false" value="${esc(String(port))}" />
-		${localButton('save-port', 'Save', true)}
-	</div>
-	<p class="ai-note" id="port-note">${esc(
-		port > 0 ? `Fixed at ${port}; a start fails if anything else holds it.` : 'Chosen at each start, so two windows never collide.'
-	)}</p>
-</div>
-<div class="mt-24" id="api">
-	${section({ title: 'Platform API', desc: 'The service the device, documentation, repository and project tools ask when the answer is not on this machine.' })}
-	<div class="ai-field">
-		<label for="api-address">Address</label>
-		<input id="api-address" type="text" spellcheck="false" placeholder="http://127.0.0.1:3210" value="${esc(api)}" />
-		${localButton('save-api', 'Save', true)}
-	</div>
-	<p class="ai-note" id="api-note">${esc(
-		api.length > 0
-			? `Set to ${api}. Devices, documentation, repositories, projects and the site are asked there.`
-			: 'Not set, so the calls that need it answer that the service is not configured. The catalog calls read a file on this machine and carry on.'
-	)}</p>
 </div>`;
 
 	const script = `window.__temcoStatus = ${JSON.stringify(status).replace(/</g, '\\u003c')};

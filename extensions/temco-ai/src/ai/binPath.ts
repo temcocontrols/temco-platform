@@ -84,7 +84,8 @@ export async function ensureServerBinary(context: vscode.ExtensionContext): Prom
     return artifact.path;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`${reason}\n\n${buildHint(context)}`);
+    // A cancel is an answer, not a failure to explain: it gets no advice about building one from source.
+    throw new Error(/cancelled/i.test(reason) ? reason : `${reason}\n\n${buildHint(context)}`);
   }
 }
 

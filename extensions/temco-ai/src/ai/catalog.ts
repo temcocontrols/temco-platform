@@ -119,9 +119,9 @@ export const RUNTIMES: readonly CatalogEntry[] = [
  * The models on offer. Permissive licences only, and the licence is shown before anything is downloaded.
  *
  * **These entries are not pinned yet**: no checksum and no size, because the machine this list was written
- * on cannot reach the file host. An unpinned entry is refused unless `temcoAi.allowUnpinned` is
- * on, and it always asks for confirmation first — after which the checksum the download actually had is
- * recorded, so a later change is detected. Filling in `sha256` and `bytes` is a data task, not a code one.
+ * on cannot reach the file host. An unpinned entry asks before it downloads — naming the address and the size —
+ * without needing a setting first, and the checksum the download actually had is recorded, so a later change is
+ * detected. Filling in `sha256` and `bytes` is a data task, not a code one.
  */
 export const MODELS: readonly CatalogEntry[] = [
   {
@@ -187,7 +187,9 @@ function toolServer(rid: string, platform: string, architecture: string, label: 
     licence: 'UNLICENSED',
     platform,
     architecture,
-    notes: 'checksum and size pinned at release time',
+    // Said where a reader sees it, because it is the difference between "checked" and "asked about": the size is
+    // not known before the download and the checksum is only known after one, so the list does not pretend.
+    notes: 'one confirmation before the first download; the checksum it turns out to have is recorded',
   };
 }
 

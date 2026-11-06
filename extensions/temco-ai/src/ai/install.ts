@@ -56,8 +56,11 @@ export function installedArtifacts(context: vscode.ExtensionContext): InstalledA
 /**
  * Downloads, verifies and unpacks one catalog entry.
  *
- * An entry the catalog has not pinned is refused unless the user has allowed it *and* confirms here: the
- * first download is the one chance to notice a wrong URL, so it is never silent.
+ * An entry the catalog has not pinned is confirmed with the person first rather than refused: the first download
+ * is the one chance to notice a wrong URL, so it is never silent — but it is also not a wall. The file, where it
+ * comes from, its size and where it lands are all named in the question, and the checksum it turns out to have is
+ * recorded, so a later change is still noticed. `temcoAi.allowUnpinned` answers that question in advance for a
+ * machine that installs unattended.
  */
 export async function install(
   context: vscode.ExtensionContext,
@@ -71,26 +74,29 @@ export async function install(
   }
 
   if (!entry.sha256) {
-    const allowed = vscode.workspace
+    const quiet = vscode.workspace
       .getConfiguration('temcoAi')
       .get<boolean>('allowUnpinned', false);
-    if (!allowed) {
-      throw new Error(
-        `"${entry.label}" has no pinned checksum yet, so the download could not be verified. ` +
-          'Turn on "Temco AI › Allow Unpinned" to download it anyway — the checksum it turns ' +
-          'out to have is recorded, so a later change is still noticed.'
+    if (!quiet) {
+      const answer = await vscode.window.showWarningMessage(
+        `Download "${entry.label}"?`,
+        {
+          modal: true,
+          detail: [
+            'The catalog has no checksum pinned for this file yet, so the download cannot be verified against it.',
+            '',
+            `From: ${entry.url}`,
+            `Size: ${entry.bytes > 0 ? formatBytes(entry.bytes) : 'not published in the catalog'}`,
+            `To:   ${root}`,
+            '',
+            'The checksum it turns out to have is recorded, so a change after this is still noticed.',
+          ].join('\n'),
+        },
+        'Download'
       );
-    }
-    const answer = await vscode.window.showWarningMessage(
-      `"${entry.label}" has no pinned checksum yet.`,
-      {
-        modal: true,
-        detail: `The download cannot be verified against the catalog. It comes from:\n${entry.url}\n\nContinue?`,
-      },
-      'Download anyway'
-    );
-    if (answer !== 'Download anyway') {
-      throw new Error('the download was cancelled');
+      if (answer !== 'Download') {
+        throw new Error('the download was cancelled');
+      }
     }
   }
 
