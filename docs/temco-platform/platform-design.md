@@ -4,7 +4,6 @@
 
 Status: design for implementation. Written to be handed to a code generator.
 Target repository: `temcocontrols/temco-platform` (VS Code 1.144.0.0 fork, 12 `temco-*` extensions).
-Supersedes: [`platform-design-v1-web-hosted.md`](./platform-design-v1-web-hosted.md).
 
 ---
 

@@ -49,6 +49,10 @@ Every one of them is drawn with the shared page vocabulary from `temco-ui` (`pag
 registry, search, the offline CHM, the editing and git flow, feedback, the AI features, the implementation
 plan and the governance rules. `16-overview.md` is the one-page version.
 
+[`design/authoring-and-msdn-output.md`](../../design/authoring-and-msdn-output.md) is the other half: what an
+author gets, and what a reader gets. Its §5 is the **MSDN contract** — the concrete meaning of "looks like
+Microsoft Learn" that a surface is judged against — and §6 is the project flow that follows from it.
+
 **They describe the platform, and their paths belong to the product repository.** `docs/t3000/**`,
 `docs/help/registry.json`, `docs/docfx.json`, `scripts/docs-*.mjs` and `dist/docs/` are the *product* repo's
 paths, not this one's: the content and the publishing pipeline stay there by design.

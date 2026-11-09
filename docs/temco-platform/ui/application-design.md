@@ -6,7 +6,7 @@ is either a bug or a proposal to change this file.
 
 Confirmed 2026-10-27. Decisions and their reasons are in *What was decided*; the work order is in *Order of work*.
 
-To **use** the application rather than design it, read [operating-manual.md](./operating-manual.md): the same flow as click-by-click steps, with the button for every page and the command id behind it.
+To **use** the application rather than design it, read [getting-started.md](../getting-started.md): the same flow as numbered steps, with the button for every page and the command id behind it.
 
 ## The two rules
 

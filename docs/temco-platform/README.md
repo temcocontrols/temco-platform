@@ -90,13 +90,17 @@ Only `temco-docs` is active today.
 
 Nothing needs registering for a module to build or ship: the build picks up every `extensions/*/package.json`, the root install brings in each folder's own dependencies, and web builds skip anything that is not a web extension.
 
-## Building and publishing
+## Publishing your documentation
 
-From a project's pages to a page on Temco Learn: what a build writes, where each output lands, what the site's deploy needs that a project build cannot make, and what a publish actually does: [build-and-publish.md](./build-and-publish.md).
+New to the platform? Start here: from an empty folder to a page on Temco Learn, in nine steps, each with a file to look at before you go on — [getting-started.md](./getting-started.md). The same document carries the rest of what a project can do — sources, the editor, validate, release, export, translate — in *Beyond the flow*.
 
 ## Naming
 
 All identifiers, and the rename map applied at the move: [naming.md](./naming.md).
+
+## The catalog
+
+The platform's memory — the tables `temco-store` keeps, what each one is for, and every setting a module declares: [catalog.md](./catalog.md).
 
 ## UI layout
 
@@ -142,7 +146,7 @@ A container with no views is not shown, so a container may be declared before it
 5. `temco-docs` owns the catalog and every page write.
 6. Read-only by default. The application writes only in the five documented cases, each behind its own command and a confirmation naming the path or the value.
 7. Nothing is ever written to a source repository.
-8. The only thing the application pushes is the site: a publish commits `temco-learn` and pushes `main`, and its CI deploys to Pages ([build-and-publish.md](./build-and-publish.md)). A project's own build is never deployed from here.
+8. The only thing the application pushes is the site: a publish commits `temco-learn` and pushes `main`, and its CI deploys to Pages ([getting-started.md](./getting-started.md)). A project's own build is never deployed from here.
 9. A build engine sits behind the content-package contract ([content-package.md](../temco-learn/content-package.md)); nothing outside the engine's own folder names it.
 10. Runtimes and models are downloaded on request into the user's own folder; the engine runs on loopback only.
 

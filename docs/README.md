@@ -5,11 +5,12 @@ Two products, and a mock of the window they live in.
 | Folder | What it documents |
 |---|---|
 | [`temco-platform/`](temco-platform/README.md) | **Temco Platform** — the application: the shell, its modules, how it is built, and the rules that keep it that way |
-| [`temco-learn/`](temco-learn/README.md) | **Temco Learn** — the published documentation site: the content model, the engine, the template, search, the offline artifacts, and the review flow |
+| [`temco-learn/`](temco-learn/README.md) | **Temco Learn** — the published site: its stack, the catalog it reads, the downloads it serves, and the deploy |
 | [`mock/`](mock/README.md) | **The layout mock** — a static, interactive site that draws the whole window so a layout can be settled before the shell is changed |
 
 Read [`temco-platform/README.md`](temco-platform/README.md) when you are writing code.
-Read [`temco-learn/README.md`](temco-learn/README.md) when you are producing documentation for a product.
+Read [`temco-platform/getting-started.md`](temco-platform/getting-started.md) when you are putting a project on the site — it is the place to start as a new user.
+Read [`temco-learn/README.md`](temco-learn/README.md) when you are changing the site itself.
 Open [`mock/index.html`](mock/index.html) when you are arguing about the layout.
 
 ## The tree
@@ -20,7 +21,10 @@ docs/
 │  ├─ README.md            the application: the shell, the modules, the build
 │  ├─ naming.md            ids, titles, settings and namespaces
 │  ├─ entry-points.md      the two seams where product code joins VS Code
-│  ├─ build-and-publish.md  a project's build → the site → GitHub Pages
+│  ├─ getting-started.md   where a new user starts: the whole app, the publish flow first
+│  ├─ catalog.md           the tables the store keeps, and every setting a module declares
+│  ├─ platform-design.md   the engineering design: what the platform is and why
+│  ├─ design/              two specifications: the assistant's MCP server, the authoring and MSDN target
 │  ├─ modules/
 │  │  ├─ README.md         the module register: what each module owns
 │  │  └─ temco-docs/       the documentation module

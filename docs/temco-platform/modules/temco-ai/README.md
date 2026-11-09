@@ -56,6 +56,10 @@ One declared dependency, in one direction:
   to draft, and a source to analyse. It gates the rows and menu entries it shows on `temcoDocs.aiInstalled`, so an
   install without this module shows no door that does not open.
 
+## The tool server
+
+The assistant can call tools: a C# MCP server lives at `tools/temco-mcp` and this module is its client. The protocol between them, the tools it exposes, how the server is built, and how the application starts and stops it are specified in [`design/ai-assistant-and-mcp-server.md`](../../design/ai-assistant-and-mcp-server.md).
+
 ## What it never does
 
 - Writes a page. A draft goes back to the page that asked for it, and a person accepts it as one undoable edit.
