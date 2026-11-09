@@ -2463,6 +2463,23 @@ export default defineConfig(
 						'@playwright/*',
 						'*' // node modules
 					]
+				},
+				{
+					// The end-to-end cases run inside the extension host of the built application, so they are written
+					// against the `vscode` API and load the compiled modules of the platform for the first-run journey.
+					'target': 'test/temco-e2e/**',
+					'restrictions': [
+						'test/temco-e2e/**',
+						'vscode',
+						'extensions/temco-*/out/**',
+						'node:assert/strict',
+						'node:child_process',
+						'node:fs',
+						'node:module',
+						'node:os',
+						'node:path',
+						'*' // node modules
+					]
 				}
 			]
 		}

@@ -106,15 +106,20 @@ function startPanel(): string {
 	return configuration('temcoWorkbench').get<string>(START_PANEL, DEFAULT_PANEL);
 }
 
-/** The Startup view row's items, with the stored id kept visible when this build no longer declares it. */
-function panelOptions(): Choice[] {
+/**
+ * The Startup view row's items, with the stored id kept visible when this build no longer declares it.
+ *
+ * Exported for `test/temco/settings.mts`: "the items are the left panel's items" is a claim about where the list comes
+ * from — the manifests — and a hardcoded list would look identical on screen and be wrong the moment a module is added.
+ */
+export function panelOptions(): Choice[] {
 	const options = activityPanels();
 	const current = startPanel();
 	return options.some((option) => option.value === current) ? options : [...options, { value: current, label: current }];
 }
 
 function breadcrumbsOn(): boolean {
-	return configuration('workbench').get<boolean>('breadcrumbs.enabled', true);
+	return configuration('breadcrumbs').get<boolean>('enabled', true);
 }
 
 function telemetryOn(): boolean {
@@ -428,7 +433,7 @@ export class SettingsPages {
 				if (
 					event.affectsConfiguration('temcoWorkbench') ||
 					event.affectsConfiguration('temcoAi') ||
-					event.affectsConfiguration('workbench.breadcrumbs') ||
+					event.affectsConfiguration('breadcrumbs.enabled') ||
 					event.affectsConfiguration('workbench.colorTheme') ||
 					event.affectsConfiguration('window.autoDetectColorScheme') ||
 					event.affectsConfiguration('telemetry')
@@ -557,7 +562,14 @@ async function receive(
  * once where the setting is read live, and the value is still there after a restart. None of them is written to a
  * workspace, because a preference about the window itself is not a property of a folder.
  */
-async function applySetting(
+/**
+ * One row of a Settings page, written to the settings the editor already reads.
+ *
+ * Exported for `test/temco/settings.mts`: each row is a claim that the checkbox does something — breadcrumbs to
+ * `breadcrumbs.enabled`, telemetry to `telemetry.telemetryLevel`, the channel to `temcoWorkbench.updateChannel`
+ * — and the checks that refuse an unknown value are as much a part of the behaviour as the writes are.
+ */
+export async function applySetting(
 	context: vscode.ExtensionContext,
 	key: string,
 	value: unknown,
@@ -586,7 +598,10 @@ async function applySetting(
 			return;
 		}
 		case 'breadcrumbs':
-			await configuration('workbench').update('breadcrumbs.enabled', Boolean(value), vscode.ConfigurationTarget.Global);
+			// The setting is `breadcrumbs.enabled`: section `breadcrumbs`, property `enabled`. Written as
+			// `workbench.breadcrumbs.enabled` it is not a registered configuration, and the editor refuses the write —
+			// which is what the end-to-end case in `test/temco-e2e` caught, with the stub suites green.
+			await configuration('breadcrumbs').update('enabled', Boolean(value), vscode.ConfigurationTarget.Global);
 			markChanged(context);
 			return;
 		case 'telemetry':
@@ -684,7 +699,7 @@ export function registerSettings(context: vscode.ExtensionContext): { pages: Set
 			// reset that wrote its own copy would freeze today's default into the file.
 			await configuration('window').update('autoDetectColorScheme', undefined, vscode.ConfigurationTarget.Global);
 			await configuration('workbench').update('colorTheme', undefined, vscode.ConfigurationTarget.Global);
-			await configuration('workbench').update('breadcrumbs.enabled', undefined, vscode.ConfigurationTarget.Global);
+			await configuration('breadcrumbs').update('enabled', undefined, vscode.ConfigurationTarget.Global);
 			await configuration('telemetry').update('telemetryLevel', undefined, vscode.ConfigurationTarget.Global);
 			await configuration('temcoWorkbench').update(START_PANEL, undefined, vscode.ConfigurationTarget.Global);
 			await configuration('temcoWorkbench').update('updateChannel', undefined, vscode.ConfigurationTarget.Global);

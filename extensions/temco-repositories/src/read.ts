@@ -497,9 +497,12 @@ function parseRegistry(text: string, folder: string | undefined): { pages: PageI
 
 /** The owner and repository a URL names, whether it is an https clone URL or a web address. */
 export function coordinatesOf(remoteUrl: string): { owner: string; repo: string } | undefined {
+  // The shapes seen in the wild: a clone URL with `.git`, an ssh address with `:`, and a web address a person pasted,
+  // which browsers and GitHub both show with a trailing slash as often as without.
   const match = remoteUrl
-    .replace(/\.git$/, '')
-    .match(/github\.com[/:]([^/]+)\/([^/]+)$/);
+    .trim()
+    .replace(/\.git$/i, '')
+    .match(/github\.com[/:]([^/]+)\/([^/]+?)\/?$/i);
   return match ? { owner: match[1], repo: match[2] } : undefined;
 }
 

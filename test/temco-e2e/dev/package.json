@@ -1,0 +1,11 @@
+{
+	"name": "temco-e2e",
+	"displayName": "Temco End-to-End Cases",
+	"description": "The extension host side of `npm run test-temco-e2e`. It contributes nothing: it exists because the editor only runs extension tests for a path that is both a development extension and a test location.",
+	"publisher": "temcocontrols",
+	"version": "0.0.1",
+	"private": true,
+	"engines": {
+		"vscode": "*"
+	}
+}

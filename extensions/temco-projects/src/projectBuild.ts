@@ -183,7 +183,13 @@ async function pick(
  * no script here — nothing in this application writes them — so an output with no script is simply skipped; an engine
  * with no tick at all still means a site, because docfx writes one.
  */
-function scriptsFor(
+/**
+ * The scripts an output needs, narrowed to the ones this repository really declares.
+ *
+ * Exported for `test/temco/projects.mts`: "one script per ticked output" is a claim the guide makes, and a mapping that
+ * quietly invents a script name is a build that reports nothing.
+ */
+export function scriptsFor(
   outputs: readonly string[],
   engine: string | undefined,
   scripts: Record<string, string>
@@ -205,7 +211,8 @@ function scriptsFor(
 }
 
 /** The scripts the outputs named, whether or not this repository has them: what a warning has to be able to list. */
-function namesFor(outputs: readonly string[], engine: string | undefined): readonly string[] {
+/** The script names an output would need, for the sentence that says which ones the repository is missing. */
+export function namesFor(outputs: readonly string[], engine: string | undefined): readonly string[] {
   const named = outputs.flatMap((output) => SCRIPTS[output.toLowerCase()] ?? []);
   return named.length === 0 && engine === 'docfx' ? SCRIPTS.site : named;
 }

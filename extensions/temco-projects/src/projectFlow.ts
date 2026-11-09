@@ -47,8 +47,11 @@ const DEFAULTS = { name: 'Test1', version: '1.0' };
  * The same three keys every other module reads: the projects folder, the working area when that is empty, and the home
  * folder when neither is set. A template that wrote itself into `~/temco` while removal looked in `~/temco/projects/t3000`
  * would leave a folder behind that nobody could find or delete.
+ *
+ * Exported for the placement cases in `test/temco/projects.mts`: this is the rule the guide states, and it was got
+ * wrong once.
  */
-function defaultFolder(): string {
+export function defaultFolder(): string {
   const projects = vscode.workspace.getConfiguration('temcoRepositories').get<string>('projectsFolder');
   if (projects !== undefined && projects.trim().length > 0) {
     return projects.trim();
@@ -585,8 +588,11 @@ function isDocumentation(file: string): boolean {
  *
  * The two files that *are* the documentation's shape. Everything else — every topic, every class — starts unticked,
  * so a person adds what a draft should read rather than removing most of a repository from it.
+ *
+ * Exported for `test/temco/templates.mts`: getting this list wrong is how an import silently reads ninety pages, or
+ * none.
  */
-function defaultTick(file: string): boolean {
+export function defaultTick(file: string): boolean {
 	const lower = file.toLowerCase();
 	return /(^|\/)docs\/help\/registry\.json$/.test(lower) || /(^|\/)docs\/help\/overview\.md$/.test(lower);
 }
@@ -602,8 +608,10 @@ interface ImportOutcome {
  *
  * `under` is the difference between the two origins that use a path: a folder project *is* the folder it names,
  * while a template writes its tree into a folder of the project's own inside the one it names.
+ *
+ * Exported for the placement cases in `test/temco/projects.mts`, where the two origins are told apart.
  */
-function resolveFolder(text: string, name: string, under: boolean): vscode.Uri {
+export function resolveFolder(text: string, name: string, under: boolean): vscode.Uri {
 	const base = text.trim() || defaultFolder();
 	const expanded = expand(base);
 	const folder = under ? path.join(expanded, slugOf(name)) : expanded;
@@ -726,9 +734,10 @@ async function countDocuments(folder: vscode.Uri): Promise<{ markdown: number; h
  * `*.mjs.txt` assets are copied to `*.mjs`: the repository's hygiene rule forbids committing JavaScript, and a starter's
  * copy is JavaScript only once it is a project's own file.
  *
- * Returns the reason it could not be written, or `undefined` when it was.
+ * Returns the reason it could not be written, or `undefined` when it was. Exported for `test/temco/templates.mts`,
+ * which writes a starter into a throwaway folder and reads what landed there.
  */
-async function writeTemplate(
+export async function writeTemplate(
 	extensionUri: vscode.Uri,
 	folder: vscode.Uri,
 	name: string,

@@ -168,6 +168,24 @@ A container with no views is not shown, so a container may be declared before it
 8. The only thing the application pushes is the site: a publish commits `temco-learn` and pushes `main`, and its CI deploys to Pages ([getting-started.md](./getting-started.md)). A project's own build is never deployed from here.
 9. A build engine sits behind the content-package contract ([content-package.md](../temco-learn/content-package.md)); nothing outside the engine's own folder names it.
 10. Runtimes and models are downloaded on request into the user's own folder; the engine runs on loopback only.
+11. A guide is a promise, so the docs are checked against the manifests: every `temco*.*` id in backticks must be a declared command, a registered command or a setting, every relative link and `#anchor` must land, `json` examples must parse, screenshot slots must be numbered `00, 01, 02 …`, and `## Step N` must not skip. Rename a command and the guide fails ([getting-started.md](./getting-started.md) is the guide; `npm run check-temco-docs` is the check).
+
+## Checks
+
+Four commands. `check-temco` runs as part of `npm run compile`, so a stale guide or a broken button stops the build; the others are run when the thing they cover changes.
+
+| command | what it holds |
+| --- | --- |
+| `npm run check-temco` | the module boundaries, every button's command id against the manifests, the shared components, and `check-temco-docs` |
+| `npm run check-temco-docs` | what the pages *say*: ids, links, anchors, `json`, screenshot slots, step numbers ([docs.mts](../test/temco/docs.mts)) |
+| `npm run test-temco` | every suite in [test/temco](../test/temco): the pages, the store on a real database, where a project's folder goes, the scripts a build runs, the site publish order, the publish guard, the settings rows, starters and imports, and the environment the tool server is given |
+| `npm run test-temco-e2e` | the same application, running: every module activates, every declared command is registered, the catalog opens in the window's own profile, and a Settings-page setting round-trips through the editor's own configuration service — then **a first run, in order**: nothing configured, a folder chosen, a project made from the starter, that project's own scripts building it with a real `node`, the platform finding that build by itself, the build going onto the site, and the project still there afterwards |
+
+`test-temco` compiles the six extensions it loads, because the code it tests imports `vscode` and has to be stubbed the way the running editor would call it — one process per suite, since two suites cannot both be the stub that answers `require('vscode')`. The publish cases need a site clone; with none on the machine they skip and say so, and `TEMCO_SITE` points them at one elsewhere.
+
+`test-temco-e2e` needs a build (`npm run compile`) and opens a real window in a throwaway profile. It is the only check that can catch what the stubs cannot: the breadcrumbs row wrote `workbench.breadcrumbs.enabled`, which this editor does not register, so the checkbox threw in a real window while every stubbed suite stayed green. Its `firstrun.case.js` is the one place the modules meet: it drives the real compiled modules in the order the guide describes, so a change in one module that breaks the next one's assumption fails there and nowhere else. `TEMCO_E2E_KEEP=1` keeps the profile for its logs, and `TEMCO_E2E_TIMEOUT_MS` bounds the run.
+
+A suite is one file in [test/temco](../test/temco) that ends by handing its cases to `standalone()`; the runner finds the rest. A case is one `test('what must be true', () => { … })` line, and the failure it reports is the assertion's own message, so the case and the reason arrive together.
 
 ## Branches
 
