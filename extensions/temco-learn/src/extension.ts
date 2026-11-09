@@ -349,10 +349,16 @@ export function activate(context: vscode.ExtensionContext): void {
 		}
 
 		const site = await readSite(repo());
-		const existing = site.projects.find((project) => project.id === chosen.id);
+		// A project already on the site under this id, or under this title: the title is matched too because a build that
+		// was added before ids came from the folder carries the id its old title suggested, and its history is not
+		// something to strand over a rename.
+		const existing =
+			site.projects.find((project) => project.id === chosen.id) ??
+			site.projects.find((project) => project.title === chosen.title);
+		const id = existing?.id ?? chosen.id;
 		const version = await vscode.window.showInputBox({
 			title: 'Add ' + chosen.title + ' to the site',
-			prompt: 'The version this build is',
+			prompt: 'The version this build is - project ' + id,
 			value: existing?.versions[0]?.version ?? '1.0',
 			validateInput: (value) =>
 				/^[0-9A-Za-z][0-9A-Za-z._+-]*$/.test(value.trim())
@@ -367,7 +373,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			say('Adding ' + chosen.title + ' ' + version.trim() + ' and rebuilding the catalog...');
 			const added = await importBuild({
 				repo: repo(),
-				id: chosen.id,
+				id,
 				title: chosen.title,
 				section: existing?.section,
 				version: version.trim(),
@@ -382,7 +388,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			say(
 				chosen.title + ' ' + added.version + ' is on the site - ' + plural(added.pages, 'page') + '. Nothing is published until you publish.'
 			);
-			await showSite({ project: chosen.id, version: added.version });
+			await showSite({ project: id, version: added.version });
 		} catch (error) {
 			output.appendLine('[add] ' + reason(error));
 			complain('The build could not be added - ' + reason(error));

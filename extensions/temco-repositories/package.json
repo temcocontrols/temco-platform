@@ -273,7 +273,12 @@
         "temcoRepositories.workspaceFolder": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Where clones of sources are made, and where what we make from them is written. Empty means `~/temco`. It is outside every repository on purpose: **nothing is ever written to a source, and nothing is ever pushed**."
+          "markdownDescription": "The working area: where clones of sources are made (`source/` under it), and where a project's folder is written unless `#temcoRepositories.projectsFolder#` says otherwise. Empty means `~/temco`. It is outside every repository on purpose: **nothing is ever written to a source, and nothing is ever pushed**."
+        },
+        "temcoRepositories.projectsFolder": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Where a project's own folder is made — `<this>/<slug>`, holding its `docs/`, its build and what it produces. Empty means the working area above, which is how every project was placed before this setting existed. Point it at a folder of its own (`~/temco/projects`) to keep projects apart from the shared clones."
         }
       }
     }

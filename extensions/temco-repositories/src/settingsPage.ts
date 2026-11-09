@@ -10,7 +10,7 @@
 import * as vscode from 'vscode';
 import { tokenOf } from './read';
 import { callout, hero, icon, page, pageColumn, remember, section } from './ui';
-import { cloneRoot, workRoot } from './workarea';
+import { cloneRoot, projectsRoot, workRoot } from './workarea';
 
 export const REPOSITORY_SETTINGS_VIEW_TYPE = 'temcoRepositories.settings';
 
@@ -18,8 +18,10 @@ interface SettingsMessage {
   type?: string;
   organisation?: string;
   workspaceFolder?: string;
+  projectsFolder?: string;
   where?: string;
   clones?: string;
+  projects?: string;
 }
 
 /** The section every one of these settings lives in. */
@@ -66,8 +68,10 @@ export class RepositorySettingsPage {
       type: 'state',
       organisation: configuration.get<string>('organisation') ?? '',
       workspaceFolder: configuration.get<string>('workspaceFolder') ?? '',
+      projectsFolder: configuration.get<string>('projectsFolder') ?? '',
       where: workRoot(),
       clones: cloneRoot(),
+      projects: projectsRoot(),
       hasToken: token !== undefined,
     });
   }
@@ -82,11 +86,21 @@ export class RepositorySettingsPage {
           (message.workspaceFolder ?? '').trim(),
           vscode.ConfigurationTarget.Global
         );
+        await configuration.update(
+          'projectsFolder',
+          (message.projectsFolder ?? '').trim(),
+          vscode.ConfigurationTarget.Global
+        );
         this.refresh();
         await this.send();
         return;
       case 'pick':
         await vscode.commands.executeCommand('temcoRepositories.pickWorkspaceFolder');
+        this.refresh();
+        await this.send();
+        return;
+      case 'pickProjects':
+        await vscode.commands.executeCommand('temcoRepositories.pickProjectsFolder');
         this.refresh();
         await this.send();
         return;
@@ -142,17 +156,19 @@ function html(): string {
 ${hero({
     title: 'Repository settings',
     mark: 'repo',
-    desc: 'Which enterprise the page opens on, where a clone lands, and the token that reaches a private repository.',
+    desc: 'Which enterprise the page opens on, where a clone lands, where a project is made, and the token that reaches a private repository.',
     descWide: true
   })}
 ${section({ title: 'Default enterprise', desc: 'The list the Repositories page opens on — one setting.' })}
 <div class="az-entries">
   ${row('repo', 'Organisation', 'temcocontrols is the one the platform ships its own documentation from; any organisation or account works.', '<input class="input setting-input" id="organisation" spellcheck="false" placeholder="temcocontrols" aria-label="Organisation">')}
 </div>
-${section({ title: 'Clones and drafts', desc: 'One folder holds both, and what is inside it says which is which: <code>source/</code> for the clones, and one folder per project for what we make.' })}
+${section({ title: 'Clones and drafts', desc: 'Clones share one folder; a project owns its own. The two can sit apart, and each row says where its half lands.' })}
 <div class="az-entries">
-  ${row('folder', 'Folder', 'Deliberately outside every repository: nothing is ever written to a source, and nothing is pushed. Clones go to <code>source/</code> under it — one copy per repository, shared by every project that cites it. Empty means <code>~/temco</code>.', '<input class="input setting-input" id="workspaceFolder" spellcheck="false" placeholder="~/temco" aria-label="Working folder"><button type="button" class="az-btn az-btn--sm" id="pick">Choose</button>')}
+  ${row('folder', 'Working folder', 'Clones go to <code>source/</code> under it — one copy per repository, shared by every project that cites it. Deliberately outside every repository: nothing is ever written to a source, and nothing is pushed. Empty means <code>~/temco</code>.', '<input class="input setting-input" id="workspaceFolder" spellcheck="false" placeholder="~/temco" aria-label="Working folder"><button type="button" class="az-btn az-btn--sm" id="pick">Choose</button>')}
   ${row('info', 'Where copies land', 'Read from this profile, not from the field above — the dialog writes the setting the moment it closes.', '<span class="footer-state" id="where"></span>')}
+  ${row('layers', 'Projects folder', 'Where a project\'s own folder is made: <code>&lt;this&gt;/&lt;slug&gt;</code>, holding its <code>docs/</code> and what it builds. Empty puts it beside the clones, in the working folder above.', '<input class="input setting-input" id="projectsFolder" spellcheck="false" placeholder="~/temco/projects" aria-label="Projects folder"><button type="button" class="az-btn az-btn--sm" id="pick-projects">Choose</button>')}
+  ${row('info', 'Where projects are made', 'The folder the next project is created in — new projects only; one that exists keeps the folder it has.', '<span class="footer-state" id="projects"></span>')}
   ${row('layers', 'Clones made before <code>source/</code>', 'Clones used to live inside the project folder. Their folders are fine — only the folder above them was wrong — so this renames them instead of cloning again.', '<button type="button" class="az-btn az-btn--sm" id="move">Move the Clones Into the Shared Folder</button>')}
 </div>
 ${section({ title: 'GitHub token', desc: 'A private repository needs one, and so does the anonymous allowance running out early.' })}
@@ -162,7 +178,7 @@ ${section({ title: 'GitHub token', desc: 'A private repository needs one, and so
 </div>
 ${callout({
     title: 'Saved to your user settings, not to the workspace',
-    desc: 'These two settings are the editor\'s own (temcoRepositories.organisation and .workspaceFolder), so the page, the settings JSON and the command palette all write the same place.'
+    desc: 'These three settings are the editor\'s own (temcoRepositories.organisation, .workspaceFolder and .projectsFolder), so the page, the settings JSON and the command palette all write the same place.'
   })}
 <div class="az-block__foot">
   <button type="button" class="az-btn az-btn--link" id="json">${icon('code')}<span>Open the settings JSON</span></button>
@@ -181,6 +197,7 @@ const $ = (id) => document.getElementById(id);
 let state = {};
 
 $('pick').addEventListener('click', () => vscode.postMessage({ type: 'pick' }));
+$('pick-projects').addEventListener('click', () => vscode.postMessage({ type: 'pickProjects' }));
 $('move').addEventListener('click', () => vscode.postMessage({ type: 'move' }));
 $('token').addEventListener('click', () => vscode.postMessage({ type: 'token' }));
 $('test').addEventListener('click', () => vscode.postMessage({ type: 'test' }));
@@ -189,7 +206,8 @@ $('save').addEventListener('click', () => {
   vscode.postMessage({
     type: 'save',
     organisation: $('organisation').value,
-    workspaceFolder: $('workspaceFolder').value
+    workspaceFolder: $('workspaceFolder').value,
+    projectsFolder: $('projectsFolder').value
   });
 });
 
@@ -205,7 +223,11 @@ window.addEventListener('message', (event) => {
   if (document.activeElement !== $('workspaceFolder')) {
     $('workspaceFolder').value = message.workspaceFolder || '';
   }
+  if (document.activeElement !== $('projectsFolder')) {
+    $('projectsFolder').value = message.projectsFolder || '';
+  }
   $('where').textContent = 'Clones land in ' + (message.clones || message.where);
+  $('projects').textContent = 'Projects are made in ' + (message.projects || message.projectsFolder || message.where);
   $('token-state').textContent = message.hasToken
     ? 'A token is stored. Setting a new one replaces it; leaving the box empty clears it.'
     : 'No token is stored — the list is read anonymously.';

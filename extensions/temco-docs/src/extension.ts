@@ -1569,21 +1569,26 @@ async function draftMaterial(page: PageEntry, root: DocsRoot | undefined, curren
  * is created outside it.
  */
 /**
- * The working area: **the same root `temco-repositories` clones into**, and never the folder the window happens
- * to have open.
+ * Where a project's own folder is made: **the same rule `temco-repositories` applies**, and never the folder the window
+ * happens to have open.
+ *
+ * `temcoRepositories.projectsFolder` when it is set — a folder of its own, apart from the shared clones — and the working
+ * area (`temcoRepositories.workspaceFolder`, else `~/temco`) when it is not, which is where every project was made before
+ * that setting existed. Two modules cannot import each other, so the rule is spelled twice; both name the same two keys,
+ * and `projectFolder()` in the repositories module is the other copy.
  *
  * It used to fall back to `workspaceFolders[0]`, and that made two mistakes at once. A project's folder is added
  * to the workspace so Explorer can show its `docs/`, so the *next* project created itself a folder **inside the
- * previous one** (`~/temco/test1/test2`, `/test3`…). And because `temco-repositories` deletes `~/temco/<slug>`,
+ * previous one** (`~/temco/test1/test2`, `/test3`…). And because `temco-repositories` deletes `<root>/<slug>`,
  * those nested folders were never the path it looked at, so removing the projects left them on disk.
- *
- * One working area, one owner: the repositories module owns it and names it in `temcoRepositories.workspaceFolder`.
  */
-function workingFolder(): string {
-  const configured = vscode.workspace.getConfiguration('temcoRepositories').get<string>('workspaceFolder');
-  return typeof configured === 'string' && configured.trim().length > 0
-    ? expandHome(configured.trim())
-    : path.join(os.homedir(), 'temco');
+function projectsFolder(): string {
+  const chosen = vscode.workspace.getConfiguration('temcoRepositories').get<string>('projectsFolder');
+  if (typeof chosen === 'string' && chosen.trim().length > 0) {
+    return expandHome(chosen.trim());
+  }
+  const area = vscode.workspace.getConfiguration('temcoRepositories').get<string>('workspaceFolder');
+  return typeof area === 'string' && area.trim().length > 0 ? expandHome(area.trim()) : path.join(os.homedir(), 'temco');
 }
 
 /** `~` written by hand means the home folder, the same rule the working area uses. */
@@ -1651,7 +1656,7 @@ async function createProjectFolder(
   if (slug === undefined || name === undefined) {
     return;
   }
-  const base = path.join(workingFolder(), slug);
+  const base = path.join(projectsFolder(), slug);
   // One area, named after the project, and nothing inside it. A new project has not a single page; six empty
   // section folders looked like a structure somebody had planned, and every one of them was a room with no
   // furniture. The person adds sections when they know what they are.

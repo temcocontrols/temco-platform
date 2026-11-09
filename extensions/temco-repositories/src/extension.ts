@@ -153,6 +153,26 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 				.getConfiguration('temcoRepositories')
 				.update('workspaceFolder', folder.fsPath, vscode.ConfigurationTarget.Global);
 			refresh();
+		}),
+
+		// The same dialog for the other half of the working area: a project's own folder can sit somewhere of its
+		// own, apart from the clones every project shares.
+		vscode.commands.registerCommand('temcoRepositories.pickProjectsFolder', async () => {
+			const picked = await vscode.window.showOpenDialog({
+				canSelectFiles: false,
+				canSelectFolders: true,
+				canSelectMany: false,
+				openLabel: 'Keep projects here',
+				title: 'Where should project folders be made?'
+			});
+			const folder = picked?.[0];
+			if (folder === undefined) {
+				return;
+			}
+			await vscode.workspace
+				.getConfiguration('temcoRepositories')
+				.update('projectsFolder', folder.fsPath, vscode.ConfigurationTarget.Global);
+			refresh();
 		})
 	);
 

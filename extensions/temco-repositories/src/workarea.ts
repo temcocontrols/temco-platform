@@ -39,9 +39,45 @@ export function workRoot(): string {
     : path.join(os.homedir(), 'temco');
 }
 
+/**
+ * Where a project's own folder is made: `projectsFolder` when it is set, the working area otherwise.
+ *
+ * The two are separate questions — a clone is shared by every project that cites it, and a project is what one person
+ * made — so the folder they live in can be too. Empty keeps the older arrangement, where both sat side by side.
+ */
+export function projectsRoot(): string {
+  const configured = vscode.workspace.getConfiguration('temcoRepositories').get<string>('projectsFolder');
+  return configured !== undefined && configured.trim().length > 0 ? expandHome(configured.trim()) : workRoot();
+}
+
 /** The folder one project owns: what we made for it. Clones do not live here — a repository is not a project's. */
 export function projectFolder(project: string): string {
-  return path.join(workRoot(), slugOf(project));
+  return path.join(projectsRoot(), slugOf(project));
+}
+
+/**
+ * Every place a project's folder may be, in the order it is looked for: the projects folder, then the working area it
+ * sat in before projects could live on their own. A folder made before the setting was changed is still its owner's.
+ */
+function projectFolders(project: string): string[] {
+  const slug = slugOf(project);
+  const folders = [path.join(projectsRoot(), slug)];
+  const earlier = path.join(workRoot(), slug);
+  if (!folders.includes(earlier)) {
+    folders.push(earlier);
+  }
+  return folders;
+}
+
+/** Which of a project's places is really there; the projects folder when none is, since that is where a new one goes. */
+async function existingProjectFolder(project: string): Promise<string> {
+  const folders = projectFolders(project);
+  for (const folder of folders) {
+    if (await isThere(folder)) {
+      return folder;
+    }
+  }
+  return folders[0];
 }
 
 /** Where every clone lives: one folder per repository, shared by every project that cites it. */
@@ -149,7 +185,7 @@ export async function projectFor(
   if (current !== undefined) {
     return current;
   }
-  const area = path.join(workRoot(), '<project>');
+  const area = path.join(projectsRoot(), '<project>');
   output?.appendLine(`[work] ${what} needs a project: what we make for one goes to ${area}`);
   const create = repository === undefined ? 'Create a Project' : 'Create a Project from It';
   const answer = await vscode.window.showInformationMessage(
@@ -647,7 +683,7 @@ async function projectWorkFolder(
   if (project === undefined) {
     return undefined;
   }
-  const folder = projectFolder(project);
+  const folder = await existingProjectFolder(project);
   return { folder, exists: await isThere(folder) };
 }
 
@@ -670,7 +706,7 @@ async function deleteProjectFolder(
   if (project === undefined) {
     return false;
   }
-  const folder = projectFolder(project);
+  const folder = await existingProjectFolder(project);
   if (!(await isThere(folder))) {
     return false;
   }

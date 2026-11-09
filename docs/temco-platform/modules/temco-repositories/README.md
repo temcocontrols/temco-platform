@@ -9,7 +9,7 @@ The organisation and the local copies of it: the repository list, the working ar
 | Namespace | `temcoRepositories` |
 | State | active |
 | Page | **The Repositories** (`temcoRepositories.page`) — a webview tab, opened by its own command |
-| Settings | `temcoRepositories.organisation`, `temcoRepositories.workspaceFolder` |
+| Settings | `temcoRepositories.organisation`, `temcoRepositories.workspaceFolder`, `temcoRepositories.projectsFolder` |
 | Requires | `temco-store` (the platform's memory), `temco-ui` (where a page opens) |
 | Required by | `temco-docs` — for the code files of a source and the material a new page is drafted from |
 
@@ -34,7 +34,7 @@ Two of those are for other modules rather than for the palette, and are delibera
 ## Boundary rules
 
 - **Nothing is written to a repository, and nothing is ever pushed.** Every write this module makes is to the catalog; git is used for `clone` and `pull --ff-only` and for reading history, and never for a change to a tracked file.
-- **The working area is outside every repository** (`temcoRepositories.workspaceFolder`, default `~/Temco`), so a clone can never be mistaken for a source.
+- **The working area is outside every repository** (`temcoRepositories.workspaceFolder`, default `~/temco`), so a clone can never be mistaken for a source. A project's own folder is placed by a second setting — `temcoRepositories.projectsFolder`, empty meaning "beside the clones" — so projects can be kept apart from the shared `source/` without moving it.
 - **A token lives in secret storage**, keyed `temcoRepositories.githubToken`. It is never written to a setting, a file or the catalog.
 - **Reading is explicit.** No read, clone or pull happens on its own: the first read offers a local copy, and every act after that is a command a person ran.
 - **What a registry means is not decided here.** This module reads the file and records the rows; the registry's shape, its checks and its areas are `temco-docs`', which is why this module needs nothing from it.

@@ -81,10 +81,25 @@ export function latestOf(project: SiteProject): string | undefined {
 
 /** The working area: the setting `temco-repositories` owns, or a visible folder in the user's home. */
 export function workRoot(): string {
-	const configured = vscode.workspace.getConfiguration('temcoRepositories').get<string>('workspaceFolder');
+	return expand(vscode.workspace.getConfiguration('temcoRepositories').get<string>('workspaceFolder'), path.join(os.homedir(), 'temco'));
+}
+
+/**
+ * Where project folders are made: `temcoRepositories.projectsFolder` when it is set, the working area otherwise.
+ *
+ * The rule `temco-repositories` owns (`projectFolder()`); it is spelled again here because the build search walks the
+ * folder a project's build was written into. Empty means the working area, which is where projects lived before the
+ * setting existed.
+ */
+export function projectsRoot(): string {
+	return expand(vscode.workspace.getConfiguration('temcoRepositories').get<string>('projectsFolder'), workRoot());
+}
+
+/** A configured folder, or `fallback` when it is empty: `~` and `~/x` mean the home folder. */
+function expand(configured: string | undefined, fallback: string): string {
 	const value = typeof configured === 'string' ? configured.trim() : '';
 	if (value === '') {
-		return path.join(os.homedir(), 'temco');
+		return fallback;
 	}
 	if (value === '~') {
 		return os.homedir();

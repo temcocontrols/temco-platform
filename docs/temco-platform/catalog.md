@@ -38,12 +38,14 @@ file needs to become `n`:
 
 ## Where the settings sit
 
-Two settings decide what the repositories surfaces act on, and both are written by
+Three settings decide what the repositories surfaces act on, and all are written by
 `temcoRepositories.settings` (the page) or by VS Code's own settings JSON:
 
 - `temcoRepositories.organisation` — the enterprise the dashboard opens on, and the one seeded into
   `organisations` the first time the page opens.
 - `temcoRepositories.workspaceFolder` — the root of the working area. Clones go to `source/` under it (one copy
-  per repository, shared by every project that cites it) and what we make for a project goes to `<project>/`.
-  Empty means `~/temco`. It is outside every repository on purpose: nothing is ever written to a source, and
-  nothing is pushed.
+  per repository, shared by every project that cites it). Empty means `~/temco`. It is outside every repository
+  on purpose: nothing is ever written to a source, and nothing is pushed.
+- `temcoRepositories.projectsFolder` — where a project's own folder is made, `<this>/<slug>/`. Empty means the
+  working area above, which is where every project went before the setting existed; pointing it at a folder of
+  its own keeps projects apart from the shared clones.
