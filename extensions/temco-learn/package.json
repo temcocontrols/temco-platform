@@ -84,6 +84,12 @@
         "category": "Temco Learn"
       },
       {
+        "command": "temcoLearn.site.downloads",
+        "title": "Make the Downloads",
+        "icon": "$(cloud-download)",
+        "category": "Temco Learn"
+      },
+      {
         "command": "temcoLearn.site.stop",
         "title": "Stop the Site",
         "icon": "$(debug-stop)",

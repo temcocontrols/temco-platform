@@ -2,7 +2,7 @@
 //
 // `src/builds.ts` answers "build what is open, the way the repository builds it". This answers "build what I
 // am managing" — it takes the project's own recipe (the engine and the outputs chosen on the edit page), turns
-// it into the repository's own script name, runs that script as a task, and records the files it left behind in
+// it into the repository's own scripts, runs each as a task, and records the files they left behind in
 // the catalog so the Builds tab has something to show next time.
 //
 // Two rules are inherited from `builds.ts` and not re-decided here:
@@ -17,7 +17,9 @@ import { Catalog, CatalogUnavailable, slugOf } from './store';
 /** The script names, per output. A rename in the product repository is reported, never guessed around. */
 const SCRIPTS: Record<string, readonly string[]> = {
   chm: ['build:help:dry'],
+  help: ['build:help:dry'],
   site: ['docs:site', 'docs:build'],
+  website: ['docs:site', 'docs:build'],
   html: ['docs:site', 'docs:build'],
   pdf: ['build:help:dry', 'docs:pdf'],
 };
@@ -63,8 +65,7 @@ async function buildProject(
       return;
     }
 
-    const wanted_ = scriptFor(detail.outputs, detail.engine);
-    if (wanted_.length === 0) {
+    if (detail.outputs.length === 0 && detail.engine === undefined) {
       void vscode.window.showWarningMessage(
         `Temco Projects: ${detail.name} has no output chosen, so there is nothing to build. ` +
           'Edit the project and say what it should produce.'
@@ -83,11 +84,12 @@ async function buildProject(
     }
 
     const scripts = scriptsOf(folder);
-    const script = wanted_.find((name) => scripts[name] !== undefined);
-    if (!script) {
+    const wanted_ = scriptsFor(detail.outputs, detail.engine, scripts);
+    if (wanted_.length === 0) {
+      const named = [...new Set(namesFor(detail.outputs, detail.engine))];
       void vscode.window.showWarningMessage(
-        `Temco Projects: ${path.basename(folder)} has no ${wanted_.map((name) => `\`${name}\``).join(' or ')} ` +
-          'script, so nothing was run.'
+        `Temco Projects: ${path.basename(folder)} has none of ${named.map((name) => `\`${name}\``).join(' or ')}, ` +
+          'so nothing was run.'
       );
       return;
     }
@@ -96,7 +98,7 @@ async function buildProject(
     const started = Date.now();
     output.appendLine('');
 
-    // The generator first, when there is one: it is what the output script reads its structure from.
+    // The generator first, when there is one: it is what the output scripts read their structure from.
     const generator = GENERATOR.find((name) => scripts[name] !== undefined);
     if (generator !== undefined) {
       output.appendLine(`Building ${detail.name}: npm run ${generator} in ${folder} (the generator first)`);
@@ -104,13 +106,16 @@ async function buildProject(
       output.appendLine(`npm run ${generator} exited with ${generated === undefined ? 'no code' : generated}`);
     } else {
       output.appendLine(
-        `Building ${detail.name}: npm run ${script} in ${folder} — no ${GENERATOR.map((name) => `\`${name}\``).join(' or ')} ` +
+        `Building ${detail.name} in ${folder} — no ${GENERATOR.map((name) => `\`${name}\``).join(' or ')} ` +
           'script, so what is built is whatever the last run of the generator left behind.'
       );
     }
 
-    const exit = await runTask(folder, script);
-    output.appendLine(`npm run ${script} exited with ${exit === undefined ? 'no code' : exit}`);
+    // One script per ticked output, in the order the ticks were made: asking for a site and a PDF means both run.
+    for (const script of wanted_) {
+      const exit = await runTask(folder, script);
+      output.appendLine(`npm run ${script} exited with ${exit === undefined ? 'no code' : exit}`);
+    }
 
     const produced = findArtifacts(folder, detail.outputs, started);
     output.appendLine(
@@ -170,19 +175,39 @@ async function pick(
   return chosen ? { slug: chosen.slug } : undefined;
 }
 
-/** Which of the repository's scripts produces the outputs this project asked for. */
-function scriptFor(outputs: readonly string[], engine: string | undefined): readonly string[] {
+/**
+ * Which of the repository's scripts produce the outputs this project asked for.
+ *
+ * One script per ticked output, each run once: the ticks say what the project is meant to produce, so a project that
+ * asked for a site and a PDF runs both scripts rather than whichever one happened to come first. `search` and `ai` have
+ * no script here — nothing in this application writes them — so an output with no script is simply skipped; an engine
+ * with no tick at all still means a site, because docfx writes one.
+ */
+function scriptsFor(
+  outputs: readonly string[],
+  engine: string | undefined,
+  scripts: Record<string, string>
+): readonly string[] {
+  const wanted: string[] = [];
   for (const output of outputs) {
-    const scripts = SCRIPTS[output.toLowerCase()];
-    if (scripts) {
-      return scripts;
+    const script = (SCRIPTS[output.toLowerCase()] ?? []).find((name) => scripts[name] !== undefined);
+    if (script !== undefined && !wanted.includes(script)) {
+      wanted.push(script);
     }
   }
-  // An engine with no output named is still an intention to build something: docfx writes a site.
-  if (engine === 'docfx') {
-    return SCRIPTS.site;
+  if (wanted.length === 0 && engine === 'docfx') {
+    const site = SCRIPTS.site.find((name) => scripts[name] !== undefined);
+    if (site !== undefined) {
+      wanted.push(site);
+    }
   }
-  return [];
+  return wanted;
+}
+
+/** The scripts the outputs named, whether or not this repository has them: what a warning has to be able to list. */
+function namesFor(outputs: readonly string[], engine: string | undefined): readonly string[] {
+  const named = outputs.flatMap((output) => SCRIPTS[output.toLowerCase()] ?? []);
+  return named.length === 0 && engine === 'docfx' ? SCRIPTS.site : named;
 }
 
 /** The folder the script would run in: a source of this project that is on this machine and has a package.json. */

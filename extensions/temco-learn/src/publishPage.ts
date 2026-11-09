@@ -136,6 +136,13 @@ function steps(pending: number): string {
 			go: 'Choose a build'
 		},
 		{
+			title: 'Downloads',
+			desc: 'The PDFs and the help file the site serves, printed here - the deploy cannot make them and refuses to ship a version without them.',
+			mark: 'download',
+			command: 'temcoLearn.site.downloads',
+			go: 'Make the downloads'
+		},
+		{
 			title: 'Publish',
 			desc: 'The clone is committed, and the commit is pushed at the main branch.',
 			mark: 'upload',

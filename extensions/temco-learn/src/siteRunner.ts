@@ -274,9 +274,10 @@ export class SiteRunner implements vscode.Disposable {
 	}
 
 	/** Run one of the repository's scripts to completion: `build`, `catalog`, or `install`. The exit code is the answer. */
-	async run(script: string, log: Log): Promise<number> {
+	async run(script: string, log: Log, args: readonly string[] = []): Promise<number> {
 		const repo = this.read();
-		const command = script === 'install' ? 'npm install' : 'npm run ' + script;
+		const tail = args.length === 0 ? '' : ' -- ' + args.join(' ');
+		const command = script === 'install' ? 'npm install' : 'npm run ' + script + tail;
 		return new Promise((resolve) => {
 			const child = spawn(command, { cwd: repo, shell: true, windowsHide: true, env: process.env });
 			child.stdout?.on('data', (chunk: Buffer) => log(String(chunk).trimEnd()));

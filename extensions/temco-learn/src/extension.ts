@@ -269,8 +269,63 @@ export function activate(context: vscode.ExtensionContext): void {
 		complain('That did not finish' + (code === -1 ? '.' : ' (exit ' + String(code) + ').'));
 	};
 
-	/** Look at what a build wrote: a folder is the website itself, served here; a file opens in whatever reads it. */
-	const previewArtifact = async (file: string | undefined): Promise<void> => {
+	/**
+	 * Whether the clone declares one of its own scripts.
+	 *
+	 * A clone older than a script is not a reason to refuse to publish — the site's `guard` is the gate, and a clone that
+	 * has never had one cannot be judged by it. What it can be judged by is `pages.yml`, which is where this came from.
+	 */
+	const declaresScript = (script: string): boolean => {
+		try {
+			const parsed = JSON.parse(fs.readFileSync(path.join(repo(), 'package.json'), 'utf8')) as {
+				scripts?: Record<string, string>;
+			};
+			return typeof parsed.scripts?.[script] === 'string';
+		} catch {
+			return false;
+		}
+	};
+
+	/**
+	 * The site's own downloads: the whole-guide PDFs, then the Windows help file.
+	 *
+	 * `pages.yml` never builds them — a Linux runner has neither the fonts nor `hhc.exe` — so they are made on a machine
+	 * like this one and committed, and the site's own `guard` refuses to deploy a version whose file nobody made. Every
+	 * step here is the repository's script, and the browser is asked for by name (`--strict`) so a machine without
+	 * Chromium says so instead of leaving a PDF quietly out. The help file is the one optional download: a machine that
+	 * cannot compile one still has a site, so that step is reported and not fatal.
+	 */
+	const makeDownloads = async (): Promise<void> => {
+		if (!repoReady(repo())) {
+			await chooseFolder();
+			return;
+		}
+		say('Making the site downloads: the site, then the PDFs, then the help files...');
+		const built = await runner.run('build:fast', log);
+		if (built !== 0) {
+			complain('The site could not be built' + (built === -1 ? '.' : ' (exit ' + String(built) + ').') + ' The downloads are printed from it, so nothing was made.');
+			return;
+		}
+		const printed = await runner.run('pdf', log, ['--strict']);
+		if (printed !== 0) {
+			complain(
+				'The PDFs were not made' +
+					(printed === -1 ? '.' : ' (exit ' + String(printed) + ').') +
+					' They are printed by a browser: install playwright and its Chromium, then run this again.'
+			);
+			return;
+		}
+		const helped = await runner.run('chm', log);
+		refresh();
+		sitePage.refresh();
+		say(
+			helped === 0
+				? 'The downloads are made and waiting in the clone. Publish commits them, and the deploy that serves them follows.'
+				: 'The PDFs are made and waiting in the clone. No help file: the compiler is not on this machine — the site serves without it. Publish commits what was made.'
+		);
+	};
+
+	/** Look at what a build wrote: a folder is the website itself, served here; a file opens in whatever reads it. */	const previewArtifact = async (file: string | undefined): Promise<void> => {
 		if (file === undefined) {
 			return;
 		}
@@ -444,6 +499,16 @@ export function activate(context: vscode.ExtensionContext): void {
 			const catalogued = await runner.run('catalog', log);
 			if (catalogued !== 0) {
 				publishSink.appendLine('[publish] the catalog could not be rebuilt, so nothing was committed');
+				return;
+			}
+			// The site's own gate, invoked rather than reimplemented: `guard` is what `pages.yml` runs before it deploys,
+			// and it is the only thing that knows a version needs a committed PDF. Failing here is the same failure one
+			// step earlier, where it costs a dialog instead of a red run.
+			const guarded = declaresScript('guard') ? await runner.run('guard', log) : 0;
+			if (guarded !== 0) {
+				publishSink.appendLine(
+					'[publish] the site\'s guard refused this clone, so nothing was committed — the lines above name the missing download. Make the downloads, then publish again.'
+				);
 				return;
 			}
 			const published = await publishSite(repo(), publishSink, message);
@@ -716,6 +781,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('temcoLearn.site.install', async () => {
 			await runScript('install', 'Installing the site dependencies...', 'The dependencies are installed.');
 		}),
+
+		// The two downloads the deploy cannot make for itself, each its own script, in the order they depend on each other.
+		vscode.commands.registerCommand('temcoLearn.site.downloads', () => makeDownloads()),
 
 		vscode.commands.registerCommand('temcoLearn.site.stop', async () => {
 			await runner.stop();

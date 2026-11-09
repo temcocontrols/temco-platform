@@ -20,6 +20,7 @@ docs/
 │  ├─ README.md            the application: the shell, the modules, the build
 │  ├─ naming.md            ids, titles, settings and namespaces
 │  ├─ entry-points.md      the two seams where product code joins VS Code
+│  ├─ build-and-publish.md  a project's build → the site → GitHub Pages
 │  ├─ modules/
 │  │  ├─ README.md         the module register: what each module owns
 │  │  └─ temco-docs/       the documentation module
