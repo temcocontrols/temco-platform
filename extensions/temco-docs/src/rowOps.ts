@@ -158,8 +158,12 @@ function folderOf(row: DocsNode): vscode.Uri | undefined {
       // A page's folder is the chapter's, whatever the page's own name is: the last id segment is the file.
       return contentUri(rootUri, ...row.page.id.split('/').slice(0, -1));
     default:
-      // An issue row hangs off a page, so it has that page's folder; anything else has none to show.
-      return row.kind === 'issue' ? contentUri(rootUri, ...row.page.id.split('/').slice(0, -1)) : undefined;
+      // An issue row hangs off a page, so it has that page's folder; an image row is a file in the area's own folder;
+      // anything else has none to show.
+      if (row.kind === 'issue') {
+        return contentUri(rootUri, ...row.page.id.split('/').slice(0, -1));
+      }
+      return row.kind === 'image' ? contentUri(rootUri, row.image.area) : undefined;
   }
 }
 
@@ -173,6 +177,8 @@ function rowName(row: DocsNode): string {
       return row.area.title;
     case 'chapter':
       return row.chapter.chapter;
+    case 'image':
+      return row.image.name;
     case 'folder':
       return row.root.folder.name;
     case 'note':

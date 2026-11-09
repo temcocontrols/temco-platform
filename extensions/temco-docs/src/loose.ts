@@ -30,12 +30,29 @@ export interface LooseFile {
 	uri: vscode.Uri;
 }
 
+/**
+ * A picture in an area's own folder.
+ *
+ * A folder that holds no pages — `docs/media/` is the one every project made here has — still has rows worth seeing:
+ * the images a page points at. They are read from disk and shown as pictures rather than as pages, because that is what
+ * they are: nothing in them is written by the generator and nothing in them is published on its own.
+ */
+export interface LooseImage {
+	area: string;
+	name: string;
+	uri: vscode.Uri;
+}
+
 export interface Loose {
 	folders: LooseFolder[];
 	files: LooseFile[];
+	images: LooseImage[];
 }
 
-const EMPTY: Loose = { folders: [], files: [] };
+/** The file types a picture can have: what `landImage` can write and what a page can point at. */
+const IMAGE = /\.(png|jpe?g|gif|bmp|webp|svg|avif)$/iu;
+
+const EMPTY: Loose = { folders: [], files: [], images: [] };
 
 /**
  * Everything an area folder holds that its registry does not.
@@ -50,6 +67,7 @@ export async function looseEntries(root: DocsRoot): Promise<Loose> {
 	}
 	const folders: LooseFolder[] = [];
 	const files: LooseFile[] = [];
+	const images: LooseImage[] = [];
 
 	for (const area of root.areas) {
 		const pages = area.chapters.flatMap((group) => group.pages);
@@ -88,7 +106,15 @@ export async function looseEntries(root: DocsRoot): Promise<Loose> {
 					await walk(vscode.Uri.joinPath(folder, name), path);
 					continue;
 				}
-				if (type !== vscode.FileType.File || !/\.md$/i.test(name)) {
+				if (type !== vscode.FileType.File) {
+					continue;
+				}
+				if (!/\.md$/i.test(name)) {
+					// A picture in the area's own folder: the `media/` a project keeps its images in. It is a row of its
+					// own so the folder says what is in it instead of reading as empty.
+					if (relative.length === 0 && area.chapters.length === 0 && IMAGE.test(name)) {
+						images.push({ area: area.area, name, uri: vscode.Uri.joinPath(folder, name) });
+					}
 					continue;
 				}
 				const base = name.replace(/\.md$/i, '');
@@ -102,7 +128,7 @@ export async function looseEntries(root: DocsRoot): Promise<Loose> {
 		await walk(contentUri(root.rootUri, area.area), '');
 	}
 
-	return { folders, files };
+	return { folders, files, images };
 }
 
 /** The page's first `#` heading, or its file name — the same rule the generator uses for a title. */

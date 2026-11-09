@@ -11,7 +11,7 @@
 
 import * as vscode from 'vscode';
 import { cutUris } from './clipboard';
-import { Loose, LooseFile } from './loose';
+import { Loose, LooseFile, LooseImage } from './loose';
 import {
   AreaGroup,
   ChapterGroup,
@@ -66,12 +66,28 @@ interface FolderLevel {
 
 class PageNode {
   readonly kind = 'page';
-  constructor(readonly root: DocsRoot, readonly page: PageEntry, readonly loose = false) { }
+  /**
+   * `loose` is a file the registry does not name yet; `section` is the page a section *is* — a top-level entry like
+   * `ip-settings`, which is drawn as its own title rather than as `ip-settings.md`, because that is what the published
+   * contents say and what the folder row it replaces used to say.
+   */
+  constructor(readonly root: DocsRoot, readonly page: PageEntry, readonly loose = false, readonly section = false) { }
 }
 
 class IssueNode {
   readonly kind = 'issue';
   constructor(readonly root: DocsRoot, readonly page: PageEntry, readonly index: number) { }
+}
+
+/**
+ * A picture in a folder that holds no pages.
+ *
+ * `docs/media/` is the one every project made here has, and a row that opens onto nothing reads as an empty folder
+ * rather than as "the pictures are here". A picture row opens the image itself.
+ */
+class ImageNode {
+  readonly kind = 'image';
+  constructor(readonly root: DocsRoot, readonly image: LooseImage) { }
 }
 
 /**
@@ -114,6 +130,7 @@ export type DocsNode =
   | ChapterNode
   | PageNode
   | IssueNode
+  | ImageNode
   | NoteNode;
 
 export function pageFromNode(node: DocsNode | undefined): PageNode | undefined {
@@ -279,6 +296,12 @@ export class DocsTreeProvider implements vscode.TreeDataProvider<DocsNode> {
         if (area === undefined) {
           return new FolderNode(node.root);
         }
+        // A section that is one page is drawn as that page, so it sits at the top rather than under a folder that
+        // carries the same name.
+        const bare = this.barePage(node.root, area);
+        if (bare !== undefined && bare.page.id === node.page.id) {
+          return undefined;
+        }
         const segments = node.page.id.split('/').slice(1, -1).filter((segment) => segment.length > 0);
         if (segments.length === 0) {
           return this.topOf(node.root, area);
@@ -290,7 +313,26 @@ export class DocsTreeProvider implements vscode.TreeDataProvider<DocsNode> {
       }
       case 'issue':
         return new PageNode(node.root, node.page);
+      case 'image':
+        return new AreaNode(node.root, this.areaOf(node.root, node.image.area), this.areasAreTop(node.root));
     }
+  }
+
+  /** The area a row belongs to; a row whose area is gone hangs under the source itself. */
+  private areaOf(root: DocsRoot, area: string): AreaGroup {
+    return root.areas.find((candidate) => candidate.area === area) ?? {
+      area,
+      title: area,
+      audience: 'user',
+      noindex: false,
+      chapters: [],
+      pages: 0,
+      issues: 0,
+      errors: 0,
+      warnings: 0,
+      neverReviewed: 0,
+      unshipped: 0,
+    };
   }
 
   /**
@@ -315,6 +357,45 @@ export class DocsTreeProvider implements vscode.TreeDataProvider<DocsNode> {
     }
     const root = this.roots[0];
     return root.areas.length === 1 ? { root, area: root.areas[0] } : undefined;
+  }
+
+  /**
+   * The page a section *is*, when the section holds nothing else.
+   *
+   * A manual's top-level entries are a mix: `docs/control/` is a chapter with twenty pages in it, and `docs/ip-settings/`
+   * is one page that happens to have a folder of its own. Drawing the second as a folder holding a file puts a level in
+   * the tree that the published contents do not have, and every such entry reads as a section called "IP SETTINGS"
+   * containing a page called "ip-settings.md". The page is the row instead: one click to open it, and the tree's shape is
+   * the reader's.
+   */
+  private barePage(root: DocsRoot, area: AreaGroup): PageNode | undefined {
+    const pages = area.chapters.flatMap((chapter) => chapter.pages);
+    if (pages.length !== 1) {
+      return undefined;
+    }
+    const [page] = pages;
+    if (page.id !== area.area) {
+      return undefined;
+    }
+    // The registry says `''` for "filed directly in the area" and the constant says `(root)`: both mean the same thing,
+    // and a section is only "just this page" when neither a sub-folder nor a second page is in it.
+    if (area.chapters.some((chapter) => chapter.chapter !== ROOT_CHAPTER && chapter.chapter !== '')) {
+      return undefined;
+    }
+    const loose = this.loose.get(root.folder.uri.toString());
+    const hasLoose = loose !== undefined && (loose.folders.some((folder) => folder.area === area.area) || loose.files.some((file) => file.area === area.area));
+    return hasLoose ? undefined : new PageNode(root, page, false, true);
+  }
+
+  /** The pictures a folder that holds no pages has in it, in name order. */
+  private imagesOf(root: DocsRoot, area: AreaGroup): LooseImage[] {
+    const loose = this.loose.get(root.folder.uri.toString());
+    if (loose === undefined) {
+      return [];
+    }
+    return loose.images
+      .filter((image) => image.area === area.area)
+      .sort((one, other) => one.name.localeCompare(other.name));
   }
 
   /** Whether this root's areas are the view's own top level — the one case where an area has no folder above it. */
@@ -348,13 +429,15 @@ export class DocsTreeProvider implements vscode.TreeDataProvider<DocsNode> {
       case 'folder':
         return folderItem(node);
       case 'area':
-        return areaItem(node, this.levelFor(node.root, node.area).folders.size > 0);
+        return areaItem(node, this.levelFor(node.root, node.area).folders.size > 0, this.imagesOf(node.root, node.area).length);
       case 'chapter':
         return chapterItem(node, this.hasChildren(node));
       case 'page':
         return pageItem(node);
       case 'issue':
         return issueItem(node);
+      case 'image':
+        return imageItem(node);
       case 'note': {
         const item = new vscode.TreeItem(node.note.label, vscode.TreeItemCollapsibleState.None);
         item.description = node.note.detail;
@@ -388,7 +471,7 @@ export class DocsTreeProvider implements vscode.TreeDataProvider<DocsNode> {
       const rows = roots.length === 0
         ? []
         : roots.length === 1 && roots[0].areas.length > 0
-          ? roots[0].areas.map((area) => new AreaNode(roots[0], area, true))
+          ? roots[0].areas.map((area) => this.barePage(roots[0], area) ?? new AreaNode(roots[0], area, true))
           : roots.map((root) => new FolderNode(root));
       // Whatever the sources could not say for themselves: a source with no local copy, a registry that failed.
       // With one source and one area the project row *is* that area, so it also carries the area itself.
@@ -421,10 +504,16 @@ export class DocsTreeProvider implements vscode.TreeDataProvider<DocsNode> {
         })];
       }
       case 'folder':
-        return node.root.areas.map((area) => new AreaNode(node.root, area));
+        return node.root.areas.map((area) => this.barePage(node.root, area) ?? new AreaNode(node.root, area));
       case 'area': {
         const level = this.levelFor(node.root, node.area);
-        return this.rowsAt(node.root, [node.area], [], level);
+        const rows = this.rowsAt(node.root, [node.area], [], level);
+        // A folder that holds no pages still holds something: the pictures a page points at. Reading them here is what
+        // turns `media` from an empty-looking folder into the list of images it is.
+        const images = this.imagesOf(node.root, node.area);
+        return rows.length > 0 || images.length === 0
+          ? rows
+          : images.map((image) => new ImageNode(node.root, image));
       }
       case 'chapter': {
         const level = this.levelAt(node.root, node.area, node.segments);
@@ -518,11 +607,11 @@ function folderItem(node: FolderNode): vscode.TreeItem {
   return item;
 }
 
-function areaItem(node: AreaNode, hasLoose = false): vscode.TreeItem {
+function areaItem(node: AreaNode, hasLoose = false, images = 0): vscode.TreeItem {
   const { area } = node;
   const item = new vscode.TreeItem(
     area.title,
-    area.chapters.length > 0 || hasLoose
+    area.chapters.length > 0 || hasLoose || images > 0
       ? vscode.TreeItemCollapsibleState.Expanded
       : vscode.TreeItemCollapsibleState.None
   );
@@ -536,6 +625,7 @@ function areaItem(node: AreaNode, hasLoose = false): vscode.TreeItem {
         area.audience ? `audience: ${area.audience}` : '',
         area.noindex ? 'excluded from the published site' : '',
         `${area.pages} pages`,
+        images > 0 ? `${images} pictures` : '',
         node.root.origin === 'catalog' ? '' : `${area.neverReviewed} never reviewed`,
         area.unshipped ? `${area.unshipped} not shipped` : '',
         stale > 0 ? `${stale} stale` : '',
@@ -551,7 +641,7 @@ function areaItem(node: AreaNode, hasLoose = false): vscode.TreeItem {
 
 function chapterItem(node: ChapterNode, hasChildren = false): vscode.TreeItem {
   const item = new vscode.TreeItem(
-    node.chapter.chapter,
+    chapterName(node),
     // Folders open by default: the tree is a list of pages, and a closed folder hides the very thing it is for.
     node.chapter.pages.length > 0 || hasChildren
       ? vscode.TreeItemCollapsibleState.Expanded
@@ -577,13 +667,38 @@ function chapterItem(node: ChapterNode, hasChildren = false): vscode.TreeItem {
   return item;
 }
 
+/**
+ * A folder's row name.
+ *
+ * The published contents name a chapter by the page that opens it — "6.1 Graphic Screens", not `graphic-screens` — and a
+ * tree that says the folder's file name makes a reader translate every row. When the folder has no page of its own the
+ * words are made from its name, which is what the area titles already do.
+ */
+function chapterName(node: ChapterNode): string {
+  // A folder's own page is the one filed inside it under the folder's name: `control/graphic-screens/graphic-screens`.
+  const path = [node.area.area, ...node.segments].join('/');
+  const own = node.chapter.pages.find((page) => page.id === `${path}/${node.segments[node.segments.length - 1] ?? node.area.area}`);
+  if (own !== undefined) {
+    return own.title;
+  }
+  const words = node.chapter.chapter.replace(/[-_]+/g, ' ').trim();
+  return words === '' ? node.chapter.chapter : words.replace(/^./, (first) => first.toUpperCase());
+}
+
 function pageItem(node: PageNode): vscode.TreeItem {
   const { page } = node;
   const recorded = page.origin === 'catalog';
-  // The row is a file, so it is named like one: `point-scaling.md`, not the curated title. A tree that shows titles
-  // and a file manager that shows names disagree about every row, and the tree is the one people copy paths from.
+  // Inside a folder the row is a file, so it is named like one: `point-scaling.md`, not the curated title. A tree that
+  // shows titles and a file manager that shows names disagree about every row, and the tree is the one people copy paths
+  // from. A page that *is* a section is the exception: `docs/ip-settings/` holds one page, the contents call it "IP
+  // SETTINGS", and the folder row it replaces said so — so it keeps the title and carries the file name beside it.
   const file = `${page.id.split('/').pop() ?? page.id}.md`;
-  const item = new vscode.TreeItem(file, vscode.TreeItemCollapsibleState.None);
+  const item = node.section
+    ? new vscode.TreeItem(page.title, vscode.TreeItemCollapsibleState.None)
+    : new vscode.TreeItem(file, vscode.TreeItemCollapsibleState.None);
+  if (node.section) {
+    item.description = file;
+  }
   item.id = `docs|page|${node.root.folder.uri.toString()}|${page.id}`;
   // The name is the row. The curated title is not repeated beside it: it is in the tooltip and on the page itself, and a
   // row that says `test11.md TEST11` spends half the side bar's width saying the same thing twice.
@@ -670,5 +785,21 @@ function issueItem(node: IssueNode): vscode.TreeItem {
     new vscode.ThemeColor(issue.severity === 'error' ? 'problemsErrorIcon.foreground' : 'problemsWarningIcon.foreground')
   );
   item.contextValue = 'issue';
+  return item;
+}
+
+/**
+ * A picture in a folder that holds no pages.
+ *
+ * It opens the image rather than a page: nothing here is written by the generator, and what the row is for is seeing
+ * which pictures a page could point at and copying the name of one.
+ */
+function imageItem(node: ImageNode): vscode.TreeItem {
+  const item = new vscode.TreeItem(node.image.name, vscode.TreeItemCollapsibleState.None);
+  item.id = `docs|image|${node.root.folder.uri.toString()}|${node.image.area}|${node.image.name}`;
+  item.iconPath = new vscode.ThemeIcon('file-media');
+  item.tooltip = `${node.image.name} - a picture in ${node.image.area}/. It is opened, not edited: what a page points at.`;
+  item.command = { command: 'vscode.open', title: 'Open the image', arguments: [node.image.uri] };
+  item.contextValue = 'image';
   return item;
 }
