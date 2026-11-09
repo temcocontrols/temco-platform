@@ -204,7 +204,9 @@ you are working on.
 **What opens when the platform is activated is the project you are on** — its dashboard, the one surface that
 says what is in it and what next — then the page you were last working on, then the home page when there is
 neither. `temcoWorkbench.start.open` (`project` · `page` · `home` · `welcome` · `none`) chooses, and `none` opens no tab at
-all for anyone who would rather nothing opened by itself.
+all for anyone who would rather nothing opened by itself. The side panel the window is revealed on is a second,
+separate choice — `temcoWorkbench.start.panel`, whose values are the left panel's own items (Home, Documentation,
+Repositories, AI, Forum, Tools, Settings) and whose default is `temcoDashboard`.
 
 **The Workspace is the first view, and the Library is beneath it.** Both sit in the `temco` activity bar: the
 Workspace tree is the documentation module's, the Library is the workbench's — the one index of everything every

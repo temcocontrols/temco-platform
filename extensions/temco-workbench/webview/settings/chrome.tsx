@@ -28,11 +28,16 @@ export function Action(props: {
 	onClick: () => void;
 	kind?: 'primary' | 'link';
 	small?: boolean;
+	/**
+	 * What the button does, in full — for a list where every row's button says the same word. It becomes the button's
+	 * accessible name and its tooltip, so "Open" in ten rows is ten different things to a screen reader.
+	 */
+	title?: string;
 }): React.ReactElement {
 	const size = props.small === true ? ' az-btn--sm' : '';
 	const kind = props.kind === 'primary' ? ' az-btn--primary' : props.kind === 'link' ? ' az-btn--link' : '';
 	return (
-		<button type="button" className={`az-btn${size}${kind}`} onClick={props.onClick}>
+		<button type="button" className={`az-btn${size}${kind}`} title={props.title} aria-label={props.title} onClick={props.onClick}>
 			{props.glyph}
 			<span>{props.label}</span>
 			{props.kind === 'link' ? <ArrowRight /> : null}
@@ -128,6 +133,41 @@ export function Entry(props: {
 /** A stack of entries: the one shape a page uses for a list of things it already knows. */
 export function Entries(props: { children: ReactNode }): React.ReactElement {
 	return <div className="az-entries">{props.children}</div>;
+}
+
+/** The same list, laid out across the page instead of down it. */
+export function Cards(props: { children: ReactNode }): React.ReactElement {
+	return <div className="az-cards module-cards">{props.children}</div>;
+}
+
+/**
+ * One card: the mark and the name on its first line, the sentence under them, the facts at its foot.
+ *
+ * It is the kit's `.az-card` — the shape Temco Learn's Overview page uses for a reading — rather than a second kind of
+ * box. `idle` is for a thing this window knows about but has not loaded: the card keeps its place and loses its weight,
+ * so "not here yet" reads without a second colour.
+ */
+export function Card(props: {
+	glyph: React.ReactElement;
+	title: string;
+	desc: string;
+	meta?: ReactNode;
+	action?: ReactNode;
+	idle?: boolean;
+}): React.ReactElement {
+	return (
+		<article className={`az-card module-card${props.idle === true ? ' module-card--idle' : ''}`}>
+			<div className="az-card__head">
+				<span className="az-card__icon" aria-hidden="true">
+					{props.glyph}
+				</span>
+				<span className="az-card__title">{props.title}</span>
+			</div>
+			<p className="az-card__desc">{props.desc}</p>
+			{props.meta === undefined ? null : <div className="module-card__meta">{props.meta}</div>}
+			{props.action === undefined ? null : <div className="module-card__action">{props.action}</div>}
+		</article>
+	);
 }
 
 /** The facts band: the floor the Overview page puts an address on. */

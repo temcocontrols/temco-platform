@@ -1,8 +1,8 @@
 // General — the window's own settings.
 //
-// Six rows, and each one says which it is: four write the editor's configuration, and two are kept in this profile's
-// register. A control asks the host to write a key and then draws whatever state comes back, so nothing here can claim a
-// change it did not make.
+// Five rows, and each one is a setting this build declares: a control asks the host to write a key and then draws whatever
+// state comes back, so nothing here can claim a change it did not make. Both lists — the themes and the left panel's items
+// — arrive in the state rather than being written here, because what this build ships is the host's fact, not the page's.
 
 import { Checkbox, Dropdown, Option, Radio, RadioGroup } from '@fluentui/react-components';
 import {
@@ -16,12 +16,17 @@ import {
 	SettingsRegular,
 	WindowNewRegular
 } from '@fluentui/react-icons';
-import { Action, Callout, Entries, Entry, Facts, Foot, Hero, ICON, Page, Section } from '../chrome';
-import { Ask, ChannelChoice, GeneralState, START_OPTIONS, ThemeChoice } from '../state';
+import { Action, Callout, Entries, Entry, Facts, Hero, ICON, Page, Section } from '../chrome';
+import { Ask, ChannelChoice, Choice, GeneralState } from '../state';
 
 interface Props {
 	state: GeneralState;
 	ask: (message: Ask) => void;
+}
+
+/** The label of the chosen entry, falling back to the stored value so a row never draws blank. */
+function labelOf(options: readonly Choice[], value: string): string {
+	return options.find((option) => option.value === value)?.label ?? value;
 }
 
 export function General({ state, ask }: Props): React.ReactElement {
@@ -29,14 +34,15 @@ export function General({ state, ask }: Props): React.ReactElement {
 
 	const openJson = (): void => ask({ type: 'command', command: 'workbench.action.openSettingsJson' });
 	const restore = (): void => ask({ type: 'command', command: 'temcoWorkbench.settings.reset' });
-	const startLabel = START_OPTIONS.find((option) => option.value === state.start)?.label ?? 'Welcome';
+	const themeLabel = labelOf(state.themes ?? [], state.theme);
+	const startLabel = labelOf(state.startOptions ?? [], state.start);
 
 	return (
 		<Page>
 			<Hero
 				title="General"
 				mark={<SettingsRegular fontSize={17} />}
-				desc={`The window itself. ${String(state.realSettings)} of its ${String(state.totalSettings)} rows write the editor's own configuration and take effect at once; the update channel is kept in this profile's register. Where work is kept is Repositories' business, and the identity is Branding's.`}
+				desc="How the window looks, what it opens with, what it reports, and where a new version comes from. Each of these five rows is one setting in this profile's settings.json — the window obeys it at once, and the value is still there after a restart. Where work is kept is Repositories' business, and the identity is Branding's."
 				note={
 					<>
 						<span className="az-note__mark">
@@ -54,8 +60,8 @@ export function General({ state, ask }: Props): React.ReactElement {
 			/>
 
 			<Callout
-				title={`${String(state.realSettings)} of these ${String(state.totalSettings)} rows are the editor's own settings`}
-				desc="Theme, Startup view, Breadcrumbs and Telemetry write the configuration and take effect at once. The update channel has no setting behind it yet — it is kept in this profile's register, and the band under Where These Live says so."
+				title="Five rows, five settings"
+				desc="Theme and Startup view choose from what this build declares; Breadcrumbs, Telemetry and the update channel write the window's own keys. Restore Defaults removes the values rather than copying them, so each row falls back to the default its manifest states."
 			/>
 
 			<Section title="Window" desc="What the window looks like, and what it opens with — 3 settings.">
@@ -63,24 +69,31 @@ export function General({ state, ask }: Props): React.ReactElement {
 					<Entry
 						glyph={<PaintBrushRegular fontSize={15} />}
 						title="Theme"
-						desc="Colour roles only — a theme never changes the layout."
+						desc="Colour roles only — a theme never changes the layout. Dark, light and high-contrast themes all ship with this build."
 						control={
-							<RadioGroup
-								layout="horizontal"
+							<Dropdown
+								size="small"
 								aria-label="Theme"
-								value={state.theme}
-								onChange={(_event, data) => set('theme', data.value as ThemeChoice)}
+								value={themeLabel}
+								selectedOptions={[state.theme]}
+								onOptionSelect={(_event, data) => {
+									if (data.optionValue !== undefined) {
+										set('theme', data.optionValue);
+									}
+								}}
 							>
-								<Radio value="System" label="System" />
-								<Radio value="Dark" label="Dark" />
-								<Radio value="Light" label="Light" />
-							</RadioGroup>
+								{(state.themes ?? []).map((theme) => (
+									<Option key={theme.value} value={theme.value}>
+										{theme.label}
+									</Option>
+								))}
+							</Dropdown>
 						}
 					/>
 					<Entry
 						glyph={<WindowNewRegular fontSize={15} />}
 						title="Startup view"
-						desc="The tab that opens when the window starts."
+						desc="The side panel the window opens with — the same items the left panel carries."
 						control={
 							<Dropdown
 								size="small"
@@ -93,7 +106,7 @@ export function General({ state, ask }: Props): React.ReactElement {
 									}
 								}}
 							>
-								{START_OPTIONS.map((option) => (
+								{(state.startOptions ?? []).map((option) => (
 									<Option key={option.value} value={option.value}>
 										{option.label}
 									</Option>
@@ -104,7 +117,7 @@ export function General({ state, ask }: Props): React.ReactElement {
 					<Entry
 						glyph={<NavigationRegular fontSize={15} />}
 						title="Breadcrumbs"
-						desc="The path above the editor. Off by default: this window has no file system, so the bar can only repeat the side bar and the tab."
+						desc="The path above the editor, and the line above a page's title — every page the platform draws respects it. On by default."
 						control={
 							<Checkbox
 								aria-label="Show breadcrumbs"
@@ -145,24 +158,16 @@ export function General({ state, ask }: Props): React.ReactElement {
 
 			<Section
 				title="Where These Live"
-				desc="The file these rows are written to, and how many of them the editor would honour from a workspace."
+				desc="The file these five rows are written to, and when each takes effect."
 			>
 				<Facts
 					items={[
 						{ title: 'File', value: 'settings.json · this profile', mono: true },
-						{ title: 'Profile', value: 'Default' },
-						{ title: 'Can be overridden', value: `${String(state.realSettings)} of these ${String(state.totalSettings)} settings` },
+						{ title: 'Keys', value: 'workbench · telemetry · temcoWorkbench', mono: true },
+						{ title: 'Applied', value: 'at once · channel on restart' },
 						{ title: 'Last changed', value: state.lastChanged }
 					]}
 				/>
-				<p className="az-note az-note--foot">
-					A row with no setting behind it is kept in this profile&rsquo;s register, which is written beside settings.json and read
-					by the platform&rsquo;s own modules. The working folder lives in Repositories, next to where copies are cloned from.
-				</p>
-				<Foot>
-					<Action label="Open settings.json" kind="link" glyph={<CodeRegular fontSize={ICON} />} onClick={openJson} />
-					<Action label="Restore every default" kind="link" glyph={<ArrowSyncRegular fontSize={ICON} />} onClick={restore} />
-				</Foot>
 			</Section>
 		</Page>
 	);

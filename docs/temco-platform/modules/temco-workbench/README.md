@@ -1,6 +1,6 @@
 # `temco-workbench`
 
-The application's own surfaces. It is the only module that is not a domain: it owns the **Library** (the index of what every module has), the **dashboard**, the **needs page**, and the two layout decisions that come with them — which tab opens at startup, and which sidebar section comes forward when the project changes.
+The application's own surfaces. It is the only module that is not a domain: it owns the **Library** (the index of what every module has), the **dashboard**, the **needs page**, and the three layout decisions that come with them — which side panel and which tab open at startup, and which sidebar section comes forward when the project changes.
 
 | | |
 |---|---|
@@ -10,7 +10,7 @@ The application's own surfaces. It is the only module that is not a domain: it o
 | State | active |
 | View | **Library** (`temcoWorkbench.library`), contributed into the `temco` activity-bar container that the documentation module declares |
 | Pages | `temcoWorkbench.overview` (the dashboard), `temcoWorkbench.activity` (what the platform recorded), `temcoWorkbench.openNeeds` (what wants a person), `temcoWorkbench.welcome` (the page a new window opens on) |
-| Setting | `temcoWorkbench.start.open` — `welcome` · `project` · `page` · `home` · `none` (default `welcome`) |
+| Setting | `temcoWorkbench.start.open` — `welcome` · `project` · `page` · `home` · `none` (default `welcome`) · `temcoWorkbench.start.panel` — the left panel's item revealed at startup (default `temcoDashboard`) · `temcoWorkbench.updateChannel` and the `branding` · `ai` · `publishing` keys the Settings pages write |
 | Requires | `temco-store`, `temco-ui`, `temco-repositories`, `temco-docs` |
 | Required by | `temco-docs` — nothing; the dependency runs one way, and the workbench reads the documentation module's model |
 
@@ -22,7 +22,7 @@ The application's own surfaces. It is the only module that is not a domain: it o
 | `src/sidebar.ts` | the side-bar groups that are not a data view — Platform, Needs Work, Site, Delivery, Profile, Learn, Support — registered here because a container cannot declare its order in the activity bar |
 | `src/dashboard.ts` | the dashboard's two pages: **Overview** (what the platform holds, what is waiting, the pipeline, the activity) and **Recent Activity** |
 | `src/helpPages.ts` | Welcome, Help, Keyboard Shortcuts, Logs, Report an Issue, About — and the one preference Welcome carries |
-| `src/settingsPages.ts` | the settings pages: the choices the application itself owns (`start.open`), and a filtered route into the settings editor for the ones the modules own |
+| `src/settingsPages.ts` | the five settings pages (General, Modules, Branding, AI Runtime, Publishing). Every row is a declared setting, so a write lands in `settings.json` and the window obeys it at once; the page reads the configuration back and never keeps a value of its own |
 | `src/needsPage.ts` | what wants a person, gathered from every module into one list with the reason and where the fix is |
 | `src/learnPages.ts` | Temco Learn as a reader sees it: Home, T3000, an article, Downloads, Learning Paths |
 | `src/surface.ts` | the page view types |
@@ -54,6 +54,20 @@ The arrangement is VS Code's, deliberately:
 - **The Dashboard is not a second home.** It is the activity-bar container you go to *after* Welcome — Overview (what the platform holds and what is waiting), Recent Activity, Needs Work. VS Code's equivalent is Explorer: state you click into, never a page that opens itself beside the welcome page.
 
 The two only ever fought because either could be the first tab. Now one is the default and the other is a click, and each has one question: Welcome asks *where do I start*, the Overview asks *what is in it and what needs me*. With the checkbox off the chain never ends at the welcome page — `project` → the page you were last on → the overview — so turning it off means what it says; an empty window gets the overview, which has its own empty state and a *New Project* button. **Coverage & Health** is gone as a third dashboard page: the documentation module draws that report from the same registry with the same figures, so the Overview's Knowledge card links to it instead of duplicating it.
+
+## Where a settings page writes
+
+Every row on the five Settings pages is a declared setting, so everything a page decides is in the profile's `settings.json`:
+
+| Page | Keys |
+|---|---|
+| General | `workbench.colorTheme` · `temcoWorkbench.start.panel` · `workbench.breadcrumbs.enabled` · `telemetry.telemetryLevel` · `temcoWorkbench.updateChannel` |
+| Modules | none — the rows describe what is loaded, and every button runs another module's command |
+| Branding | `temcoWorkbench.branding.productName` · `.accent` — the name the pages draw, and the accent written into `workbench.colorCustomizations` |
+| AI Runtime | `temcoAi.model` · `.runtime` · `.modelFolder` · `.allowUnpinned` · `.idleMinutes` · `.serverPort` · `.serverIdleMinutes` · `.platformApi` — the AI module's own keys, so the page writes exactly what that module reads |
+| Publishing | `temcoWorkbench.publishing.site` · `.path` · `.channel` · `.website` · `.pdf` · `.offlineHelp` · `.searchIndex` · `.aiIndex` |
+
+Two facts are not settings and are not written there: **when a row last changed** and **what Test Connection last read back**. Both are kept in the profile's own state rather than in the file, because they record what happened rather than what a person chose. `Restore Defaults` removes the value instead of writing a copy of today's default, so the manifest stays the only place a default is stated.
 
 ## Boundary rules
 

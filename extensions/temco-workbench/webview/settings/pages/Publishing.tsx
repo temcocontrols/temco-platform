@@ -4,8 +4,8 @@
 // already exists and the address it would be handed to.
 
 import { Checkbox, Radio, RadioGroup } from '@fluentui/react-components';
-import { ArrowSyncRegular, CloudArrowUpRegular, DocumentRegular, GlobeRegular } from '@fluentui/react-icons';
-import { Action, Callout, Entries, Entry, Facts, Foot, Hero, ICON, Page, Section } from '../chrome';
+import { CloudArrowUpRegular, DocumentRegular, GlobeRegular } from '@fluentui/react-icons';
+import { Action, Callout, Entries, Entry, Facts, Hero, ICON, Page, Section } from '../chrome';
 import { Ask, ChannelChoice, PublishingState } from '../state';
 
 interface Props {
@@ -32,6 +32,16 @@ export function Publishing({ state, ask }: Props): React.ReactElement {
 						onClick={() => ask({ type: 'command', command: 'temcoWorkbench.settings.testPublish' })}
 					/>
 				}
+			/>
+
+			<Callout
+				tone="warn"
+				title="A published version is frozen"
+				desc="To change a page a reader can reach, publish a new version — an edit does not reach the site until it does."
+			/>
+			<Callout
+				title="Test Connection sends nothing"
+				desc="It checks this profile's own record of the target and nothing else: this build has no network client, so no request leaves the window."
 			/>
 
 			<Section title="Channel" desc="Where a release goes out — one setting, and it decides whether a search engine may see it.">
@@ -86,25 +96,7 @@ export function Publishing({ state, ask }: Props): React.ReactElement {
 						{ title: 'Site', value: 'Temco Learn · Site', mono: true }
 					]}
 				/>
-				<Foot>
-					<Action
-						label="Test the connection"
-						kind="link"
-						glyph={<ArrowSyncRegular fontSize={ICON} />}
-						onClick={() => ask({ type: 'command', command: 'temcoWorkbench.settings.testPublish' })}
-					/>
-				</Foot>
 			</Section>
-
-			<Callout
-				tone="warn"
-				title="A published version is frozen"
-				desc="To change a page a reader can reach, publish a new version — an edit does not reach the site until it does."
-			/>
-			<Callout
-				title="Test Connection sends nothing"
-				desc="It checks this profile's own record of the target and nothing else: this build has no network client, so no request leaves the window."
-			/>
 		</Page>
 	);
 }

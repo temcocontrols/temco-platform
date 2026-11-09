@@ -67,8 +67,92 @@ body,
 	max-width: 220px;
 }
 
+/* A name is read as a word, a colour as a code: each gets the face it is read in. */
+.setting-control .fui-Input.setting-text {
+	flex: 0 1 200px;
+	max-width: 200px;
+}
+
+.setting-control .fui-Input.setting-code {
+	flex: 0 0 96px;
+	max-width: 96px;
+	font-family: var(--font-mono);
+}
+
+/* A native colour input, worn as the swatch it is: one flat chip beside the hex it stands for. */
+.brand-swatch {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 1px solid var(--hairline);
+	border-radius: var(--r-2);
+	background: transparent;
+	cursor: pointer;
+}
+
+.brand-swatch::-webkit-color-swatch-wrapper {
+	padding: 0;
+}
+
+.brand-swatch::-webkit-color-swatch {
+	border: 0;
+	border-radius: calc(var(--r-2) - 1px);
+}
+
+.brand-swatch:focus-visible {
+	outline: 2px solid var(--az-blue);
+	outline-offset: 1px;
+}
+
+/* The palette: one card per role, the chip in it and the value beside it, so the page shows the colours the frame is
+ * actually drawing with rather than a copied list. */
+.brand-palette {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+	gap: var(--sp-2);
+}
+
+.brand-palette__role {
+	display: grid;
+	grid-template-columns: 18px minmax(0, 1fr);
+	column-gap: var(--sp-2);
+	align-items: center;
+	padding: var(--sp-2) var(--sp-3);
+	border: 1px solid var(--hairline);
+	border-radius: var(--r-2);
+	background: var(--surface-card);
+}
+
+.brand-palette__chip {
+	grid-row: span 2;
+	width: 18px;
+	height: 18px;
+	border: 1px solid var(--hairline);
+	border-radius: var(--r-2);
+}
+
+.brand-palette__name {
+	color: var(--ink-1);
+	font-size: 12px;
+	line-height: 16px;
+}
+
+.brand-palette__value {
+	color: var(--ink-3);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	line-height: 14px;
+}
+
 .setting-control .fui-Dropdown {
 	min-width: 150px;
+}
+
+/* A port or a count is a few digits; the row's own width is not for it. */
+.setting-control .fui-Input.setting-number {
+	flex: none;
+	width: 76px;
+	max-width: 76px;
 }
 
 .setting-control .fui-Input + .az-btn--sm {
@@ -168,13 +252,81 @@ body,
 	border-top: 1px solid var(--border);
 }
 
-/* A row's own aside: the namespace and state of a module, beside its name rather than in a column of its own. */
-.setting-badge {
-	margin-left: 8px;
+/* ---- The module lists
+ *
+ * The two lists on Modules are the kit's `.az-card` laid out across the page: ten modules down a column of rows read as a
+ * table nobody asked for, and their sentences are clauses rather than labels, so each one wants a card's own width. What
+ * is added here is that width, the state dot, and the way in pinned to the card's foot so a row of cards has one floor. */
+.module-cards {
+	grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+}
+
+.module-card {
+	gap: var(--sp-1);
+}
+
+/* A module the build reserves: the card keeps its place and loses its weight, so "not here yet" needs no second colour. */
+.module-card--idle {
+	border-style: dashed;
+	background: transparent;
+}
+
+.module-card .az-card__title {
+	font-weight: 500;
+}
+
+.module-card__meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--sp-3);
+	margin-top: var(--sp-2);
+	color: var(--fg-subtle);
+	font-size: 11.5px;
+	line-height: 16px;
+}
+
+.module-namespace {
 	color: var(--ink-3);
+	font-family: var(--font-mono);
 	font-size: 11px;
-	font-weight: 400;
+}
+
+/* The state, as a dot and a word: filled once the module has activated, amber while it is only loaded, hollow when the
+ * build reserves it. The word carries the meaning; the dot is what lets a row of cards be read at a glance. */
+.module-state {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
 	white-space: nowrap;
+}
+
+.module-state::before {
+	content: '';
+	width: 6px;
+	height: 6px;
+	border: 1px solid transparent;
+	border-radius: 50%;
+	background: var(--fg-subtle);
+}
+
+.module-state--active::before {
+	background: var(--ok-ink);
+}
+
+.module-state--loaded::before {
+	background: var(--warn-ink);
+}
+
+.module-state--reserved::before {
+	background: transparent;
+	border-color: var(--fg-subtle);
+}
+
+.module-card__action {
+	display: flex;
+	margin-top: auto;
+	padding-top: var(--sp-2);
 }
 
 /* The application mark at three sizes: the same drawing, scaled, in the identity's own blue. */
@@ -185,29 +337,6 @@ body,
 	color: #fff;
 	font-weight: 700;
 	font-family: var(--font-ui);
-}
-
-/* The five colour roles, as swatches: a theme is these five and nothing else. */
-.brand-roles {
-	display: inline-flex;
-	flex-wrap: wrap;
-	gap: var(--sp-3);
-	justify-content: flex-end;
-}
-
-.brand-role {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	color: var(--ink-3);
-	font-size: 11.5px;
-	white-space: nowrap;
-}
-
-.brand-role__chip {
-	width: 14px;
-	height: 14px;
-	border-radius: 3px;
 }
 
 /* The one callout that is a warning rather than a note. */

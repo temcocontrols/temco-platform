@@ -6,18 +6,23 @@
 
 export type Page = 'general' | 'modules' | 'branding' | 'ai' | 'publishing';
 
-export type ThemeChoice = 'System' | 'Dark' | 'Light';
 export type ChannelChoice = 'Stable' | 'Preview';
 
+/** One entry a settings row offers: what is stored, and what a person reads. */
+export interface Choice {
+	value: string;
+	label: string;
+}
+
 export interface GeneralState {
-	theme: ThemeChoice;
+	theme: string;
+	themes: Choice[];
 	start: string;
+	startOptions: Choice[];
 	breadcrumbs: boolean;
 	telemetry: boolean;
 	channel: ChannelChoice;
 	lastChanged: string;
-	realSettings: number;
-	totalSettings: number;
 }
 
 /** One module the platform loads, as the extension host reports it. */
@@ -33,6 +38,8 @@ export interface ModuleFact {
 
 export interface ModulesState {
 	version: string;
+	/** The channel a new version would come from, read from `temcoWorkbench.updateChannel`. */
+	channel: ChannelChoice;
 	loaded: ModuleFact[];
 	reserved: ModuleFact[];
 }
@@ -40,17 +47,24 @@ export interface ModulesState {
 export interface BrandingState {
 	productName: string;
 	accent: string;
-	welcomePage: string;
-	roles: { colour: string; name: string }[];
 }
 
 export interface AiState {
-	chatModel: string;
-	contextWindow: string;
-	requireCitations: boolean;
-	embeddingModel: string;
-	drafts: string;
-	offlineOnly: boolean;
+	/** `temcoAi.model` — the model the panel answers with, empty when nothing is chosen. */
+	model: string;
+	/** `temcoAi.runtime` — the server binary that runs it, set with the model by the module's picker. */
+	runtime: string;
+	/** `temcoAi.modelFolder` — where downloads and the server live, empty for the profile's own folder. */
+	folder: string;
+	allowUnpinned: boolean;
+	/** `temcoAi.idleMinutes` — quiet minutes before the model server stops; 0 keeps it loaded. */
+	idleMinutes: number;
+	/** `temcoAi.serverPort` — where the tool server listens; 0 picks a free port. */
+	serverPort: number;
+	/** `temcoAi.serverIdleMinutes` — quiet minutes before the tool server stops; 0 keeps it running. */
+	serverIdleMinutes: number;
+	/** Whether `temcoAi.platformApi` names a service. The value itself is not sent to the page. */
+	platformApi: boolean;
 }
 
 export interface ArtifactFact {
@@ -74,15 +88,6 @@ export interface SettingsState {
 	ai?: AiState;
 	publishing?: PublishingState;
 }
-
-/** The startup views the manifest declares, in the order a person meets them. */
-export const START_OPTIONS: { value: string; label: string }[] = [
-	{ value: 'welcome', label: 'Welcome' },
-	{ value: 'project', label: 'The project' },
-	{ value: 'page', label: 'The last page' },
-	{ value: 'home', label: 'Overview' },
-	{ value: 'none', label: 'Nothing' }
-];
 
 /** What a page asks the host to do. Narrow on purpose: three kinds of message and no fourth. */
 export type Ask =

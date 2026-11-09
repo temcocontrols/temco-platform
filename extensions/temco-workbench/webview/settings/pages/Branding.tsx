@@ -1,11 +1,13 @@
-// Branding — the identity the shell draws: the mark, the wordmark and the accent.
+// Branding — the name and the accent this profile draws with.
 //
-// Two of the three rows are this profile's register and one is the editor's own colour theme, so the page says which is
-// which: the mark is compiled into the build and cannot be replaced from inside it, and this page does not pretend to try.
+// Two settings, and both are read where they land rather than recorded for a report: the name is what the welcome page and
+// every studio line draw, and the accent is written into the window's own colour customizations. The colour roles are not
+// settings at all — they are read from this frame's palette at runtime, so they are the theme's colours and not a sample.
 
-import { Dropdown, Input, Option } from '@fluentui/react-components';
-import { ArrowSyncRegular, ColorRegular, FolderOpenRegular, StarRegular, TextFontRegular } from '@fluentui/react-icons';
-import { Action, Callout, Entries, Entry, Hero, ICON, Page, Section } from '../chrome';
+import { Input } from '@fluentui/react-components';
+import { useEffect, useState } from 'react';
+import { ArrowSyncRegular, ColorRegular, StarRegular, TextFontRegular } from '@fluentui/react-icons';
+import { Action, Entries, Entry, Hero, ICON, Page, Section } from '../chrome';
 import { Ask, BrandingState } from '../state';
 
 interface Props {
@@ -31,25 +33,149 @@ function Mark({ size, label }: { size: number; label: string }): React.ReactElem
 	);
 }
 
+/** The palette a page of ours is drawn from, named the way the pages name it. */
+const ROLE_TOKENS = [
+	{ name: 'Accent', token: '--az-blue' },
+	{ name: 'Text', token: '--ink-1' },
+	{ name: 'Secondary', token: '--ink-2' },
+	{ name: 'OK', token: '--ok-ink' },
+	{ name: 'Warning', token: '--warn-ink' },
+	{ name: 'Error', token: '--err-ink' }
+];
+
+interface Role {
+	name: string;
+	colour: string;
+}
+
+function readRoles(): Role[] {
+	const style = getComputedStyle(document.body);
+	return ROLE_TOKENS.map((role) => ({ name: role.name, colour: style.getPropertyValue(role.token).trim() }));
+}
+
+/**
+ * The palette as the frame is drawing it.
+ *
+ * The variables are restated per theme on `body`, so the frame's class is the signal that they moved: a theme changed in
+ * General repaints these swatches without a reload.
+ */
+function useRoles(): Role[] {
+	const [roles, setRoles] = useState<Role[]>(readRoles);
+
+	useEffect(() => {
+		const update = (): void => setRoles(readRoles());
+		update();
+		const observer = new MutationObserver(update);
+		observer.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-vscode-theme-kind'] });
+		return () => observer.disconnect();
+	}, []);
+
+	return roles;
+}
+
+const ACCENT = /^#[0-9a-fA-F]{6}$/;
+
 export function Branding({ state, ask }: Props): React.ReactElement {
 	const set = (key: string, value: unknown): void => ask({ type: 'setting', key, value });
+	const roles = useRoles();
+
+	// The accent is typed, or picked, and only written when it is whole: a half-typed hex is not a colour.
+	const [accent, setAccent] = useState(state.accent);
+	useEffect(() => setAccent(state.accent), [state.accent]);
+	const commit = (value: string): void => {
+		if (ACCENT.test(value)) {
+			if (value.toLowerCase() !== state.accent.toLowerCase()) {
+				set('accent', value.toLowerCase());
+			}
+			return;
+		}
+		setAccent(state.accent);
+	};
 
 	return (
 		<Page>
 			<Hero
 				title="Branding"
 				mark={<ColorRegular fontSize={17} />}
-				desc="The identity the shell draws: the mark, the wordmark and the accent. The rows show them in place rather than on a specimen sheet."
-				note={<span className="az-note__text">{`${state.productName} · ${state.welcomePage === 'None' ? 'no welcome page' : `opens on ${state.welcomePage}`}`}</span>}
+				desc="The name this profile draws for itself, and the accent it draws it in. Both are read by the window rather than recorded for a report: the name is the welcome page's title and the studio line above every page of ours, and the accent is written into the workbench's own colours."
+				note={<span className="az-note__text">{`${state.productName} · ${accent}`}</span>}
 				actions={<Action label="Reset" glyph={<ArrowSyncRegular fontSize={ICON} />} onClick={() => ask({ type: 'command', command: 'temcoWorkbench.settings.resetBranding' })} />}
 			/>
+
+			<Section title="Identity" desc="Two settings, each read where it is drawn.">
+				<Entries>
+					<Entry
+						glyph={<TextFontRegular fontSize={15} />}
+						title="Product name"
+						desc="Drawn on the welcome page and on the studio line above every page of ours."
+						control={
+							<Input
+								className="setting-text"
+								size="small"
+								aria-label="Product name"
+								defaultValue={state.productName}
+								onBlur={(event) => {
+									const value = event.target.value.trim();
+									if (value.length > 0 && value !== state.productName) {
+										set('productName', value);
+									} else {
+										event.target.value = state.productName;
+									}
+								}}
+							/>
+						}
+					/>
+					<Entry
+						glyph={<ColorRegular fontSize={15} />}
+						title="Accent colour"
+						desc="Focus, primary buttons, badges, links and progress — written into the window's colour customizations."
+						control={
+							<>
+								<input
+									className="brand-swatch"
+									type="color"
+									aria-label="Accent colour"
+									value={ACCENT.test(accent) ? accent.toLowerCase() : state.accent}
+									onChange={(event) => setAccent(event.target.value)}
+									onBlur={(event) => commit(event.target.value)}
+								/>
+								<Input
+									className="setting-code"
+									size="small"
+									aria-label="Accent colour, six hex digits"
+									value={accent}
+									onChange={(_event, data) => setAccent(data.value)}
+									onBlur={() => commit(accent)}
+									onKeyDown={(event) => {
+										if (event.key === 'Enter') {
+											commit(accent);
+										}
+									}}
+								/>
+							</>
+						}
+					/>
+				</Entries>
+			</Section>
+
+			<Section title="Colour Roles" desc="The palette every page of ours is drawn from, read from this window's theme — not a setting.">
+				<div className="brand-palette">
+					{roles.map((role) => (
+						<div className="brand-palette__role" key={role.name}>
+							<span className="brand-palette__chip" style={{ background: role.colour }} aria-hidden="true" />
+							<span className="brand-palette__name">{role.name}</span>
+							<code className="brand-palette__value">{role.colour}</code>
+						</div>
+					))}
+				</div>
+			</Section>
 
 			<Section title="Application Mark" desc="The window, the taskbar and the title bar draw the same file at 64, 32 and 16 pixels.">
 				<Entries>
 					<Entry
 						glyph={<StarRegular fontSize={15} />}
 						title="Mark"
-						desc="resources/temco-icon.svg — compiled into the build, drawn before any extension runs."
+						desc="resources/temco-icon.svg — compiled into the build and drawn before any extension runs, so a profile cannot replace it."
 						control={
 							<>
 								<Mark size={40} label="Large" />
@@ -61,83 +187,6 @@ export function Branding({ state, ask }: Props): React.ReactElement {
 					/>
 				</Entries>
 			</Section>
-
-			<Section title="Colour Roles" desc="A theme changes colour roles, never layout: every surface here is drawn from the five roles below. Which theme is worn is set in General.">
-				<Entries>
-					<Entry
-						glyph={<ColorRegular fontSize={15} />}
-						title="Colour roles"
-						desc="Five roles draw every surface; a theme is a different set of them, not a different layout."
-						control={
-							<span className="brand-roles">
-								{state.roles.map((role) => (
-									<span className="brand-role" key={role.name}>
-										<span className="brand-role__chip" style={{ background: role.colour }} />
-										{role.name}
-									</span>
-								))}
-							</span>
-						}
-					/>
-				</Entries>
-			</Section>
-
-			<Section title="Identity" desc="Three settings this profile keeps: the name in the title bar, the accent, and the walkthrough a fresh profile opens.">
-				<Entries>
-					<Entry
-						glyph={<TextFontRegular fontSize={15} />}
-						title="Product name"
-						desc="Drawn in the title bar and the About window."
-						control={
-							<Input
-								size="small"
-								aria-label="Product name"
-								defaultValue={state.productName}
-								onBlur={(event) => set('productName', event.target.value)}
-							/>
-						}
-					/>
-					<Entry
-						glyph={<ColorRegular fontSize={15} />}
-						title="Accent colour"
-						desc="Used for focus, selection and the active container indicator. Six hex digits."
-						control={
-							<Input
-								size="small"
-								aria-label="Accent colour"
-								defaultValue={state.accent}
-								onBlur={(event) => set('accent', event.target.value)}
-							/>
-						}
-					/>
-					<Entry
-						glyph={<FolderOpenRegular fontSize={15} />}
-						title="Welcome page"
-						desc="The walkthrough shown on a fresh profile."
-						control={
-							<Dropdown
-								size="small"
-								aria-label="Welcome page"
-								value={state.welcomePage}
-								selectedOptions={[state.welcomePage]}
-								onOptionSelect={(_event, data) => {
-									if (data.optionValue !== undefined) {
-										set('welcomePage', data.optionValue);
-									}
-								}}
-							>
-								<Option value="Temco Platform">Temco Platform</Option>
-								<Option value="None">None</Option>
-							</Dropdown>
-						}
-					/>
-				</Entries>
-			</Section>
-
-			<Callout
-				title="The mark and the identity are this profile's register"
-				desc="The window's icon is compiled into the build and cannot be replaced from inside it. The theme is not here: it is General's row, because it is the window's look rather than the product's identity."
-			/>
 		</Page>
 	);
 }

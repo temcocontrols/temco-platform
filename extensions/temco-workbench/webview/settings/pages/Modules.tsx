@@ -1,11 +1,11 @@
 // Modules — what this window loads, and what is only reserved.
 //
-// The rows come from the extension host, not from a table: a module is here because it is loaded, and its state is whether
-// it has activated yet. What the sample adds is only what a manifest cannot say — the sentence naming what the module owns,
-// and the surface it opens.
+// The cards come from the extension host, not from a table: a module is here because it is loaded, and its state is whether
+// it has activated yet. What the sample adds is only what a manifest cannot say — the sentence naming what the module owns
+// — and the host decides, by module id, which page each card's Open link opens.
 
 import { ArrowSyncRegular, CubeRegular, FolderRegular } from '@fluentui/react-icons';
-import { Action, Callout, Entries, Entry, Facts, Foot, Hero, ICON, Page, Section } from '../chrome';
+import { Action, Callout, Card, Cards, Facts, Hero, ICON, Page, Section } from '../chrome';
 import { Ask, ModuleFact, ModulesState } from '../state';
 
 interface Props {
@@ -13,22 +13,37 @@ interface Props {
 	ask: (message: Ask) => void;
 }
 
-function ModuleRow(props: { module: ModuleFact; ask: (message: Ask) => void }): React.ReactElement {
+/**
+ * The state a module is in, as a word and a dot: green once it has activated, amber while it is loaded but has not
+ * activated yet, hollow when the build only reserves it.
+ */
+function ModuleState(props: { state: string }): React.ReactElement {
+	const tone = props.state.toLowerCase();
+	return <span className={`module-state module-state--${tone}`}>{props.state}</span>;
+}
+
+function ModuleCard(props: { module: ModuleFact; ask: (message: Ask) => void }): React.ReactElement {
 	const module = props.module;
 	return (
-		<Entry
+		<Card
 			glyph={<CubeRegular fontSize={15} />}
 			title={module.name}
 			desc={module.owns}
-			badge={
-				<span className="setting-badge">
-					{module.namespace === '' ? '' : `${module.namespace} · `}
-					{module.state}
-				</span>
+			idle={module.state === 'Reserved'}
+			meta={
+				<>
+					{module.namespace === '' ? null : <code className="module-namespace">{module.namespace}</code>}
+					<ModuleState state={module.state} />
+				</>
 			}
-			control={
+			action={
 				module.open === undefined ? undefined : (
-					<Action label="Open" kind="link" onClick={() => props.ask({ type: 'command', command: module.open as string })} />
+					<Action
+						label="Open"
+						kind="link"
+						title={`Open ${module.name}`}
+						onClick={() => props.ask({ type: 'command', command: module.open as string })}
+					/>
 				)
 			}
 		/>
@@ -46,7 +61,17 @@ export function Modules({ state, ask }: Props): React.ReactElement {
 				mark={<CubeRegular fontSize={17} />}
 				desc="A module is a built-in extension: it ships with the platform and is never installed, removed or updated from the window."
 				note={<span className="az-note__text">{`${String(loaded)} loaded · ${String(reserved)} reserved · ${state.version}`}</span>}
-				actions={<Action label="Show on Disk" glyph={<FolderRegular fontSize={ICON} />} onClick={() => ask({ type: 'command', command: 'temcoWorkbench.settings.showOnDisk' })} />}
+				actions={
+					<>
+						<Action
+							label="Check for Updates"
+							kind="primary"
+							glyph={<ArrowSyncRegular fontSize={ICON} />}
+							onClick={() => ask({ type: 'command', command: 'temcoWorkbench.settings.checkUpdates' })}
+						/>
+						<Action label="Show on Disk" glyph={<FolderRegular fontSize={ICON} />} onClick={() => ask({ type: 'command', command: 'temcoWorkbench.settings.showOnDisk' })} />
+					</>
+				}
 			/>
 
 			<Callout
@@ -59,11 +84,11 @@ export function Modules({ state, ask }: Props): React.ReactElement {
 				title="Loaded"
 				desc={`${String(loaded)} ${loaded === 1 ? 'module' : 'modules'}, read from the extension host: a module is here because it is loaded. Ids all live under the temcocontrols. scope, which the rows leave out.`}
 			>
-				<Entries>
+				<Cards>
 					{state.loaded.map((module) => (
-						<ModuleRow key={module.id} module={module} ask={ask} />
+						<ModuleCard key={module.id} module={module} ask={ask} />
 					))}
-				</Entries>
+				</Cards>
 			</Section>
 
 			<Section
@@ -75,11 +100,11 @@ export function Modules({ state, ask }: Props): React.ReactElement {
 				}
 			>
 				{reserved === 0 ? null : (
-					<Entries>
+					<Cards>
 						{state.reserved.map((module) => (
-							<ModuleRow key={module.id} module={module} ask={ask} />
+							<ModuleCard key={module.id} module={module} ask={ask} />
 						))}
-					</Entries>
+					</Cards>
 				)}
 			</Section>
 
@@ -87,13 +112,10 @@ export function Modules({ state, ask }: Props): React.ReactElement {
 				<Facts
 					items={[
 						{ title: 'Version', value: state.version, mono: true },
-						{ title: 'Channel', value: 'Stable' },
+						{ title: 'Channel', value: state.channel },
 						{ title: 'Optional modules', value: 'none' }
 					]}
 				/>
-				<Foot>
-					<Action label="Check for updates" kind="link" glyph={<ArrowSyncRegular fontSize={ICON} />} onClick={() => ask({ type: 'command', command: 'temcoWorkbench.settings.checkUpdates' })} />
-				</Foot>
 			</Section>
 		</Page>
 	);
