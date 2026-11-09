@@ -23,7 +23,7 @@ src/home.ts           the dashboard summary the startup falls back to
 src/needsPage.ts      what wants a person, said in full
 src/workspaces.ts     All Workspaces, one workspace, New Workspace, Templates
 src/learnPages.ts     Temco Learn: Home, T3000, an article, Downloads, Learning Paths
-src/settingsPages.ts  General (a Fluent bundle), Modules, Branding, AI Models, Publishing
+src/settingsPages.ts  General (a Fluent bundle), Modules, Branding, AI Runtime, Publishing
 webview/settings/     the General page: React, Fluent UI seeded with Azure, the kit's page language
 scripts/build-webview.mts  builds it into out/webview/settings/
 src/helpPages.ts      Welcome, Help, Keyboard Shortcuts, Logs, Report an Issue, About

@@ -43,7 +43,7 @@ const GROUPS: Group[] = [
 			{ label: 'General', note: 'its look, what it opens with, where work is kept, what it reports', icon: 'gear', command: 'temcoWorkbench.settings.general' },
 			{ label: 'Repositories', note: 'the default enterprise, where copies are cloned, and the GitHub token', icon: 'repo', command: 'temcoRepositories.settings' },
 			{ label: 'Modules', note: 'the modules loaded into this window, and what each owns', icon: 'package', command: 'temcoWorkbench.settings.modules' },
-			{ label: 'AI Models', note: 'what drafts, how much it reads, and what may leave the machine', icon: 'sparkle', command: 'temcoWorkbench.settings.ai' },
+			{ label: 'AI Runtime', note: 'the local model, the servers that run it, and what they may reach', icon: 'sparkle', command: 'temcoWorkbench.settings.ai' },
 			{ label: 'Publishing', note: 'where a release goes and what it may overwrite', icon: 'cloud-upload', command: 'temcoWorkbench.settings.publishing' },
 			{ label: 'Branding', note: 'the mark, the colour roles and the identity', icon: 'paintcan', command: 'temcoWorkbench.settings.branding' }
 		]

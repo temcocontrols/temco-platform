@@ -140,6 +140,12 @@ const ui = extension.exports;
 /** True when a view type — as a tab reports it, or as it was created — is a page of ours. */
 export const isOurViewType = ui.isOurViewType;
 
+/** The name this profile draws for itself — the Branding page's own row, or the build's name when it is unset. */
+export function productName(): string {
+	const name = vscode.workspace.getConfiguration('temcoWorkbench').get<string>('branding.productName', '').trim();
+	return name.length > 0 ? name : 'Temco Platform';
+}
+
 /** The editor column every page of ours opens in. */
 export const pageColumn = ui.pageColumn;
 

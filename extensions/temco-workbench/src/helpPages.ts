@@ -13,7 +13,7 @@
 import * as vscode from 'vscode';
 import { ISSUE_INCLUDES, LOG_FILES, SHORTCUTS } from './helpSample';
 import type { Selection } from './store';
-import { actionBar, button, cards, code, commandScript, entries, entry, entryRow, figures, floatAction, formFields, head, hero, icon, n, notice, optionCards, page, pageColumn, part, questions, section } from './ui';
+import { actionBar, button, cards, code, commandScript, entries, entry, entryRow, figures, floatAction, formFields, head, hero, icon, n, notice, optionCards, page, pageColumn, part, productName, questions, section } from './ui';
 
 export const HELP_WELCOME_VIEW_TYPE = 'temcoWorkbench.help.welcome';
 export const HELP_HOME_VIEW_TYPE = 'temcoWorkbench.help.home';
@@ -283,7 +283,7 @@ ${entryRow({
 			})}`;
 
 		return `${hero({
-			title: t('Temco Platform'),
+			title: productName(),
 			mark: 'dashboard',
 			desc: t('One window for the technical documentation of Temco products: the pages, the repositories they are written from, the AI that drafts them, the devices they describe, and the release that ships them. Everything runs on this machine; nothing is uploaded unless you publish it.'),
 			descWide: true,
@@ -399,7 +399,7 @@ function homeBody(): string {
 	const workspacePath = folder ? folder.uri.fsPath : '—';
 
 	return `${head({
-		studio: t('Temco Platform'),
+		studio: productName(),
 		title: t('Help'),
 		mark: 'info',
 		desc: t('What this window is, how to drive it, and what to send when it goes wrong. Everything here works with no network: the same pages are in the offline help file.'),
@@ -445,7 +445,7 @@ function keysBody(registered: string[]): string {
 	const reachable = SHORTCUTS.reduce((sum, group) => sum + group.items.filter((item) => item.command !== undefined && known.has(item.command)).length, 0);
 
 	return `${head({
-		studio: t('Temco Platform'),
+		studio: productName(),
 		title: t('Keyboard Shortcuts'),
 		mark: 'key',
 		desc: t('Every key this window binds. A command without a key can still be run from the command palette, which also lists the ones below.'),
@@ -574,7 +574,7 @@ async function logsBodyFor(context: vscode.ExtensionContext): Promise<string> {
 		: `<div class="mt-16">${code({ language: t('Log'), lines: tail.split('\n').map((text) => ({ text })) })}</div>`;
 
 	return `${head({
-		studio: t('Temco Platform'),
+		studio: productName(),
 		title: t('Logs'),
 		mark: 'output',
 		desc: t('One file per process, in this profile’s log folder. A log line names the process that wrote it, so a report can be read back without the window in front of you.'),
@@ -629,7 +629,7 @@ function issueBody(version: string): string {
 	const counted = ISSUE_INCLUDES.filter((item) => item.on).length;
 
 	return `${head({
-		studio: t('Temco Platform'),
+		studio: productName(),
 		title: t('Report an Issue'),
 		mark: 'alert',
 		desc: t('A report that can be reproduced is a report that gets fixed. This page collects the facts you would otherwise be asked for, and leaves out anything private.')
@@ -678,7 +678,7 @@ function aboutBody(): string {
 	const reserved = own.length - active;
 
 	return `${head({
-		studio: t('Temco Platform'),
+		studio: productName(),
 		title: t('About'),
 		mark: 'info',
 		desc: t('{0} {1} — the window, the modules that ship with it, and the versions of what it depends on.', vscode.env.appName, vscode.version),

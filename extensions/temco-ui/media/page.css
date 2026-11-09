@@ -3629,6 +3629,12 @@ body {
 	line-height: 16px;
 }
 
+/* Breadcrumbs switched off in the settings: the path above a page's title goes with the bar above an editor. An eyebrow
+   shares the class but is not a path — it names the kind of thing the page is about — so it stays. */
+.temco-no-crumbs .az-crumbs:not(.az-crumbs--eyebrow) {
+	display: none;
+}
+
 /* An eyebrow names the kind of thing the page is about, in the small caps a portal uses above a title. */
 .az-crumbs--eyebrow {
 	margin-bottom: var(--sp-1);

@@ -89,6 +89,10 @@ export function page(context: vscode.ExtensionContext, body: string, options: Pa
 	const seed = options.initialWork === undefined
 		? ''
 		: `<script nonce="${nonce}">window.__temcoInitial = ${JSON.stringify(options.initialWork).replace(/</g, '\\u003c')};</script>`;
+	// Breadcrumbs are one preference for the whole window: the bar above an editor and the line above a page's title are
+	// the same idea, so switching them off has to reach the pages too. A page is drawn without the line rather than
+	// corrected afterwards, which is why the decision is made here, in the one shell every page is built by.
+	const crumbs = vscode.workspace.getConfiguration('workbench').get<boolean>('breadcrumbs.enabled', true);
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -97,7 +101,7 @@ export function page(context: vscode.ExtensionContext, body: string, options: Pa
 <style>${pageCss(context)}${options.extraCss ?? ''}</style>
 <title>${escapeHtml(options.title ?? 'Temco')}</title>
 </head>
-<body>
+<body${crumbs ? '' : ' class="temco-no-crumbs"'}>
 ${icons(context)}
 <div class="view"><div class="view__inner">${body}</div></div>
 ${seed}

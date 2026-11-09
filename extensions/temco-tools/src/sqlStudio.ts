@@ -511,7 +511,8 @@ const TABLE_BAR_CSS = `
 
 /** The strip of tables the Data page picks from: it has the width for it, and no room for a column of names. */
 const TABLE_STRIP_CSS = `
-.tb-strip { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0 0; }
+/* Air above and below the strip: it is a picker, not a header, and it was sitting on the bar underneath it. */
+.tb-strip { display: flex; gap: 8px 6px; flex-wrap: wrap; margin: 18px 0 16px; }
 .tb-pick { display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 10px; border: 1px solid var(--border);
   border-radius: 0; background: none; color: var(--fg); font: inherit; font-size: 12px; line-height: 17px; cursor: pointer;
   transition: background-color 90ms ease-out, border-color 90ms ease-out; }

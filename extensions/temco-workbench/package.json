@@ -130,7 +130,7 @@
       },
       {
         "command": "temcoWorkbench.settings.ai",
-        "title": "AI Models",
+        "title": "AI Runtime",
         "icon": "$(sparkle)"
       },
       {
@@ -251,6 +251,84 @@
           ],
           "default": "welcome",
           "markdownDescription": "What opens in the editor when the extension is activated — the one decision that makes a first tab. Each choice falls through to the next when it cannot be honoured: `project`, then the page you were last on, then the overview. With the welcome page switched off, that chain never ends at the welcome page. Only `none` opens nothing."
+        },
+        "temcoWorkbench.start.panel": {
+          "type": "string",
+          "default": "temcoDashboard",
+          "markdownDescription": "The side panel the window opens with — an id from the left panel, as `viewsContainers.activitybar` declares it (for example `temcoDashboard`). The Settings page lists them by title rather than by id. An id this build does not have reveals nothing, and the window starts as it otherwise would."
+        },
+        "temcoWorkbench.updateChannel": {
+          "type": "string",
+          "enum": [
+            "Stable",
+            "Preview"
+          ],
+          "enumDescriptions": [
+            "The release readers get.",
+            "Release candidates, one version earlier than Stable."
+          ],
+          "default": "Stable",
+          "description": "Which channel a new version of the platform comes from. The channel is read when the window checks for updates; a change takes effect on restart."
+        },
+        "temcoWorkbench.branding.productName": {
+          "type": "string",
+          "default": "Temco Platform",
+          "description": "The name this profile draws for itself — the welcome page's title and the studio line above every page of ours."
+        },
+        "temcoWorkbench.branding.accent": {
+          "type": "string",
+          "default": "#0078d4",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "patternErrorMessage": "A six-digit hex colour, for example #0078d4.",
+          "markdownDescription": "The accent this profile draws with. Setting it writes the platform's colour roles into `#workbench.colorCustomizations#` — focus, primary buttons, badges, links and progress — so the window itself changes rather than a sample on a page. Clearing it puts back whatever was there before."
+        },
+        "temcoWorkbench.publishing.site": {
+          "type": "string",
+          "default": "https://learn.temcocontrols.com",
+          "description": "The address a release is published to."
+        },
+        "temcoWorkbench.publishing.path": {
+          "type": "string",
+          "default": "/t3000/{version}/",
+          "description": "The path under that address a version is written to. `{version}` is replaced by the version being published."
+        },
+        "temcoWorkbench.publishing.channel": {
+          "type": "string",
+          "enum": [
+            "Stable",
+            "Preview"
+          ],
+          "enumDescriptions": [
+            "The release readers get, indexed by search engines.",
+            "Published with noindex, so a search engine never sees a draft."
+          ],
+          "default": "Stable",
+          "description": "Which channel a release goes out on."
+        },
+        "temcoWorkbench.publishing.website": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish the rendered site."
+        },
+        "temcoWorkbench.publishing.pdf": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish one PDF per version, built from the same pages."
+        },
+        "temcoWorkbench.publishing.offlineHelp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish the Windows help file readers open from the Start menu."
+        },
+        "temcoWorkbench.publishing.searchIndex": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish the static index the site loads to answer a search."
+        },
+        "temcoWorkbench.publishing.aiIndex": {
+          "type": "boolean",
+          "default": false,
+          "description": "Publish local chunks for the AI panel. Never uploaded with the site."
         }
       }
     },

@@ -4,9 +4,9 @@
 //
 //   * **the dashboard** — the application itself, what it is made of and what to do first;
 //
-// It is also where the application *starts*: which tab opens, and which sidebar section comes forward when the
-// project being worked on changes. Both are layout decisions, so they are made here rather than in a module that
-// happens to own a view.
+// It is also where the application *starts*: which side panel is revealed and which tab opens, and which sidebar section
+// comes forward when the project being worked on changes. All three are layout decisions, so they are made here rather than
+// in a module that happens to own a view.
 //
 // Nothing here writes anything, and nothing here is a domain: every surface of the work is another module's page,
 // and every action on one is that module's own command.
@@ -60,7 +60,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	// five other pages that answer a question about the window itself. Welcome used to be its own panel and Help one
 	// page with everything on it; the mock gives six surfaces, each with one question to answer.
 	const help = new HelpPages(context, selection);
-	// The five choices the application asks a profile to make — General, Modules, Branding, AI Models, Publishing.
+	// The five choices the application asks a profile to make — General, Modules, Branding, AI Runtime, Publishing.
 	const settings = registerSettings(context);
 	// The Dashboard's own pages: Overview and Recent Activity. Coverage is the documentation module's report, and
 	// is linked from the Overview rather than drawn twice from the same registry.
@@ -211,9 +211,13 @@ function pagesComeBack(): Promise<boolean> {
 }
 
 /**
- * The tab the platform opens when it starts. `temcoWorkbench.start.open` decides, and nothing else.
+ * What the platform opens when it starts: the side panel and then the tab.
  *
- * The default is **the welcome page**, which is the VS Code arrangement: a fresh window opens on the page that says
+ * Two settings decide, and they are separate because they are two different parts of the window. `start.panel` names one of
+ * the items the left panel draws, and it is revealed first — a person meets the window on the panel they work from.
+ * `start.open` names the tab, and the rest of this comment is about it.
+ *
+ * The tab's default is **the welcome page**, which is the VS Code arrangement: a fresh window opens on the page that says
  * what the application is for, and the checkbox in that page's own footer turns it off. `project`, `page` and `home`
  * are the working choices — the work you were doing instead of the orientation page.
  *
@@ -229,6 +233,7 @@ function pagesComeBack(): Promise<boolean> {
  * none of ours to show.
  */
 async function openStart(dashboard: DashboardPages, help: HelpPages): Promise<void> {
+	await revealStartPanel();
 	const mode = vscode.workspace.getConfiguration('temcoWorkbench').get<string>('start.open', 'welcome');
 	if (mode === 'none') {
 		return;
@@ -255,6 +260,29 @@ async function openStart(dashboard: DashboardPages, help: HelpPages): Promise<vo
 		return;
 	}
 	dashboard.open('overview');
+}
+
+/** The side panel `temcoWorkbench.start.panel` names, revealed before any tab opens so the window starts on it. */
+const START_PANEL = 'start.panel';
+const DEFAULT_PANEL = 'temcoDashboard';
+
+/**
+ * Brings forward the side panel a profile chose.
+ *
+ * The value is the id of one of the application's own containers — the items the left panel draws — so revealing it is one
+ * command and no state of ours. An id this build does not have is ignored: a window whose startup panel was removed by an
+ * upgrade still needs to open its tab.
+ */
+async function revealStartPanel(): Promise<void> {
+	const panel = vscode.workspace.getConfiguration('temcoWorkbench').get<string>(START_PANEL, DEFAULT_PANEL);
+	if (panel.length === 0) {
+		return;
+	}
+	try {
+		await vscode.commands.executeCommand(`workbench.view.extension.${panel}`);
+	} catch {
+		// No container by that id: the tab still opens, which is the part a person came for.
+	}
 }
 
 /**

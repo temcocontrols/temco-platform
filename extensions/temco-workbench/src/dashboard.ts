@@ -11,7 +11,7 @@
 import * as vscode from 'vscode';
 import { collectPages, countStale, roots as readRoots, totals } from './docs';
 import { Catalog, DraftRow, EventRow, selection } from './store';
-import { button, commandScript, entries, entry, escapeHtml, head, n, page, pageColumn, notice, part, runCommand } from './ui';
+import { button, commandScript, entries, entry, escapeHtml, head, n, page, pageColumn, notice, part, productName, runCommand } from './ui';
 
 /** The view types the dashboard opens under. */
 export const OVERVIEW_VIEW_TYPE = 'temcoWorkbench.overview';
@@ -265,7 +265,7 @@ ${foldedEvents.length === 0 ? '' : `<details class="az-more"><summary>${escapeHt
 			});
 
 	return `${head({
-		studio: t('Temco Platform'),
+		studio: productName(),
 		title: t('Overview'),
 		mark: 'dashboard',
 		desc: t('What the platform holds, where the work stands, and the one thing that needs you next.'),
@@ -316,7 +316,7 @@ ${foldedEvents.length === 0 ? '' : `<details class="az-more"><summary>${escapeHt
 /** *Recent Activity* — every row the platform wrote about itself, newest first. */
 function activityBody(facts: DashboardFacts): string {
 	return `${head({
-		studio: t('Temco Platform'),
+		studio: productName(),
 		title: t('Recent Activity'),
 		mark: 'clock',
 		desc: t('Everything the platform recorded, newest first. A row is written by the module that did the thing, so nothing here is a second, derived history.'),
