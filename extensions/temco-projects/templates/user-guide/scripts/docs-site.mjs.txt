@@ -1,54 +1,146 @@
-// Renders the site a reader gets: `dist/docs`, one HTML page per shipped topic.
+// The build a documentation project leaves behind: `dist/docs`, the Markdown a reader can edit and the site publishes,
+// with the reading order and every file a page points at copied beside it.
 //
-// MSDN shape on purpose — a breadcrumb, the whole table of contents at the left with the current branch open, an
-// on-page list of sections, "Applies to", previous/next in reading order, and a permalink on every heading. The
-// metadata is the registry's: `order` is the TOC, `ship` decides what is published, `title` is the heading and the
-// breadcrumb, `audience` is the "Applies to" line.
+// Markdown and not HTML, on purpose. The site is a repository, and a page that is a `.md` file is a page anyone can fix
+// through an Edit link; nothing here renders, because the reader's browser does that from this same file. The offline
+// copies a reader downloads — the `.pdf` and the Windows help file — are built from these pages by the site, not here.
+//
+// `docs/help/registry.json` is the only source of truth: `ship` decides what is published, `title` becomes the page's
+// front matter, and `order` is one number for the whole manual, so a chapter can fall between two pages of its parent —
+// which is where the manual puts it.
 //
 // Temco Platform's Build Center runs this as the `docs:site` script and judges it by the files it leaves behind.
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const root = process.cwd();
 const registry = readJson(join(root, 'docs', 'help', 'registry.json')) ?? { areas: {}, pages: {} };
 const pkg = readJson(join(root, 'package.json')) ?? {};
-const version = String(pkg.version ?? '');
 const out = join(root, 'dist', 'docs');
 
 const pages = Object.entries(registry.pages ?? {})
 	.map(([id, page]) => ({ id, ...page }))
 	.filter((page) => page.ship !== false)
-	.sort((left, right) =>
-		String(left.area).localeCompare(String(right.area))
-		|| String(left.chapter).localeCompare(String(right.chapter))
-		|| (left.order ?? 0) - (right.order ?? 0)
-		|| left.id.localeCompare(right.id));
+	.sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.id.localeCompare(right.id));
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
-for (let index = 0; index < pages.length; index++) {
-	const page = pages[index];
-	const rendered = render(read(join(root, 'docs', page.id + '.md')));
-	const title = page.title ?? page.id;
-	const html = shell({
-		title,
-		breadcrumb: [areaTitle(page.area), page.chapter && page.chapter !== '(root)' ? titleCase(page.chapter) : '', title].filter(Boolean),
-		toc: toc(pages, page.id, registry.areas ?? {}),
-		sectionList: rendered.sections,
-		body: rendered.html,
-		appliesTo: page.audience ?? version,
-		previous: index > 0 ? pages[index - 1] : undefined,
-		next: index < pages.length - 1 ? pages[index + 1] : undefined
-	});
-	const file = join(out, page.id + '.html');
-	mkdirSync(join(file, '..'), { recursive: true });
-	writeFileSync(file, html);
+for (const page of pages) {
+	const body = read(join(root, 'docs', page.id + '.md'));
+	const file = join(out, page.id + '.md');
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, frontMatter(page) + withoutTitle(body, page.title ?? page.id));
 }
 
-writeFileSync(join(out, 'index.html'), landing(pages, registry.areas ?? {}));
-console.log('site: ' + pages.length + ' page(s) in ' + join('dist', 'docs'));
+writeFileSync(join(out, 'index.md'), landing(pages));
+
+// The reading order, as a file: a folder walk cannot know that "6.1 Graphic Screens" comes before "6.2 Programs", and
+// the order lives in the registry rather than in the pages. This is the only place it is written down.
+writeFileSync(
+	join(out, 'nav.json'),
+	JSON.stringify(
+		{
+			generated: new Date().toISOString().slice(0, 10),
+			pages: pages.map((page) => ({ href: page.id + '.md', title: page.title ?? page.id, order: page.order ?? 0 }))
+		},
+		null,
+		'\t'
+	) + '\n'
+);
+
+// What the site needs to know about the project itself, beside the pages rather than inside them.
+writeFileSync(
+	join(out, 'site.json'),
+	JSON.stringify(
+		{
+			title: String(pkg.name ?? 'Documentation'),
+			section: 'documentation',
+			...(typeof pkg.description === 'string' && pkg.description !== '' ? { summary: pkg.description } : {})
+		},
+		null,
+		'\t'
+	) + '\n'
+);
+
+// Everything a page points at — images, downloads, anything a topic carries — keeps the path the page gave it.
+const assets = copyAssets(join(root, 'docs'), out);
+console.log('docs: ' + pages.length + ' page(s) and ' + assets + ' asset(s) in ' + join('dist', 'docs'));
+
+/** The front matter that makes a page findable: its title as a reader reads it, and where it sits in the manual. */
+function frontMatter(page) {
+	const lines = ['---', 'title: ' + JSON.stringify(page.title ?? page.id), 'order: ' + Number(page.order ?? 0)];
+	if (typeof page.audience === 'string' && page.audience !== '') {
+		lines.push('appliesTo: ' + JSON.stringify(page.audience));
+	}
+	lines.push('---', '');
+	return lines.join('\n') + '\n';
+}
+
+/** A page's body without the title it repeats: the title is front matter now, so the first heading left is a section. */
+function withoutTitle(body, title) {
+	const lines = body.replace(/^\uFEFF/u, '').split(/\r?\n/u);
+	while (lines.length > 0 && lines[0].trim() === '') {
+		lines.shift();
+	}
+	const first = lines[0] ?? '';
+	if (/^#\s+/u.test(first) && first.replace(/^#\s+/u, '').trim() === String(title).trim()) {
+		lines.shift();
+		while (lines.length > 0 && lines[0].trim() === '') {
+			lines.shift();
+		}
+	}
+	return lines.join('\n').replace(/\s*$/u, '') + '\n';
+}
+
+/** The build's front page: what is here, in the order a reader would walk it. */
+function landing(pages) {
+	const name = String(pkg.name ?? 'Documentation');
+	const lines = ['---', 'title: ' + JSON.stringify(name), 'order: 0', '---', '', '# ' + name, ''];
+	if (typeof pkg.description === 'string' && pkg.description !== '') {
+		lines.push(pkg.description, '');
+	}
+	lines.push('## Contents', '');
+	for (const page of pages) {
+		const depth = String(page.id).split('/').length - 1;
+		lines.push('  '.repeat(depth) + '- [' + (page.title ?? page.id) + '](' + page.id + '.md)');
+	}
+	lines.push('');
+	return lines.join('\n');
+}
+
+function copyAssets(from, to) {
+	let copied = 0;
+	let entries = [];
+	try {
+		entries = readdirSync(from, { withFileTypes: true });
+	} catch {
+		return 0;
+	}
+	for (const entry of entries) {
+		if (entry.name.startsWith('.')) {
+			continue;
+		}
+		const source = join(from, entry.name);
+		const target = join(to, entry.name);
+		if (entry.isDirectory()) {
+			// `help` is the registry, not a page; it has no business in a reader's build.
+			if (entry.name === 'help') {
+				continue;
+			}
+			copied += copyAssets(source, target);
+			continue;
+		}
+		if (/\.md$/iu.test(entry.name)) {
+			continue;
+		}
+		mkdirSync(dirname(target), { recursive: true });
+		cpSync(source, target);
+		copied += 1;
+	}
+	return copied;
+}
 
 function read(file) {
 	try {
@@ -65,209 +157,3 @@ function readJson(file) {
 		return undefined;
 	}
 }
-
-function areaTitle(area) {
-	return titleCase(area);
-}
-
-function titleCase(text) {
-	const words = String(text ?? '').replace(/[-_/]+/g, ' ').replace(/\s+/g, ' ').trim();
-	return words.length === 0 ? '' : words.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
-}
-
-function slug(text) {
-	return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section';
-}
-
-function escapeHtml(text) {
-	return String(text)
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;');
-}
-
-/** The Markdown these pages are written in: headings, paragraphs, lists, fences, inline code, links, emphasis. */
-function render(markdown) {
-	const lines = String(markdown).replace(/\r\n/g, '\n').split('\n');
-	const html = [];
-	const sections = [];
-	let paragraph = [];
-	let list = false;
-	let fence = false;
-	let code = [];
-
-	const flush = () => {
-		if (paragraph.length > 0) {
-			html.push('<p>' + inline(paragraph.join(' ')) + '</p>');
-			paragraph = [];
-		}
-		if (list) {
-			html.push('</ul>');
-			list = false;
-		}
-	};
-
-	for (const line of lines) {
-		if (/^```/.test(line)) {
-			if (fence) {
-				html.push('<pre><code>' + escapeHtml(code.join('\n')) + '</code></pre>');
-				code = [];
-				fence = false;
-			} else {
-				flush();
-				fence = true;
-			}
-			continue;
-		}
-		if (fence) {
-			code.push(line);
-			continue;
-		}
-		if (/^#{1,6}\s/.test(line)) {
-			flush();
-			const level = /^#+/.exec(line)[0].length;
-			const text = line.replace(/^#+\s*/, '');
-			const id = slug(text);
-			if (level === 2 || level === 3) {
-				sections.push({ id, text });
-			}
-			html.push('<h' + level + ' id="' + id + '">' + inline(text) + ' <a class="anchor" href="#' + id + '" aria-label="Permalink">#</a></h' + level + '>');
-			continue;
-		}
-		if (/^\s*[-*]\s+/.test(line)) {
-			if (paragraph.length > 0) {
-				flush();
-			}
-			if (!list) {
-				html.push('<ul>');
-				list = true;
-			}
-			html.push('<li>' + inline(line.replace(/^\s*[-*]\s+/, '')) + '</li>');
-			continue;
-		}
-		if (line.trim().length === 0) {
-			flush();
-			continue;
-		}
-		paragraph.push(line.trim());
-	}
-	flush();
-	return { html: html.join('\n'), sections };
-}
-
-function inline(text) {
-	let out = escapeHtml(text);
-	out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
-	out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-	out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, href) =>
-		'<a href="' + String(href).replace(/\.md$/i, '.html') + '">' + label + '</a>');
-	return out;
-}
-
-/** The table of contents: area → chapter → topic, the current topic marked and its branch open. */
-function toc(pages, currentId, areas) {
-	const groups = new Map();
-	for (const page of pages) {
-		const area = page.area ?? 'overview';
-		if (!groups.has(area)) {
-			groups.set(area, new Map());
-		}
-		const chapters = groups.get(area);
-		const chapter = page.chapter && page.chapter !== '(root)' ? page.chapter : '';
-		if (!chapters.has(chapter)) {
-			chapters.set(chapter, []);
-		}
-		chapters.get(chapter).push(page);
-	}
-
-	const out = [];
-	for (const [area, chapters] of groups) {
-		out.push('<div class="toc__area"><span>' + escapeHtml(areas[area]?.title ?? areaTitle(area)) + '</span></div>');
-		for (const [chapter, topics] of chapters) {
-			if (chapter) {
-				out.push('<div class="toc__chapter">' + escapeHtml(titleCase(chapter)) + '</div>');
-			}
-			for (const topic of topics) {
-				const current = topic.id === currentId ? ' class="current" aria-current="page"' : '';
-				out.push('<a href="' + topic.id + '.html"' + current + '>' + escapeHtml(topic.title ?? topic.id) + '</a>');
-			}
-		}
-	}
-	return out.join('\n');
-}
-
-function shell(options) {
-	const sections = options.sectionList.length === 0
-		? ''
-		: '<nav class="onpage" aria-label="On this page"><div class="onpage__title">On this page</div>'
-			+ options.sectionList.map((section) => '<a href="#' + section.id + '">' + escapeHtml(section.text) + '</a>').join('')
-			+ '</nav>';
-
-	const pager = '<nav class="pager">'
-		+ (options.previous ? '<a href="' + options.previous.id + '.html" rel="prev">← ' + escapeHtml(options.previous.title ?? options.previous.id) + '</a>' : '<span></span>')
-		+ (options.next ? '<a href="' + options.next.id + '.html" rel="next">' + escapeHtml(options.next.title ?? options.next.id) + ' →</a>' : '<span></span>')
-		+ '</nav>';
-
-	return '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-		+ '<meta name="viewport" content="width=device-width,initial-scale=1">'
-		+ '<title>' + escapeHtml(options.title) + '</title>'
-		+ '<link rel="stylesheet" href="site.css">'
-		+ '</head><body>'
-		+ '<header class="top">' + escapeHtml(pkg.name ?? 'Documentation') + '</header>'
-		+ '<div class="layout">'
-		+ '<nav class="toc" aria-label="Contents">' + options.toc + '</nav>'
-		+ '<main><nav class="crumbs" aria-label="Breadcrumb">' + options.breadcrumb.map(escapeHtml).join(' / ') + '</nav>'
-		+ '<h1>' + escapeHtml(options.title) + '</h1>'
-		+ (options.appliesTo ? '<div class="applies">Applies to: ' + escapeHtml(options.appliesTo) + '</div>' : '')
-		+ options.body
-		+ pager
-		+ '<footer class="feedback">Was this page helpful? <a href="mailto:docs@example.invalid?subject=' + encodeURIComponent(options.title) + '">Tell us</a></footer>'
-		+ '</main>'
-		+ (sections ? '<aside class="rail">' + sections + '</aside>' : '')
-		+ '</div>'
-		+ '<link rel="stylesheet" href="site.css">'
-		+ '</body></html>';
-}
-
-function landing(pages, areas) {
-	const links = pages.map((page) =>
-		'<li><a href="' + page.id + '.html">' + escapeHtml(page.title ?? page.id) + '</a> <span>' + escapeHtml(areaTitle(page.area)) + '</span></li>').join('');
-	return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' + escapeHtml(pkg.name ?? 'Documentation')
-		+ '</title><link rel="stylesheet" href="site.css"></head><body><header class="top">'
-		+ escapeHtml(pkg.name ?? 'Documentation') + '</header><main class="landing"><h1>' + escapeHtml(pkg.name ?? 'Documentation')
-		+ '</h1><p>Everything this project publishes, in reading order.</p><ul>' + links + '</ul></main></body></html>';
-}
-
-writeFileSync(join(out, 'site.css'), `:root { --fg: #1f2328; --muted: #656d76; --line: #d0d7de; --accent: #0969da; }
-* { box-sizing: border-box; }
-body { margin: 0; font: 16px/1.6 "Segoe UI", system-ui, sans-serif; color: var(--fg); }
-.top { padding: 12px 24px; border-bottom: 1px solid var(--line); font-weight: 600; }
-.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr) 220px; gap: 32px; padding: 24px; max-width: 1280px; margin: 0 auto; }
-.toc { font-size: 14px; }
-.toc__area { margin-top: 16px; font-weight: 600; }
-.toc__chapter { margin: 8px 0 4px 12px; color: var(--muted); }
-.toc a { display: block; padding: 2px 8px 2px 24px; color: var(--fg); text-decoration: none; border-left: 2px solid transparent; }
-.toc a:hover { background: #f6f8fa; }
-.toc a.current { border-left-color: var(--accent); color: var(--accent); font-weight: 600; }
-.crumbs { font-size: 13px; color: var(--muted); }
-.applies { display: inline-block; margin: 8px 0 16px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; color: var(--muted); }
-h1 { margin: 8px 0 0; font-size: 32px; }
-h2 { margin-top: 32px; font-size: 24px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
-.anchor { opacity: 0; font-size: 14px; text-decoration: none; color: var(--muted); }
-h2:hover .anchor, h3:hover .anchor { opacity: 1; }
-.onpage__title { font-weight: 600; margin-bottom: 6px; }
-.onpage a { display: block; font-size: 13px; color: var(--muted); text-decoration: none; padding: 2px 0; }
-.onpage a:hover { color: var(--accent); }
-pre { background: #f6f8fa; padding: 12px; overflow: auto; border-radius: 6px; }
-code { font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
-table { border-collapse: collapse; }
-th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
-.pager { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
-.feedback { margin-top: 24px; font-size: 13px; color: var(--muted); }
-.landing { max-width: 720px; margin: 0 auto; padding: 24px; }
-.landing ul { list-style: none; padding: 0; }
-.landing li { padding: 8px 0; border-bottom: 1px solid var(--line); }
-.landing li span { color: var(--muted); font-size: 13px; margin-left: 8px; }
-@media (max-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr); } .rail { display: none; } }
-`);

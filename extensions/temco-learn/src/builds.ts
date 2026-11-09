@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import { projectNameOf, projectsRoot, slugOf, workRoot } from './site';
 
 export interface Build {
-	/** The folder that holds `index.html`: what gets copied into the site. */
+	/** The folder that holds `index.html` or, for a Markdown build, `index.md`: what gets copied into the site. */
 	folder: string;
 	/** The name the build gives itself in its own index, or the folder it was found in. */
 	title: string;
@@ -47,7 +47,8 @@ export async function findBuilds(): Promise<Build[]> {
 	const found: Build[] = [];
 	for (const root of roots) {
 		for (const folder of await buildFolders(root)) {
-			if (!fs.existsSync(path.join(folder, 'index.html'))) {
+			// A build names its front page one of two ways: HTML a generator rendered, or the Markdown a project wrote.
+			if (!fs.existsSync(path.join(folder, 'index.html')) && !fs.existsSync(path.join(folder, 'index.md'))) {
 				continue;
 			}
 			const fallback = path.basename(path.dirname(path.dirname(folder)));

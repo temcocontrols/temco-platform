@@ -99,7 +99,10 @@ interface Found {
 
 const place = load(join(out('temco-repositories'), 'workarea.js')) as Place;
 const builds = load(join(out('temco-learn'), 'builds.js')) as { findBuilds(): Promise<Found[]> };
-const site = load(join(out('temco-learn'), 'site.js')) as { slugOf(title: string): string };
+const site = load(join(out('temco-learn'), 'site.js')) as {
+	slugOf(title: string): string;
+	buildPages(root: string): Promise<{ href: string; title: string; kind?: 'md' | 'build' }[]>;
+};
 
 const group = suite();
 const test = (name: string, run: () => Promise<void> | void): void => group.test(name, run);
@@ -118,6 +121,9 @@ function write(file: string, content = 'x'): void {
 }
 
 const page = (title: string): string => `<html><head><title>${title}</title></head><body></body></html>`;
+
+/** A page as a documentation project writes it: the title in front matter, where the catalog reads it. */
+const markdown = (title: string, body = 'Body.'): string => `---\ntitle: "${title}"\norder: 10\n---\n\n${body}\n`;
 
 // ---------- where a project's folder goes ----------
 
@@ -200,6 +206,37 @@ test('a build outside every project folder falls back to the name it gives itsel
 		write(join(world.root, 'dist', 'site', 'index.html'), page('Loose Build'));
 		const [build] = await builds.findBuilds();
 		assert.equal(build.id, 'loose-build');
+	} finally {
+		rmSync(world.keep, { recursive: true, force: true });
+	}
+});
+
+test('a Markdown build is a build, and names itself from its own front matter', async () => {
+	const world = space();
+	try {
+		write(join(world.root, 't3000', 'dist', 'docs', 'index.md'), markdown('T3000 documentation'));
+		write(join(world.root, 't3000', 'dist', 'docs', 'control', 'inputs.md'), markdown('Inputs'));
+		const [build] = await builds.findBuilds();
+		assert.equal(build.id, 't3000');
+		assert.equal(build.title, 'T3000', 'the title is short of the word "documentation"');
+	} finally {
+		rmSync(world.keep, { recursive: true, force: true });
+	}
+});
+
+test('a Markdown page is listed without its extension, so it reads like a page and not a file', async () => {
+	const world = space();
+	try {
+		write(join(world.root, 't3000', 'dist', 'docs', 'index.md'), markdown('T3000'));
+		write(join(world.root, 't3000', 'dist', 'docs', 'control', 'inputs.md'), markdown('Inputs'));
+		const pages = await site.buildPages(join(world.root, 't3000', 'dist', 'docs'));
+		assert.deepEqual(
+			pages.map((one) => ({ href: one.href, title: one.title, kind: one.kind })),
+			[
+				{ href: 'index', title: 'T3000', kind: 'md' },
+				{ href: 'control/inputs', title: 'Inputs', kind: 'md' }
+			]
+		);
 	} finally {
 		rmSync(world.keep, { recursive: true, force: true });
 	}

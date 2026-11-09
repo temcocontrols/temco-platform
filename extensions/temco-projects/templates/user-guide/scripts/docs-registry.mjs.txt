@@ -21,9 +21,12 @@ const orders = new Map();
 for (const file of markdownFiles(docs)) {
 	const parts = relative(docs, file).split(sep);
 	const name = parts.pop().replace(/\.md$/i, '');
-	const area = parts[0] ?? 'overview';
-	const chapter = parts[1] ?? '';
-	const id = [area, ...(chapter ? [chapter] : []), name].join('/');
+	// The id is the whole path under `docs/`, because a page's address is its path: `control/inputs/range-setting/menu`.
+	// A chapter is every folder below the area, so a chapter inside a chapter keeps its own name. A page at the top of
+	// `docs/` is an area of its own, which is what made the old `parts[1]` rule invent an "overview" folder out of nothing.
+	const area = parts[0] ?? name;
+	const chapter = parts.slice(1).join('/');
+	const id = [...parts, name].join('/');
 	const heading = /^#\s+(.+)$/m.exec(readFileSync(file, 'utf8'))?.[1]?.trim();
 	const kept = pages[id] ?? {};
 

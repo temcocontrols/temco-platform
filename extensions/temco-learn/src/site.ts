@@ -1,8 +1,9 @@
 ﻿// What the site holds, and how a build gets into it.
 //
 // The site is its own repository (see `siteRepo.ts`). Its pages come from two places inside that checkout: Markdown a
-// person writes under `content/<project>/<version>/`, and a project's own build HTML copied under
-// `public/imported/<project>/<version>/`. The repository's `npm run catalog` folds both into `public/catalog.json`, and
+// person writes under `content/<project>/<version>/` — where a documentation project's own build lands, because a
+// Markdown build is content — and a rendered HTML build copied under `public/imported/<project>/<version>/` when the
+// generator someone used only speaks HTML. The repository's `npm run catalog` folds both into `public/catalog.json`, and
 // that file is the only thing read here - the same file the website reads, so the panel cannot list a page the site does
 // not have.
 //
@@ -188,11 +189,16 @@ export interface Added {
 }
 
 /**
- * Copy one build into the site as `public/imported/<project>/<version>/`.
+ * Copy one build into the site: Markdown pages as `content/<project>/<version>/`, HTML pages as
+ * `public/imported/<project>/<version>/`.
  *
- * The build is copied as it stands - its pages are the generator's. Adding the same version twice replaces it, because
+ * The build is copied as it stands — its pages are the generator's. Adding the same version twice replaces it, because
  * rebuilding a version and importing it again is the ordinary way to fix a page, not a mistake to refuse. The catalog
  * has to run afterwards; this only puts the bytes and the `site.json` in place.
+ *
+ * Which folder a build lands in is decided by what it holds. Markdown is the site's own shape — the catalog reads it,
+ * the Edit link points at it, and a reader can fix a page on GitHub — so a Markdown build becomes content. HTML is a
+ * build someone else rendered, and it is kept beside the catalog as it came.
  */
 export async function importBuild(options: {
 	repo: string;
@@ -205,7 +211,8 @@ export async function importBuild(options: {
 	/** The folder a build wrote. */
 	built: string;
 }): Promise<Added> {
-	const relative = path.join('public', 'imported', options.id, options.version);
+	const markdown = (await buildPages(options.built)).some((page) => page.kind === 'md');
+	const relative = markdown ? path.join('content', options.id, options.version) : path.join('public', 'imported', options.id, options.version);
 	const destination = path.join(options.repo, relative);
 	await fs.promises.mkdir(path.dirname(destination), { recursive: true });
 	await fs.promises.rm(destination, { recursive: true, force: true });
@@ -216,7 +223,7 @@ export async function importBuild(options: {
 	return {
 		project: options.id,
 		version: options.version,
-		pages: (await htmlPages(destination)).length,
+		pages: (await buildPages(destination)).length,
 		destination: relative
 	};
 }
@@ -239,8 +246,13 @@ async function writeProject(options: { repo: string; id: string; title: string; 
 	await fs.promises.writeFile(file, JSON.stringify(next, undefined, '\t') + '\n', 'utf8');
 }
 
-/** Every HTML page in a folder, in the build's own reading order, without the build's index in the list. */
-export async function htmlPages(root: string, under = ''): Promise<SitePage[]> {
+/** Every page in a folder, in the build's own reading order, without the build's index in the list.
+ *
+ * A build is one of two shapes and this is the only place that has to know it: HTML pages, which a generator wrote for
+ * a browser, and Markdown pages, which a documentation project writes for the site to publish. A Markdown page is
+ * addressed without its extension — `ports`, not `ports.md` — because that is how the site renders it.
+ */
+export async function buildPages(root: string, under = ''): Promise<SitePage[]> {
 	const found: SitePage[] = [];
 	const folder = path.join(root, under);
 	let entries: fs.Dirent[];
@@ -252,29 +264,38 @@ export async function htmlPages(root: string, under = ''): Promise<SitePage[]> {
 	for (const entry of entries) {
 		const next = under === '' ? entry.name : under + '/' + entry.name;
 		if (entry.isDirectory()) {
-			found.push(...(await htmlPages(root, next)));
+			found.push(...(await buildPages(root, next)));
 		} else if (entry.isFile() && entry.name.toLowerCase().endsWith('.html')) {
 			found.push({ href: next, title: (await titleOf(path.join(root, next))) ?? next });
+		} else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+			found.push({ href: next.replace(/\.md$/iu, ''), title: (await titleOf(path.join(root, next))) ?? next, kind: 'md' });
 		}
 	}
-	const first = (page: SitePage): number => (page.href.toLowerCase() === 'index.html' ? -1 : 0);
+	const first = (page: SitePage): number => (/^index(\.html)?$/iu.test(page.href) ? -1 : 0);
 	return found.sort((one, other) => first(one) - first(other) || one.href.localeCompare(other.href));
 }
 
-/** The name a build gives itself: the `<title>` of its index, without the site's own suffix. */
+/** The name a build gives itself: the `<title>` of its index, or the front matter of a Markdown one. */
 export async function projectNameOf(build: string): Promise<string | undefined> {
-	const title = await titleOf(path.join(build, 'index.html'));
+	const title = (await titleOf(path.join(build, 'index.html'))) ?? (await titleOf(path.join(build, 'index.md')));
 	return title === undefined ? undefined : shortName(title);
 }
 
 async function titleOf(file: string): Promise<string | undefined> {
-	let html: string;
+	let text: string;
 	try {
-		html = await fs.promises.readFile(file, 'utf8');
+		text = await fs.promises.readFile(file, 'utf8');
 	} catch {
 		return undefined;
 	}
-	const held = /<title>([\s\S]*?)<\/title>/iu.exec(html)?.[1];
+	if (file.toLowerCase().endsWith('.md')) {
+		const held = /^---\r?\n([\s\S]*?)\r?\n---/u.exec(text)?.[1];
+		const front = held === undefined ? undefined : /^title:\s*(.*)$/imu.exec(held)?.[1];
+		const heading = /^#\s+(.+)$/mu.exec(text)?.[1];
+		const title = (front ?? heading ?? '').trim().replace(/^["'](.*)["']$/u, '$1').trim();
+		return title === '' ? undefined : title;
+	}
+	const held = /<title>([\s\S]*?)<\/title>/iu.exec(text)?.[1];
 	const title = held === undefined ? undefined : unescapeText(held).trim();
 	return title === undefined || title === '' ? undefined : title;
 }

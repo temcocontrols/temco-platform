@@ -131,6 +131,7 @@ Five things take part. Knowing which is which is most of understanding the flow.
 |---|---|---|
 | **A project** | one body of documentation: its name, its pages, and the outputs it should produce | `<projectsFolder>/<slug>/`, for example `~/temco/projects/t3000` |
 | **A page** | one Markdown file, listed in the project's registry | `<project>/docs/<area>/*.md`, with the list in `docs/help/registry.json` |
+| **A picture** | a screenshot or diagram a page points at — `![the trend log](media/x.png)` | `<project>/docs/media/`. The build copies everything under `docs/` that is not a page, so a picture keeps the address the page gave it |
 | **A build** | the rendered site, made from those pages | `<project>/dist/site`, or `dist/docs` when your own generator wrote it |
 | **The site** | the Temco Learn repository: a React app that reads a catalog of projects | `temcoLearn.siteRepo`, by default `~/temco/temco-learn` |
 | **The published page** | what a reader opens on the internet | GitHub Pages, served from the site's `main` branch |
@@ -336,7 +337,7 @@ This is the step that produces a PDF or a `.chm` **for the docs module**: the co
 > **Screenshot — the version box, showing “project t3000” and the version field.**
 > `media/publishing/06-add-build.png`
 
-It finds every `dist/site` and `dist/docs` two folders below the window's folders, the projects folder and the working folder, and offers the ones that contain an `index.html`. The box then names the project it will land in (`project t3000`) and asks one question: which version. Type `1.0`.
+It finds every `dist/site` and `dist/docs` two folders below the window's folders, the projects folder and the working folder, and offers the ones that contain an `index.html` or, for a documentation project, an `index.md`. A Markdown build is added as content, so its pages become editable pages of the site; an HTML build is copied beside the catalog as it came. The box then names the project it will land in (`project t3000`) and asks one question: which version. Type `1.0`.
 
 What happens with your answer:
 
@@ -611,7 +612,7 @@ A guard nobody has watched refuse is a guard nobody can trust.
 
 | Step | What you see | What it usually is | Where to look |
 |---|---|---|---|
-| 4 | the build is not in the list to add | there is no `index.html` in it, or it sits more than two folders below a root | the folder itself. The roots are the window's folders, the projects folder and the working folder |
+| 4 | the build is not in the list to add | there is no `index.html` or `index.md` in it, or it sits more than two folders below a root | the folder itself. The roots are the window's folders, the projects folder and the working folder |
 | 6 | adding refuses | the site clone is not where `temcoLearn.siteRepo` says | that setting, and whether the folder has `package.json` and `content/sections.json` |
 | 6, 9 | the catalog did not run | there is no `npm ci` in the clone, or no `catalog` script | the site log |
 | 9 | publishing refuses | the site's guard: a version has no committed PDF | the guard lines in the log |
@@ -679,6 +680,7 @@ The table above covers the publishing pipeline. These are the rest:
 | a single-file page shows a broken picture | the picture's path in the Markdown is wrong, or it is not under the page's `media/` | fix the reference, because the same link is broken on the site |
 | the editor shows raw Markdown | the file opened as text | in `Pages`, right-click the page → **Open the Page**; or in Explorer, **Reopen Editor With…** → **Temco Editor** |
 | a picture is full width on the web but small in the editor | the page is older than the width support | reselect the picture, drag a handle, save |
+| **The Temco Editor surface is not built** — `markdown.js`, `markdown.css` are missing | the window is running compiled extension-host code whose webview bundle was never built, or was removed by a build that cleans `out/` | `npm run compile-temco` from the repository root, then **Developer: Reload Window**. A plain `npm run compile` stops before the webviews when an earlier check fails, so the application compiles and its pages still have no surface |
 
 The output explains itself: **View → Output → `Temco Docs`**. Every build, publish, export and generator decision is written there, with the path it used.
 

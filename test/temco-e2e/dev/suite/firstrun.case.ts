@@ -220,9 +220,12 @@ cases.push({
 		execFileSync(process.execPath, ['scripts/docs-registry.mjs'], { cwd: project, stdio: 'pipe' });
 		execFileSync(process.execPath, ['scripts/docs-site.mjs'], { cwd: project, stdio: 'pipe' });
 
-		const index = path.join(built, 'index.html');
-		assert.ok(fs.existsSync(index), 'the build the guide calls "build the site" left a site behind');
-		assert.match(fs.readFileSync(index, 'utf8'), /T3000 Platform/u, 'the person\'s own name is in their own site');
+		const index = path.join(built, 'index.md');
+		assert.ok(fs.existsSync(index), 'the build the guide calls "build the site" left pages behind');
+		const front = /^---\r?\ntitle:\s*"([^"]+)"/u.exec(fs.readFileSync(index, 'utf8'))?.[1];
+		assert.equal(front, 'T3000 Platform', 'the person\'s own name is in their own docs');
+		const page = fs.readFileSync(path.join(built, 'overview', 'getting-started.md'), 'utf8');
+		assert.match(page, /^---\r?\ntitle:\s*"Getting started"/u, 'every page carries the title the catalog sorts by');
 
 		const registry = JSON.parse(fs.readFileSync(path.join(project, 'docs', 'help', 'registry.json'), 'utf8')) as { pages: Record<string, unknown> };
 		assert.ok(Object.keys(registry.pages).length > 0, 'the generator indexed the pages it found');
@@ -250,8 +253,8 @@ cases.push({
 		assert.equal(added.version, '1.0');
 		assert.ok(added.pages >= 1, 'the pages the build wrote are the pages the site gets');
 
-		const published = path.join(siteRepo, 'public', 'imported', slug, '1.0', 'index.html');
-		assert.ok(fs.existsSync(published), 'the build is copied, not referenced: the site is a repository of its own');
+		const published = path.join(siteRepo, 'content', slug, '1.0', 'index.md');
+		assert.ok(fs.existsSync(published), 'a Markdown build becomes content: the build is copied, not referenced');
 
 		const described = JSON.parse(fs.readFileSync(path.join(siteRepo, 'content', slug, 'site.json'), 'utf8')) as { title?: string; section?: string };
 		assert.equal(described.title, name, 'the site names the project the way the person does');
@@ -273,7 +276,7 @@ cases.push({
 			held.close();
 		}
 
-		assert.ok(fs.existsSync(path.join(project, 'dist', 'docs', 'index.html')), 'and so is the build it made');
+		assert.ok(fs.existsSync(path.join(project, 'dist', 'docs', 'index.md')), 'and so is the build it made');
 	}
 });
 

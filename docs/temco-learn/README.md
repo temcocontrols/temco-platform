@@ -52,8 +52,8 @@ temco-learn/
 
 ## How content arrives
 
-1. A project builds its documentation — `dist/site`, or `dist/docs` when its own generator wrote it.
-2. **Add This Build to the Site** copies it to `public/imported/<id>/<version>/` and writes `content/<id>/site.json`. The project's id is its folder's name; its section defaults to `documentation`.
+1. A project builds its documentation — `dist/site`, or `dist/docs` when its own generator wrote it. A documentation project's own generator writes **Markdown** there (`index.md`, one `.md` per page, `nav.json`); a generator that only speaks HTML writes pages instead, and both are builds.
+2. **Add This Build to the Site** copies a Markdown build to `content/<id>/<version>/`, so its pages are content a reader can edit; an HTML build is copied to `public/imported/<id>/<version>/` as rendered. Either way it writes `content/<id>/site.json`. The project's id is its folder's name; its section defaults to `documentation`.
 3. `npm run catalog` turns both kinds of page into one version in one reading order, and rewrites `public/catalog.json`, `public/content/` and the download bundles.
 4. `npm run pdf` prints the PDFs and mirrors them into `public/pdf/`; `npm run chm` compiles the help files and writes `public/download/manifest.json`.
 

@@ -387,7 +387,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		}
 		const builds = await findBuilds();
 		if (builds.length === 0) {
-			complain('Nothing to add: no build was found. Build a project first - a build is a folder with an index.html in it.');
+			complain('Nothing to add: no build was found. Build a project first - a build is a folder with an index.html or an index.md in it.');
 			return;
 		}
 		const chosen =
