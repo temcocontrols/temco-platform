@@ -1,8 +1,23 @@
 # Temco Learn — the published site
 
-The website readers open: `https://temcocontrols.github.io/temco-learn/`. It serves what the authoring side imports — one project per version, each with its own downloads — and it has no authoring, no drafts and no editing of its own.
+**What it is.** The website readers open: `https://temcocontrols.github.io/temco-learn/`. Static and read-only — no authoring, no drafts, no editing. A project's documentation is written in [Temco Platform](../temco-platform/README.md); this repository serves the result.
 
-It is its own repository (`temcocontrols/temco-learn`), cloned to `~/temco/temco-learn` unless `temcoLearn.siteRepo` says otherwise. The application is a client of that checkout, not its owner.
+**How it relates.** One direction only: the platform builds a project and imports that build here; nothing is ever written back to a project's sources.
+
+```text
+Temco Platform      pages → build → Add a Build → Make the Downloads → Publish
+Temco Learn         catalog → guard → build → deploy
+```
+
+| Step | Who does it | What it leaves behind |
+|---|---|---|
+| a project's pages | the platform | `dist/site` inside the project folder |
+| **Add This Build to the Site** | the platform, in this clone | `public/imported/<id>/<version>/` and `content/<id>/site.json` |
+| **Make the Downloads** | the platform, in this clone | `public/pdf/<id>/<version>.pdf`, `public/chm/…`, `public/download/manifest.json` |
+| **Publish** | the platform, in this clone | one commit and a push to `main` |
+| `catalog` → `guard` → `build:fast` | this repository's CI | `public/catalog.json` it then deploys as `dist/` |
+
+The full path, from an empty folder to a live page, is [getting-started.md](../temco-platform/getting-started.md). It is its own repository (`temcocontrols/temco-learn`), cloned to `~/temco/temco-learn` unless `temcoLearn.siteRepo` says otherwise — the application is a client of that checkout, not its owner.
 
 ## Stack
 

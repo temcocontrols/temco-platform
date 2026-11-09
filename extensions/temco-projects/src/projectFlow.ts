@@ -39,7 +39,23 @@ export interface PinnedRepository {
 }
 
 /** What the flow offers when it opens. The mock's defaults, over whatever sources the catalog has. */
-const DEFAULTS = { name: 'Test1', version: '1.0', folder: '~/temco' };
+const DEFAULTS = { name: 'Test1', version: '1.0' };
+
+/**
+ * Where a new project's folder is written when the field is left alone.
+ *
+ * The same three keys every other module reads: the projects folder, the working area when that is empty, and the home
+ * folder when neither is set. A template that wrote itself into `~/temco` while removal looked in `~/temco/projects/t3000`
+ * would leave a folder behind that nobody could find or delete.
+ */
+function defaultFolder(): string {
+  const projects = vscode.workspace.getConfiguration('temcoRepositories').get<string>('projectsFolder');
+  if (projects !== undefined && projects.trim().length > 0) {
+    return projects.trim();
+  }
+  const area = vscode.workspace.getConfiguration('temcoRepositories').get<string>('workspaceFolder');
+  return area !== undefined && area.trim().length > 0 ? area.trim() : '~/temco';
+}
 
 /** What a project can build. One build produces every one of them, so they are ticks, not a choice. */
 export const TARGETS = [
@@ -588,9 +604,9 @@ interface ImportOutcome {
  * while a template writes its tree into a folder of the project's own inside the one it names.
  */
 function resolveFolder(text: string, name: string, under: boolean): vscode.Uri {
-	const base = text.trim() || DEFAULTS.folder;
+	const base = text.trim() || defaultFolder();
 	const expanded = expand(base);
-	const folder = under ? path.join(expanded, name.replace(/[^A-Za-z0-9]+/g, '') || 'Project') : expanded;
+	const folder = under ? path.join(expanded, slugOf(name)) : expanded;
 	return vscode.Uri.file(folder);
 }
 
@@ -846,7 +862,7 @@ ${empty}
 	])}
 		<div data-starter-folder hidden>
 			${formFields([
-		{ label: 'Write it under', control: `<input class="az-input" data-field="folder" value="${esc(DEFAULTS.folder)}" aria-label="Folder">`, hint: 'A path; ~ is your home folder. The project name becomes the folder under it.', wide: true }
+		{ label: 'Write it under', control: `<input class="az-input" data-field="folder" value="${esc(defaultFolder())}" aria-label="Folder">`, hint: 'A path; ~ is your home folder. The project name becomes the folder under it.', wide: true }
 	])}
 		</div>
 	</div>

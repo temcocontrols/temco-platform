@@ -1,9 +1,61 @@
 # Getting started
 
-This is the guide for anyone new to Temco Platform: how to go from an empty folder to a page on **Temco Learn**, the published documentation site. It is one path, in order, and every step names a file you can look at before you go on — so if something goes wrong you know which step it happened in, not just that the end did not work.
+**Temco Platform is where product documentation is written and published.** It is a desktop application built on VS Code: in it a person writes pages, groups them into a **project**, builds that project into a website with a printable PDF and a Windows help file, and publishes the result to **Temco Learn** — the documentation site readers actually open, at `https://temcocontrols.github.io/temco-learn/`.
+
+This guide is that whole journey in one pass: an empty folder at one end, a live page at the other. It is written for someone who has never opened the application, and nothing in it assumes a background in VS Code, Git, or the site's own code — where an idea like that cannot be avoided (a commit, a catalog), it is explained at the step that needs it.
 
 > **Screenshot — the finished result: a project card under Documentation, opened to a page, with the version selector and the download menu visible.**
 > `media/publishing/00-published-page.png`
+
+## Who this is for
+
+| If you are… | this guide gets you to |
+|---|---|
+| **writing documentation** for a Temco product — T3000, a controller, a protocol | a project of your own, built and live under Documentation on the site |
+| **taking over documentation that already exists** — a folder of Markdown, a Word manual, a compiled `.chm` | the same, starting from *Import a document set* in step 2, with your existing pages converted once |
+| **working inside a product repository** that already has `docs/` and its own build scripts | the same, with your repository's own `docs:site` / `build:help:dry` scripts doing the building instead of the built-in generator |
+| **reviewing someone else's documentation** | enough of the flow to read what they changed, and to publish it |
+
+You do not need to be the person who set the machine up. If someone else did, [Before the first time](#before-the-first-time) tells you how to check that the three settings and the site clone are right before you start.
+
+## How to use this guide
+
+- **Read steps 1–9 in order, once.** After that, jump straight to [Running it again](#running-it-again), which is what everyday work looks like.
+- **Every step is three parts:** what you do, **You should see** — a file or a screen to check — and **If not**, the usual cause. If a step's file is not there, that is the step that failed; nothing after it is worth testing yet.
+- **Buttons are named as they appear** in the palette, with the command id in backticks beside them — `temcoDocs.buildSite`. Type the id into the Command Palette (`Ctrl+Shift+P`) when a button is hidden or unavailable.
+- **Paths use `~` for your home folder.** Windows paths are shown with backslashes; on macOS and Linux the same path uses `/`, and the only truly Windows-only piece is the `.chm`, which needs the help compiler.
+- **This document is meant to be read with the application open**, not memorised. Keep it beside the window.
+
+## What you need before you start
+
+| Need | Why |
+|---|---|
+| the application installed and running | this guide is about using it, not installing it |
+| write access to the `temcocontrols/temco-learn` repository, or someone who has it | the last step pushes a commit there; without access everything before it still works and stops at *publish* |
+| git configured with your GitHub account | a publish is `git add`, `commit` and `push`, under your name |
+| the site clone on this machine | `~/temco/temco-learn` unless you choose otherwise — the Site page clones it for you |
+| an hour, the first time | steps 2 and 7 account for most of it |
+| an hour less, every time after | a repeat publish is four commands and about two minutes |
+
+## In this guide
+
+| Section | Answers |
+|---|---|
+| [What you are making](#what-you-are-making) | what a project, a build and the site are, and where each one lives |
+| [The general flow](#the-general-flow) | the five acts, what each writes, and what a reader notices |
+| [Words this guide uses](#words-this-guide-uses) | page id, area, chapter, version, section, catalog, guard, downloads |
+| [What you will have when you are done](#what-you-will-have-when-you-are-done) | the result, in five bullets |
+| [Before the first time](#before-the-first-time) | the setup that happens once per machine |
+| [Where things go](#where-things-go) | the three settings that decide every path |
+| [Steps 1–9](#step-1--check-the-folders) | the flow, in order, each with what you should see |
+| [Running it again](#running-it-again) | the four commands for the second, third and hundredth publish |
+| [The same flow, as files](#the-same-flow-as-files--t3000) | every file, and the step that wrote it |
+| [What the files look like](#what-the-files-look-like) | real snippets of the JSON you will meet |
+| [Reference: the outputs](#reference-what-the-outputs-mean) | the ticks, and which script each one runs |
+| [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) | the tests that prove the guards really refuse |
+| [When a step goes wrong](#when-a-step-goes-wrong) | symptom → cause → where to look |
+| [Beyond the flow](#beyond-the-flow) | sources, the editor, validate, release, export, translate |
+| [Appendix](#appendix--every-button-one-page) | every button, and the command id behind it |
 
 ## What you are making
 
@@ -17,7 +69,59 @@ Five things take part, and each one lives somewhere different. Knowing which is 
 | **The site** | the Temco Learn repository — a React app that reads a catalog of projects | `temcoLearn.siteRepo` — `~/temco/temco-learn` |
 | **The published page** | what a reader opens on the internet | GitHub Pages, served from the site's `main` branch |
 
-Three of those are yours and stay yours; the site is the site's own repository; the last one belongs to GitHub. That split is why the flow has separate steps instead of one button: writing, rendering, publishing and deploying are four different acts with four different failure modes.
+There are exactly **three places** in the whole flow, and it is worth having them straight before you start:
+
+| Place | Holds | Written by |
+|---|---|---|
+| your project folder | pages, the registry, and the build | you, and this application |
+| the site clone | one imported copy per version, the downloads, the catalog | this application, until you publish |
+| GitHub | a commit on `main`, and the deployed site | a publish, then the site's own CI |
+
+Three of the five things are yours and stay yours; the site is the site's own repository; the last one belongs to GitHub. That split is why the flow has separate steps instead of one button — and why each step fails differently.
+
+## The general flow
+
+```text
+YOUR PROJECT                    A BUILD                  ADD A BUILD                 MAKE THE DOWNLOADS            PUBLISH
+~/temco/projects/t3000     →    <project>/dist/site   →  the site clone         →   the site clone           →   GitHub Pages
+pages, registry, outputs        the rendered site        one version, uncommitted    the PDFs and help file        readers see it
+```
+
+| Act | Command | Reads | Writes | What it is for |
+|---|---|---|---|---|
+| write | the editor, `temcoDocs.newPage` | nothing | `docs/**/*.md`, `docs/help/registry.json` | the pages a person writes |
+| build | `temcoDocs.buildSite` (or `temcoProjects.buildProject`) | the pages and the registry | `<project>/dist/site` | turning pages into a site nobody has seen yet |
+| add | `temcoLearn.addBuild` | the build folder | `public/imported/<id>/<version>/`, `content/<id>/site.json` | putting one version of one project into the site |
+| make the downloads | `temcoLearn.site.downloads` | the catalog the last step wrote | `public/pdf/…`, `public/chm/…`, `public/download/manifest.json` | the files the deploy cannot build for itself |
+| publish | `temcoLearn.publish` → *Publish* | the clone's changes | one commit, one push | making all of it public |
+
+The nine steps below are this table with the details filled in. What each act changes, and who can tell:
+
+| Act | What changes on disk | What a reader would notice |
+|---|---|---|
+| a build | files inside your project folder only | nothing — nobody else can see it yet |
+| add a build | the site clone, **uncommitted** | nothing yet, but it is previewable at `localhost` |
+| make the downloads | the site clone, **uncommitted** | nothing yet — but the deploy would refuse without them |
+| publish | one commit on `main` | a minute later, the page is live |
+
+So there are four places the flow can stop, and they are named at the step they belong to: a build with no `index.html` to add, a site clone that is not where the setting says, a catalog that could not run, and a version whose PDF is missing. The last one is the one people trip over, which is why it has a step and a test of its own.
+
+## Words this guide uses
+
+The platform uses a handful of words that mean something more specific than they do elsewhere. One pass over this table saves a lot of guessing later.
+
+| Word | Means |
+|---|---|
+| **registry** | `docs/help/registry.json` — the list of every page: its title, where it sits, whether it ships. The application reads it; a build renders it |
+| **area** | the top level of the documentation — one per product or section, declared in the registry |
+| **chapter** | the folder a page sits in, inside an area |
+| **page id** | the page's path under `docs/` without `.md` — `t3000/commissioning/ports` is `docs/t3000/commissioning/ports.md` |
+| **build** | the rendered site produced from the pages, in `<project>/dist/site` |
+| **version** | one immutable entry of a project on the site, `1.0`, `1.1` — a rebuild is a new version, not an overwrite of the old one |
+| **section** | the category a project appears under on the site: `documentation`, `training`, `tests`, `products`, `qa`, `topics` |
+| **catalog** | `public/catalog.json` in the site — the one file the site's app reads to know what exists |
+| **downloads** | the PDFs and help files the site serves; the deploy cannot build them, so they are made on your machine and committed |
+| **guard** | the site's own check that every catalogued version has its downloads. CI runs it, and so does a publish before it commits |
 
 ## What you will have when you are done
 
@@ -27,34 +131,19 @@ Three of those are yours and stay yours; the site is the site's own repository; 
 - Your pages in the site's search index.
 - One commit on `main` in the site repository, and a green GitHub Actions run that deployed it.
 
-## The flow
-
-Four acts, four places. The diagram is the whole guide; the nine steps below are this diagram with the details filled in.
-
-```text
-1  your pages           ~/temco/projects/t3000/docs/
-2  a build              ~/temco/projects/t3000/dist/site
-3  Add a Build          ~/temco/temco-learn/public/imported/t3000/1.0/
-4  Make the Downloads   ~/temco/temco-learn/public/pdf/t3000/1.0.pdf
-5  Publish              ~/temco/temco-learn → GitHub Pages
-```
-
-| Act | What changes | What a reader would notice |
-|---|---|---|
-| A build | files inside your project folder | nothing — nobody else can see it yet |
-| Add a build | the site clone, uncommitted | nothing yet, but it is previewable at `localhost` |
-| Make the downloads | the site clone, uncommitted | nothing yet — but the deploy would refuse without them |
-| Publish | one commit on `main` | a minute later, the page is live |
-
 ## Before the first time
+
+The table above is about *you* — the application, access, an hour. This one is about the **machine**, and happens once. If somebody else set the machine up, work down it and confirm each line rather than assuming.
 
 | Do this once | Why |
 |---|---|
-| Node 22 or newer on your path | the site's own scripts run with `--experimental-strip-types` |
+| Node 22 or newer on your path (`node --version`) | the site's own scripts run with `--experimental-strip-types` |
 | Have the site clone — the Site page (**Open the Site Page**) clones `temcocontrols/temco-learn` for you | the site is its own repository; this application is a client of it |
 | `cd ~/temco/temco-learn && npm ci` | the site's dependencies, once per clone |
 | `npx playwright install chromium` | the PDFs are printed by a browser; without it *Make the Downloads* says so |
 | Optional: HTML Help Workshop | a `.chm` needs `hhc.exe`; without it the site simply has no help file |
+
+Three of those five are optional in practice: a site with no PDFs will build and preview, and one with no help file is still a site. What is not optional is Node and `npm ci` — without them the site's `catalog` cannot run, and step 6 will stop there.
 
 ## Where things go
 
@@ -70,7 +159,7 @@ Three settings decide every path in this guide. Set them once; each page reads t
 
 ## Step 1 — check the folders
 
-Open **Settings ▸ Repositories** and read the two sentences under the fields, not the fields themselves.
+Open **Settings ▸ Repositories** and read the two sentences under the fields, not the fields themselves. The page reads your saved settings, so it is the honest answer to "where will this go?".
 
 > **Screenshot — the Repositories settings page, with “Clones land in …” and “Projects are made in …” visible.**
 > `media/publishing/01-folders.png`
@@ -78,14 +167,28 @@ Open **Settings ▸ Repositories** and read the two sentences under the fields, 
 | | |
 |---|---|
 | **You should see** | `Clones land in …\temco\source` and `Projects are made in …\temco\projects` |
-| **If not** | the page reads your saved profile, so a value typed but not saved still shows as the old one — press *Choose* or leave the field, then look again. `Projects are made in …\temco` means the projects folder is still empty |
+| **If not** | a value you typed but did not save still shows as the old one — press *Choose* or leave the field, then look again. `Projects are made in …\temco` means the projects folder is still empty, and new projects will land beside the clones |
+
+The third setting this guide depends on is **not** on that page: `temcoLearn.siteRepo` is the site clone, set from the Site page with **Choose the Site Folder**, and `~/temco/temco-learn` unless you say otherwise. Check it now — the whole right-hand half of the flow writes there.
 
 ## Step 2 — create a project
 
-**Create a Project** (`temcoProjects.newProject`). Name it `T3000` and leave the outputs ticked: *Website*, *PDF*, *Offline help*, *Search index*.
+**Create a Project** (`temcoProjects.newProject`). Name it `T3000`, version `1.0`, and leave the outputs ticked: *Website*, *PDF*, *Offline help*, *Search index*.
 
 > **Screenshot — the create-project form, with the output ticks visible and a name typed in.**
 > `media/publishing/02-create-project.png`
+
+**Where the pages come from** is the choice that decides what exists when the form closes:
+
+| Starting point | What it does |
+|---|---|
+| **Start empty** | records the project and nothing else. Its folder, `docs/help/registry.json` and one area come from **Create the Project's Documentation Folder** (`temcoDocs.createProjectFolder`) |
+| **From a template** | writes a starter tree under the folder field — `docs/help/registry.json`, one area, two topics — named after the project, so `T3000` becomes `<projectsFolder>/t3000` |
+| **From a folder** | cites a folder that already exists on this machine as the pages it reads; nothing is copied |
+| **From a repository** | cites what the platform has already read — repositories, files and folders |
+| **Import a document set** | converts Word, RTF, HTML, an HTML folder or a CHM **once** into `docs/` and a registry |
+
+Either way, the project is recorded under the slug of its name (`T3000` → `t3000`), the sources it cites are recorded with it, and the outputs become its recipe. No source is ever written to: a project is a set of references, and its own folder holds only what it writes.
 
 | | |
 |---|---|
@@ -96,51 +199,94 @@ The folder is added to the window so its `docs/` shows in Explorer. That is expe
 
 ## Step 3 — write the pages
 
-**New Page** (`temcoDocs.newPage`) with T3000 selected, then type. Repeat for as many pages as you have.
+**New Page** (`temcoDocs.newPage`) with T3000 selected, then type. The palette offers the page kinds beside it — *New Article*, *New Task*, *New Reference*, *New Troubleshooting*, *New Release Note* — which differ only in their starter headings.
+
+Each page is a Markdown file **and** a row in `docs/help/registry.json`. Three rules explain almost every surprise later:
+
+| Rule | What it means |
+|---|---|
+| the **page id is its path** under `docs/`, without `.md` | `docs/t3000/commissioning/ports.md` is the id `t3000/commissioning/ports`, and the registry must name it exactly that |
+| `ship: false` keeps a page out of the built site | a page can exist, be edited, and still not appear |
+| `order` decides the position inside a chapter | two pages sharing a title or an `order` are a warning, not an error |
+
+A page registered whose file does not exist is an **error** the module reports on refresh — which is what makes the `missing` rows in `Pages` mean something.
 
 | | |
 |---|---|
 | **You should see** | a Markdown file under `~/temco/projects/t3000/docs/<area>/`, and `registry.json` listing it |
 | **If not** | the project has to be the **selected** project: the docs module reads the folders the selected project cites, not whatever folder happens to be open |
 
+Come back to this step whenever you have more to write. Nothing downstream notices until you build.
+
 ## Step 4 — build the site
 
-**Build the Site** (`temcoDocs.buildSite`), or *Build the Site* on the project page.
+**Build the Site** (`temcoDocs.buildSite`), or *Build the Site* on the project page. It builds the project that is **selected**, reading the folders that project cites — the folder does not have to be open.
 
 > **Screenshot — the Build Center after a build, with the new row and its artifact.**
 > `media/publishing/03-build.png`
+
+Two things can produce the site, and which one runs is decided by what is in the folder:
+
+| In the project folder | What runs | Where the site lands |
+|---|---|---|
+| a `package.json` with `docs:site` or `docs:build` | that script, after `docs:registry` when the repository has it | wherever the script writes — commonly `dist/site`, docfx's `dist/docs` |
+| neither | the **built-in generator** | `<project>/dist/site` |
+
+Either way the attempt is recorded in the Build Center (`temcoDocs.builds`) and everything the build wrote is recorded against it, so the Builds and Downloads pages can list real files rather than hopes.
 
 | | |
 |---|---|
 | **You should see** | `~/temco/projects/t3000/dist/site/index.html`, and a row in the Build Center (`temcoDocs.builds`) |
 | **If not** | a project made here has no `package.json`, so the built-in generator writes the site — the log says what it read. If your repository has `docs:site` or `docs:build`, that script runs instead, and it may write `dist/docs` |
 
-The exit code is never the verdict: what counts is a file that did not exist before the run and does now.
+The exit code is never the verdict: what counts is a file that did not exist before the run and does now. A generator that exits 0 and writes nothing has failed; one that exits 1 after writing the site has not.
 
 ## Step 5 — build the project's own outputs (only for a repository)
 
-Skip this unless T3000 cites a real repository clone under `~/temco/source/`. **Temco Projects: Build** (`temcoProjects.buildProject`) takes the outputs you ticked and runs the repository's own script for each one, once each.
+Skip this unless T3000 cites a real repository clone under `~/temco/source/`. **Temco Projects: Build** (`temcoProjects.buildProject`) takes the outputs you ticked and runs the repository's own script for each one, **once each**:
+
+| Ticked output | Script it looks for, in the repository |
+|---|---|
+| Website | `docs:site`, else `docs:build` |
+| Offline help | `build:help:dry` |
+| PDF | `build:help:dry`, else `docs:pdf` |
+| Search index, AI index | nothing — no script here writes them |
+
+`docs:registry` runs first when the repository has it, because it is what the other scripts read their structure from. The build then records every file that appeared during the run, whatever the exit codes said.
 
 | | |
 |---|---|
-| **You should see** | the terminal run `docs:registry` when the repository has it, then one script per ticked output — `docs:site` for *Website*, `build:help:dry` for *Offline help* — and the log list the files they left behind |
-| **If not** | the warning names the scripts it looked for. A repository with none of them ran nothing, which is the honest answer. A scaffolded project has no scripts at all: step 4 is its build |
+| **You should see** | the terminal run `docs:registry`, then the scripts above, and the log list the files they left behind |
+| **If not** | the warning names the scripts it looked for. A repository with none of them ran nothing, which is the honest answer. A scaffolded project has no `package.json` at all: step 4 is its build, and this step is not for it |
+
+This is the step that produces a PDF or a `.chm` **for the docs module** — the copies it records and the Build Center lists. The PDF that the *website* serves is a different file, made in step 7 from the site's own content.
 
 ## Step 6 — add the build to the site
 
-**Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the Publishing page.
+**Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the Publishing page. The page that lists every build on disk is `temcoLearn.addBuilds`.
 
 > **Screenshot — the version box, showing “project t3000” and the version field.**
 > `media/publishing/04-add-build.png`
 
-The box names the project it will land in — `project t3000` — and asks for one thing: the version. Type `1.0`.
+It finds every `dist/site` and `dist/docs` two folders below the window's folders, the projects folder and the working folder, and offers the ones with an `index.html`. The box then names the project it will land in — `project t3000` — and asks one question: the version. Type `1.0`.
+
+What it does with your answer:
+
+| | |
+|---|---|
+| copies | the whole build folder into `<siteRepo>/public/imported/t3000/1.0/` — adding the same version again **replaces** it |
+| records | `<siteRepo>/content/t3000/site.json` — the title and the section; a new project defaults to `documentation` |
+| catalogs | runs the site's own `npm run catalog`, which rewrites `public/catalog.json`, `public/search.json`, `public/content/` and the download bundles |
+| opens | the site page for that project and version, so the result is one click away |
 
 | | |
 |---|---|
 | **You should see** | `~/temco/temco-learn/public/imported/t3000/1.0/index.html`, `content/t3000/site.json`, and `t3000` with version `1.0` in `public/catalog.json` |
 | **If not** | the build must contain an `index.html`. The catalog is rebuilt by this step, so a failure here means the clone has no `npm ci` yet, or no `catalog` script |
 
-The project's id is **its folder's name**: a build in `<projectsFolder>/t3000/…` is always `t3000`, whatever its pages call themselves. Its section is `documentation` unless the project's `site.json` says otherwise.
+The project's id is **its folder's name**: a build in `<projectsFolder>/t3000/…` is always `t3000`, whatever its pages call themselves. Its section is `documentation` unless `site.json` says otherwise.
+
+**Repeat this step every time you rebuild.** A build is copied as one version, so a changed site is a *new* version (`1.1`, `2.0`) — re-adding `1.0` replaces what is already there, which is only what you want when fixing that same version.
 
 Adding a build is local. Nothing is published by this step.
 
@@ -151,6 +297,14 @@ Adding a build is local. Nothing is published by this step.
 > **Screenshot — the Publishing page, with the five steps visible and the downloads step running.**
 > `media/publishing/05-downloads.png`
 
+It runs the site's own scripts, in this order, and stops at the first real failure:
+
+| Script | Makes | If it fails |
+|---|---|---|
+| `build:fast` | the catalog, the search index and the bundle the PDFs are printed from | fatal — nothing else can run |
+| `pdf --strict` | one PDF per version, and one per Markdown page, mirrored into `public/pdf/` | fatal — usually no browser: `npx playwright install chromium` |
+| `chm` | the help files and `public/download/manifest.json` | a warning — a machine without `hhc.exe` still has a site |
+
 | | |
 |---|---|
 | **You should see** | `public/pdf/t3000/1.0.pdf`, `public/download/manifest.json`, and `public/chm/…` only when the help compiler is on the machine |
@@ -158,25 +312,66 @@ Adding a build is local. Nothing is published by this step.
 
 These files are the one thing the deploy cannot make for you: the site's CI has no browser and no `hhc.exe`, so a PDF is printed here and committed — and the deploy **refuses to ship a version whose PDF is missing**. That refusal is the guard you will meet in step 9 if you skip this step.
 
+**Redo this after every step 6.** Each new version needs its own PDF, and the guard counts versions, not projects.
+
 ## Step 8 — look at it before publishing
 
 **Start the Site** (`temcoLearn.site.start`).
+
+It builds the site first if `dist/index.html` is not there, then serves the built pages on one port — `temcoLearn.sitePort`, 1025 by default.
 
 | | |
 |---|---|
 | **You should see** | `http://localhost:1025/` with T3000 under **Documentation**, and its page opening from the card |
 | **If not** | the port is `temcoLearn.sitePort`; the site's log in the panel says whether the build or the server is the problem |
 
+What you see here is what a reader will see, minus the address. If a page is missing, the page is not registered or `ship` is false — go back to step 3 rather than rebuilding.
+
 ## Step 9 — publish
 
-**Publish** (`temcoLearn.publish`) opens the publishing page: what changed, the steps of a publish in order, and the button. Press *Publish* there, and confirm the message.
+**Publish** (`temcoLearn.publish`) opens the publishing page: what changed, the steps of a publish in order, and the button. Press *Publish* there, and confirm the message. **Publish Now** (`temcoLearn.publishNow`) is the same act from the palette.
+
+It does four things in order, and it stops at the first that says no:
+
+| | |
+|---|---|
+| 1 | runs the site's `catalog`, so what is committed matches what the pages say |
+| 2 | runs the site's **`guard`** — the same gate its CI runs — and refuses to commit when a version is missing a download |
+| 3 | `git add --all` and one commit; the message defaults to `docs: publish the site (<date>)`, and you can replace it |
+| 4 | `git push origin HEAD:main` |
+
+Nothing is ever force-pushed: if `main` carries work this clone does not know about, the push is refused, the commit stays local, and a pull followed by another publish fast-forwards it.
+
+Then the site's CI takes over: `pages.yml` runs its checks, builds the site, runs the same guard, and deploys `dist` to GitHub Pages — the address the log printed. A `v*` tag matching `package.json` instead packs the whole site as a zip for handing to somebody.
 
 | | |
 |---|---|
 | **You should see** | in the clone, `git log -1 --stat` shows the commit and `git status` is clean; the log says `pushed <commit>`; the GitHub Actions run on `main` is green; and the address the log printed loads the page a minute later |
 | **If not** | *the guard refused it* means step 7 was skipped for some version — the log names the missing file, and nothing was committed. *A refused push* means the clone is behind: pull, then publish again |
 
-What happens next is not this application's work: the push starts `pages.yml`, which runs the site's checks, builds it, runs the same guard, and deploys the result to GitHub Pages. A tag `v*` that matches `package.json` instead packs the whole site as a zip for handing to somebody.
+A publish carries everything waiting in the clone, not only the project you were working on. If that is not what you want, open the publishing page first: it lists the paths the commit would take before you press the button.
+
+## Running it again
+
+After the first publish, the loop is shorter than the guide above, because the folders, the project and the site clone already exist. What you re-run depends on what changed:
+
+| What changed | Build | Add | Downloads | Publish |
+|---|---|---|---|---|
+| pages only, same version | ✓ | ✓ (same version — it replaces) | ✓ | ✓ |
+| pages, and this is a new release | ✓ | ✓ (new version) | ✓ | ✓ |
+| nothing — you only want to push someone else's changes | — | — | — | ✓ |
+| the site's own code or content | — | — | — | ✓ |
+
+The four commands, in order:
+
+```text
+Temco Docs:    Build the Site                  temcoDocs.buildSite
+Temco Learn:   Add This Build to the Site      temcoLearn.addBuild
+Temco Learn:   Make the Downloads              temcoLearn.site.downloads
+Temco Learn:   Publish                         temcoLearn.publish
+```
+
+Two habits save the most time: **add a new version for a new release** (re-adding the same version replaces it, so readers lose the old one), and **redo the downloads every time you add** — the guard counts versions, so a new version without its PDF blocks the publish rather than the deploy.
 
 ## The same flow, as files — T3000
 
@@ -195,6 +390,46 @@ What happens next is not this application's work: the push starts `pages.yml`, w
 ├── public/catalog.json                   what the site reads; rewritten by steps 6 and 9
 └── dist/                                 step 9 — what CI deploys
 ```
+
+## What the files look like
+
+Three files carry the whole arrangement. Knowing their shape is how you tell a wrong page from a wrong build without guessing.
+
+**`~/temco/projects/t3000/docs/help/registry.json`** — written by the create flow and by every page you add. It is the only list of pages; nothing else decides what exists.
+
+```json
+{
+  "version": 1,
+  "areas": { "t3000": { "title": "t3000", "audience": "user", "noindex": false } },
+  "pages": {
+    "t3000/commissioning/ports": {
+      "title": "Ports and wiring",
+      "area": "t3000", "chapter": "commissioning", "order": 10,
+      "audience": "user", "ship": true, "owner": "docs"
+    }
+  }
+}
+```
+
+`ship: false` leaves a page out of the built site. `order` decides its place inside the chapter. The key (`t3000/commissioning/ports`) must equal the file's path under `docs/`, or the page counts as missing.
+
+**`~/temco/temco-learn/content/t3000/site.json`** — written once by step 6, and kept after that. It is how the site names the project and files it under a section.
+
+```json
+{ "title": "T3000", "section": "documentation" }
+```
+
+Add `"summary"` for the sentence shown on the project's card, and change `"section"` to move the whole project to another category.
+
+**`~/temco/temco-learn/public/catalog.json`** — generated, never edited. Every row is either a Markdown page the site owns or an imported page your build wrote, in one reading order.
+
+```json
+{ "projects": [ { "id": "t3000", "title": "T3000", "section": "documentation",
+                  "versions": [ { "version": "1.0",
+                                  "pages": [ { "href": "index.html", "title": "T3000", "kind": "build" } ] } ] } ] }
+```
+
+That `"kind": "build"` is the tell: the page came from your build, not from the site's own content. If it is missing after step 6, the catalog did not run.
 
 ## Reference: what the outputs mean
 
@@ -221,14 +456,14 @@ A guard nobody has watched refuse is a guard nobody can trust.
 
 ## When a step goes wrong
 
-| What you see | What it usually is | Where to look |
-|---|---|---|
-| the build is not in the list to add | no `index.html` in it, or it sits deeper than two folders below a root | the folder itself; the roots are the window's folders, the projects folder and the working folder |
-| adding refuses | the site clone is not where `temcoLearn.siteRepo` says | the setting, and that the folder has `package.json` and `content/sections.json` |
-| the catalog did not run | no `npm ci` in the clone, or no `catalog` script | the site log |
-| publishing refuses | the site's guard: a version has no committed PDF | the guard lines in the log |
-| publishing pushes, the site looks unchanged | the commit carried nothing — the clone matched the last publish | `git log` and `git status` in the clone |
-| the site page is wrong after a rebuild | the build was rebuilt but never added again as a new version | `public/catalog.json` and `public/imported/` |
+| Step | What you see | What it usually is | Where to look |
+|---|---|---|---|
+| 4 | the build is not in the list to add | no `index.html` in it, or it sits deeper than two folders below a root | the folder itself; the roots are the window's folders, the projects folder and the working folder |
+| 6 | adding refuses | the site clone is not where `temcoLearn.siteRepo` says | the setting, and that the folder has `package.json` and `content/sections.json` |
+| 6, 9 | the catalog did not run | no `npm ci` in the clone, or no `catalog` script | the site log |
+| 9 | publishing refuses | the site's guard: a version has no committed PDF | the guard lines in the log |
+| 9 | publishing pushes, the site looks unchanged | the commit carried nothing — the clone matched the last publish | `git log` and `git status` in the clone |
+| 6 | the site page is wrong after a rebuild | the build was rebuilt but never added again as a new version | `public/catalog.json` and `public/imported/` |
 
 ## Beyond the flow
 

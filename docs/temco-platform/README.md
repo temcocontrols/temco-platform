@@ -1,13 +1,32 @@
 # Temco Platform — architecture
 
-Temco Platform is a desktop application built on VS Code. Everything Temco builds is either **the shell** (application behaviour) or **a module** (a feature).
+Temco Platform is the **authoring** application: a desktop app built on a VS Code fork where documentation is written, organised into projects, built into a website — plus a whole-guide PDF and a Windows help file — and published to [Temco Learn](../temco-learn/README.md), the site readers open.
+
+Everything Temco builds is either **the shell** (application behaviour) or **a module** (a feature).
+
+```text
+write  →  build  →  add  →  make the downloads  →  publish  →  GitHub Pages
+```
+
+| Act | Where it happens | What it produces |
+|---|---|---|
+| write | the project's `docs/` folder, in the editor | Markdown pages and a registry |
+| build | the project folder, by its own scripts or the built-in generator | `dist/site` |
+| add | the site clone, by **Add This Build to the Site** | `public/imported/<id>/<version>/` |
+| make the downloads | the site clone, by **Make the Downloads** | `public/pdf/`, `public/chm/`, the download manifest |
+| publish | the site clone, by **Publish** | one commit on `main`; CI builds and deploys it |
+
+| Start here | For |
+|---|---|
+| [getting-started.md](./getting-started.md) | **using** the platform: the flow above, step by step, with a file to look at after each step |
+| this file | **working on** the platform: the shell, the modules, the rules that keep them apart |
 
 ## Repositories
 
 | Repository | Is |
 |---|---|
 | `temco-platform` | the application: the shell and every module |
-| `temco-learn` | the published documentation site ([temco-learn.md](../temco-learn/README.md)) |
+| `temco-learn` | the published documentation site ([Temco Learn](../temco-learn/README.md)) |
 
 The application and all its modules live in one repository. `temco-learn` is separate because it is a published artifact, not a module.
 
