@@ -23,34 +23,31 @@ a page          →      builds and publishes  →     one commit on main   → 
 
 | | **Temco Platform** | **Temco Learn** |
 |---|---|---|
-| is | the **authoring** application, a desktop app built on VS Code | the **published** site, a static React app on GitHub Pages |
+| is | a desktop application, with VS Code underneath | a static site on GitHub Pages |
 | is for | whoever writes, reviews and owns product documentation | whoever reads it: customers, field engineers, support |
-| what you do there | create a project, write pages, build, make the downloads, publish | read, search, switch versions, download the PDF or the help file |
 | what it holds | your project folder, and the site clone it publishes into | one imported build per version, the catalog, the downloads |
 | where it lives | the application on your machine | its own repository, `~/temco/temco-learn`, deployed by CI |
 
 You only need the left-hand column to finish this guide. The right-hand one is what gives the work its point, and it is also the reason there is a step that produces a PDF by hand: the site cannot make one for you.
 
-## What you see when you open Temco Platform
+## The eight areas of the application
 
-The activity bar on the left holds eight areas. This guide uses four of them, and it is worth knowing what the other four are before they surprise you.
+The activity bar down the left of the window holds eight areas. Four of them carry this guide:
 
 | Area | Holds | In this guide |
 |---|---|---|
 | **Home** | Overview, Projects, What needs doing | step 2: where a project is created |
-| **Documentation** | Project, Pages, Publish | steps 3 and 4: the pages, and the build |
+| **Documentation** | Project, Pages, Publish | steps 3 to 5: the pages, the build, and what it left behind |
 | **Repositories** | Sources: organisations, clones, the folder settings | step 1: the folders everything lands in |
 | **Temco Learn** | Overview, Site, Artifacts | steps 6 to 9: add, downloads, preview, publish |
-| **AI** | Draft, What it does, Server, Tools | Beyond the flow: drafts beside your text |
-| **Forum** | Browse | not covered here |
-| **Tools** | Studios: SQL, network, BACnet, devices | not covered here |
-| **Settings** | General, Modules, AI Runtime, Branding, Publishing | step 1, and the Repositories page above |
+
+The other four are not part of the walk, and they are worth one line each so they do not surprise you: **AI** writes drafts beside your text ([Beyond the flow](#beyond-the-flow)); **Forum** is the question board; **Tools** holds the hardware studios (SQL, network, BACnet, devices); and **Settings** holds the four pages step 1 asks you to check — General, Modules, AI Runtime, Branding and Publishing.
 
 If you cannot find something in the activity bar, you can still reach it by name: the [appendix](#appendix--every-button-one-page) lists every control together with the command id behind it.
 
-## What a reader sees on Temco Learn
+## The five levels a reader walks
 
-It is worth seeing this once, so that you know what you are aiming at.
+A reader opens the site and moves down five levels. Every level is written by the same catalog, so a page you publish appears at all five at once:
 
 | The reader opens | And gets |
 |---|---|
@@ -60,16 +57,14 @@ It is worth seeing this once, so that you know what you are aiming at.
 | a version | that version's pages, in the reading order the registry gives them |
 | a page | the page itself, a download menu for the PDF, the help file and the Markdown, and a way to say it was wrong |
 
-None of this is a separate publishing channel. The site reads one catalog, and that catalog is what step 6 writes.
-
 ## Who this is for
 
-| If you are… | this guide gets you to |
-|---|---|
-| **writing documentation** for a Temco product (T3000, a controller, a protocol) | a project of your own, built and live under Documentation on the site |
-| **taking over documentation that already exists** — a folder of Markdown, a Word manual, a compiled `.chm` | the same result, starting from *Import a document set* in step 2, with your existing pages converted once |
-| **working inside a product repository** that already has `docs/` and its own build scripts | the same result, with your repository's own `docs:site` or `build:help:dry` scripts doing the building instead of the built-in generator |
-| **reviewing someone else's documentation** | enough of the flow to read what they changed, and to publish it |
+| If you are… | Start at | You end with |
+|---|---|---|
+| **writing documentation** for a Temco product (T3000, a controller, a protocol) | step 2, *Create a project* | a project of your own, built and live under Documentation on the site |
+| **taking over documentation that already exists** — a folder of Markdown, a Word manual, a compiled `.chm` | step 2, *Import a document set* | the same result, with the existing pages converted once |
+| **working inside a product repository** that already has `docs/` and its own build scripts | step 1 to point the application at the clone, then step 4 | the same result, with your repository's own `docs:site` or `build:help:dry` doing the building instead of the built-in generator |
+| **reviewing someone else's documentation** | step 6 | enough of the flow to read what they changed, and to publish it |
 
 You do not have to be the person who set the machine up. If somebody else did, [Before the first time](#before-the-first-time) shows you how to check that the three settings and the site clone are right before you begin.
 
@@ -97,8 +92,8 @@ You do not have to be the person who set the machine up. If somebody else did, [
 | Section | Answers |
 |---|---|
 | [The two halves](#the-two-halves) | Temco Platform and Temco Learn, and where they meet |
-| [What you see when you open Temco Platform](#what-you-see-when-you-open-temco-platform) | the eight areas of the activity bar, and which four this guide uses |
-| [What a reader sees on Temco Learn](#what-a-reader-sees-on-temco-learn) | the site from the reader's side, so you know what you are aiming at |
+| [The eight areas of the application](#the-eight-areas-of-the-application) | the activity bar, and which four areas this guide uses |
+| [The five levels a reader walks](#the-five-levels-a-reader-walks) | the site from the reader's side, so you know what you are aiming at |
 | [Who this is for](#who-this-is-for) | whether this guide is the right one for you |
 | [What you are making](#what-you-are-making) | what a project, a build and the site are, and where each one lives |
 | [The general flow](#the-general-flow) | the five acts, what each writes, and what a reader notices |
