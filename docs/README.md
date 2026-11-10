@@ -46,3 +46,14 @@ docs/
 - **No dates, no progress marks, no meeting notes.** If something is not part of the product, it is not here.
 - One subject per document, and the document's name is the name of the subject.
 - The design documents of `temco-learn/design/` carry a number so they can be read in order; everything else does not need one.
+
+## Pictures in a guide
+
+A guide that shows you a screen carries a **slot** where the picture will be: the sentence it says, and the path the file will live at, in backticks.
+
+```text
+> **Screenshot — the Build Center after a build: the four counts, one card per output.**
+> `media/publishing/04-build.png`
+```
+
+Save the PNG where the path says, then run `npm run docs:screenshots`. It turns every slot whose file is there into a picture, using the sentence as the alt text a screen reader reads, and names the slots still waiting. A slot whose picture is missing stays a note rather than becoming a broken image, and `npm run check-temco-docs` refuses a page that draws a picture it does not have, or numbers its slots `00`, `01`, `03`.

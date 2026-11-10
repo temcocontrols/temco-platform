@@ -34,6 +34,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { suite, standalone } from './harness.mts';
+import { picturesForSlots } from '../../scripts/docs-screenshots.mts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const docs = join(root, 'docs');
@@ -152,6 +153,21 @@ const inspect = (file: string, lines: string[]): string[] => {
 	const text = lines.join('\n');
 	const slugs = new Set(lines.filter(line => line.startsWith('#')).map(line => headingSlug(line.replace(/^#+ /, ''))));
 
+	// Which lines sit inside a ``` fence. A diagram of a page draws `![…](…)` inside its box art, and a picture drawn
+	// with box characters is not a file a reader will ever follow.
+	const fenced = new Set<number>();
+	{
+		let open = false;
+		for (const [index, line] of lines.entries()) {
+			if (line.trimStart().startsWith('```')) {
+				open = !open;
+				fenced.add(index + 1);
+			} else if (open) {
+				fenced.add(index + 1);
+			}
+		}
+	}
+
 	for (const [index, line] of lines.entries()) {
 		const number = index + 1;
 
@@ -173,6 +189,24 @@ const inspect = (file: string, lines: string[]): string[] => {
 			}
 			if (!existsSync(resolve(join(file, '..'), target))) {
 				say(number, `link to ${target} does not exist`);
+			}
+		}
+
+		// 2b. a picture a page points at exists — the slot rule below stops the numbering drifting, but a typo in the
+		// name of a screenshot is a broken image on GitHub and nothing else notices it.
+		if (!fenced.has(number)) {
+			// A pattern quoted in backticks is an example a reader copies, not a picture this page draws.
+			const prose = line.replace(/`[^`]*`/gu, '');
+			for (const match of prose.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/gu)) {
+				const target = match[1];
+				// Addressing something that is not a file here — a remote page, an attachment the editor inserts — is
+				// not this repository's to find; `…` is a slot in a sentence, not a path.
+				if (/^(?:[a-z]+:|\/\/)/iu.test(target) || target.includes('…')) {
+					continue;
+				}
+				if (!existsSync(resolve(join(file, '..'), decodeURI(target)))) {
+					say(number, `picture ${target} does not exist`);
+				}
 			}
 		}
 
@@ -205,10 +239,14 @@ const inspect = (file: string, lines: string[]): string[] => {
 		say(lines.length, `${fenceLines} code fences: one of them is never closed`);
 	}
 
-	// 6. a screenshot slot is numbered once, in order
+	// 6. a screenshot slot is numbered once, in order — whether it is written as a planned slot in backticks or pasted as
+	// a picture. A guide with `00`, `01`, `03` has lost one, and a missing number is a missing screenshot.
 	const slots: { slot: number; line: number }[] = [];
 	lines.forEach((line, index) => {
-		for (const match of line.matchAll(/`media\/[^`]*\/(\d{2})-[a-z0-9-]+\.png`/g)) {
+		if (fenced.has(index + 1)) {
+			return;
+		}
+		for (const match of line.matchAll(/media\/[^`)\s]*\/(\d{2})-[a-z0-9-]+\.png/gu)) {
 			slots.push({ slot: Number(match[1]), line: index + 1 });
 		}
 	});
@@ -244,6 +282,7 @@ const inspect = (file: string, lines: string[]): string[] => {
 const TEETH: { rule: string; lines: string[] }[] = [
 	{ rule: 'an id in backticks is real', lines: ['Run `temcoLearn.site.notACommand` to do it.'] },
 	{ rule: 'a link resolves', lines: ['See [the other guide](./no-such-guide.md).'] },
+	{ rule: 'a picture a page points at exists', lines: ['![The settings page](media/getting-started/settings-window.png)'] },
 	{ rule: 'an anchor resolves', lines: ['# A heading', '', 'Jump to [the end](#the-end).'] },
 	{ rule: 'a JSON snippet parses', lines: ['```json', '{ "version": 1, }', '```'] },
 	{ rule: 'a fence is closed', lines: ['```json', '{ "version": 1 }'] },
@@ -264,6 +303,48 @@ for (const one of TEETH) {
 		assert.equal(found.length, 1, `expected one problem, got ${found.length}: ${found.join(' | ')}`);
 	});
 }
+
+group.test('a picture is numbered like a slot, and a pattern in backticks is not a picture', () => {
+	const found = inspect(guide, [
+		'![One](media/getting-started/01-one.png)',
+		'![Two](media/getting-started/03-three.png)',
+		'An example, written in backticks: `![x](media/x.png)`.',
+		'```',
+		'![A box drawing](media/diagram/02-not-a-file.png)',
+		'```'
+	]);
+	assert.ok(
+		found.some((text) => text.includes('screenshot slots are not numbered')),
+		`the numbering rule did not fire on pasted pictures: ${found.join(' | ')}`
+	);
+	assert.ok(
+		!found.some((text) => text.includes('media/x.png')),
+		'an example in backticks was read as a picture the page draws'
+	);
+	assert.ok(
+		!found.some((text) => text.includes('media/diagram')),
+		'a diagram inside a fence was read as a picture'
+	);
+});
+
+group.test('a slot becomes a picture only when the picture is there', () => {
+	const slot = [
+		'> **Screenshot — the Build Center after a build: the four counts.**',
+		'> `media/publishing/04-build.png`',
+		''
+	].join('\n');
+
+	const drawn = picturesForSlots(slot, path => path === 'media/publishing/04-build.png');
+	assert.equal(drawn, '![The Build Center after a build: the four counts.](media/publishing/04-build.png)\n');
+
+	// A picture the guide does not have stays a note to the writer, because a broken image is worse than a TODO.
+	assert.equal(picturesForSlots(slot, () => false), slot);
+	// `npm run docs:screenshots` runs on a Windows checkout too, and a guide that was committed with CRLF keeps it.
+	assert.ok(
+		picturesForSlots(slot.replace(/\n/gu, '\r\n'), () => true).includes('\r\n'),
+		'a CRLF document came back with different line endings'
+	);
+});
 
 group.test('every page in docs/ tells the truth', () => {
 	const problems = documents.flatMap(document => inspect(document.file, document.lines));

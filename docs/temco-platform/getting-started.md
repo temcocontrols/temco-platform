@@ -288,7 +288,7 @@ Come back to this step whenever you have more to write. Nothing downstream notic
 
 **Build the Site** (`temcoDocs.buildSite`), or *Build the Site* on the project page. It builds the project that is **selected**, reading the folders that project cites, so the folder does not have to be open in the window.
 
-> **Screenshot — the Build Center after a build: the new row, its status, and the artifact it lists.**
+> **Screenshot — the Build Center after a build: the four counts, one card per output this project builds, and the newest run at the head of the log.**
 > `media/publishing/04-build.png`
 
 Two things can produce the site, and what is in the folder decides which one runs:
@@ -298,7 +298,7 @@ Two things can produce the site, and what is in the folder decides which one run
 | a `package.json` with `docs:site` or `docs:build` | that script, after `docs:registry` when the repository has one | wherever the script writes, commonly `dist/site` or docfx's `dist/docs` |
 | neither | the **built-in generator** | `<project>/dist/site` |
 
-Either way, the attempt is recorded in the Build Center (`temcoDocs.builds`), and every file the build wrote is recorded against it, so the Builds and Downloads pages can list real files rather than hopes.
+Either way, the attempt is recorded in the Build Center (`temcoDocs.builds`), and every file the build wrote is recorded against it, so Publish & Releases can list real files rather than hopes.
 
 | | |
 |---|---|
@@ -328,7 +328,7 @@ Skip this step unless T3000 cites a real repository clone under `~/temco/source/
 | **You should see** | the terminal run `docs:registry`, then the scripts above, and the log list the files they left behind |
 | **If not** | the warning names the scripts it looked for. A repository with none of them runs nothing, which is the honest answer. A scaffolded project has no `package.json` at all, so step 4 is its build, and this step is not for it |
 
-This is the step that produces a PDF or a `.chm` **for the docs module**: the copies it records and the Build Center lists. The PDF that the website serves is a different file, made in step 7 from the site's own content.
+This is the step that produces a PDF or a `.chm` **for the docs module**: the copies it records and Publish & Releases lists, under their own output. The PDF that the website serves is a different file, made in step 7 from the site's own content.
 
 ## Step 6 — add the build to the site
 
@@ -635,7 +635,7 @@ If you already have a `docs/` folder, create the project with **From existing fi
 
 ### Releasing a build locally
 
-**Publish** on the Releases page (`temcoDocs.publishRelease`) is not publishing to the site. It copies the last build's artifacts into the application's own storage, at `published/<project>/<version>` with a manifest, behind a confirmation that names the version, the destination and the file count. `temcoDocs.openPublished` opens that copy, `temcoDocs.servePublished` serves it and `temcoDocs.stopServing` stops it. Use it to hand a build to somebody, or to keep a version that will not change. Nothing is pushed anywhere.
+**Publish** on the Publish & Releases page (`temcoDocs.publishRelease`) is not publishing to the site. It copies the last build's artifacts into the application's own storage, at `published/<project>/<version>` with a manifest, behind a confirmation that names the version, the destination and the file count. `temcoDocs.openPublished` opens that copy, `temcoDocs.servePublished` serves it and `temcoDocs.stopServing` stops it. Use it to hand a build to somebody, or to keep a version that will not change. Nothing is pushed anywhere.
 
 ### Exporting
 
@@ -722,14 +722,14 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Build the Site** | `Publish` title 🌐 | `temcoDocs.buildSite` |
 | **Publish to GitHub Pages** | `Publish` title ☁ | `temcoDocs.publishSite` |
 | **Build the Offline Help** | `Publish` title 📦 | `temcoDocs.buildHelp` |
-| **Export…** | Releases page (opens the Exports page) | `temcoDocs.export` |
+| **Export…** | Publish & Releases (opens the Exports page) | `temcoDocs.export` |
 | **Export the Site as a Zip** | palette | `temcoDocs.exportSite` |
 | **Export the Page as HTML** | palette, page right-click | `temcoDocs.exportPage` |
 | **Export the Pages as a Markdown Bundle** | palette | `temcoDocs.exportMarkdown` |
 | **Export the Page as Word** | Exports page, palette | `temcoDocs.exportDocx` |
 | **Review Center** (row) | `Publish` view | `temcoDocs.review` → opens the Review Center page |
 | **Build Center** (row) | `Publish` view | `temcoDocs.builds` → opens the Build Center page |
-| **Releases** (row) | `Publish` view | `temcoDocs.releases` → opens the Releases page |
+| **Publish & Releases** (row) | `Publish` view | `temcoDocs.releases` → opens the Publish & Releases page |
 
 ### Editor (while a page is open)
 
@@ -747,16 +747,17 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 
 | Button | On the page | Command |
 |---|---|---|
-| **Build Site** | Build Center, Releases | `temcoDocs.buildSite` |
-| **Build the Website / PDF / …** (one row per output) | Build Center | `temcoDocs.buildOutput` |
-| **Build Offline Help** | Build Center, Releases | `temcoDocs.buildHelp` |
-| **Refresh** | Build Center | `temcoDocs.builds` |
-| **Open** (an artifact) | Build Center → Artifacts | `temcoDocs.openArtifact` |
-| **Publish** | Releases | `temcoDocs.publishRelease` |
-| **Publish to GitHub Pages** | Releases | `temcoDocs.publishSite` |
-| **Export…** | Releases | `temcoDocs.export` |
-| **Serve / Serve the Newest** | Releases, release rows | `temcoDocs.servePublished` |
-| **Open** (a release) | Releases → release rows | `temcoDocs.openPublished` |
+| **Build Site** | Build Center, Publish & Releases | `temcoDocs.buildSite` |
+| **Build the Website / PDF / …** (one card per output) | Build Center | `temcoDocs.buildOutput` |
+| **Build Offline Help** | Build Center, Publish & Releases | `temcoDocs.buildHelp` |
+| **Refresh** | Review Center | `temcoDocs.review` |
+| **Open folder** | Build Center, Publish & Releases | `temcoDocs.revealArtifactFolder` |
+| **Open** (a file) | Publish & Releases → a build | `temcoDocs.openArtifact` |
+| **Publish** | Publish & Releases | `temcoDocs.publishRelease` |
+| **Publish to GitHub Pages** | Publish & Releases | `temcoDocs.publishSite` |
+| **Export…** | Publish & Releases | `temcoDocs.export` |
+| **Serve / Serve the Newest** | Publish & Releases, release rows | `temcoDocs.servePublished` |
+| **Open** (a release) | Publish & Releases → release rows | `temcoDocs.openPublished` |
 | **Stop Serving the Site** | palette | `temcoDocs.stopServing` |
 
 ### The site
