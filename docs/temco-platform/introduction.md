@@ -47,7 +47,7 @@ Three habits make the rest easy:
 
 ### The eight areas, and what each can do
 
-The activity bar down the left of the window holds eight areas. Four of them carry the walk; each is worth a line here so that nothing surprises you later.
+The activity bar down the left of the window holds eight areas. Four of them carry the walk. Each gets a short paragraph here, so that nothing surprises you later.
 
 **Home** is the library at a glance: every project you have made, what needs doing across them, and the pages that have no file yet.
 
@@ -62,7 +62,7 @@ The activity bar down the left of the window holds eight areas. Four of them car
 > **Screenshot — the Review Center: drafts waiting, each shown on its own page with Accept and Discard.**
 > `media/publishing/18-review-center.png`
 
-**Repositories** is where pages are written from: a repository, a folder on this machine, or a document. One source can be cited by several projects, and nothing is ever written back into it.
+**Repositories** is where pages are written from: a repository, a folder on this machine, or a document. One source can be cited by several projects, and nothing is ever written back into it. Its own page is the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it, because you set it before anything else.
 
 **Temco Learn** is the site from this side: **Overview** (its projects, versions and pages), **Site** (the builds waiting to be added, the versions already on the site, and the serve/stop controls), and **Artifacts** (the files the site actually serves).
 
@@ -74,11 +74,31 @@ The activity bar down the left of the window holds eight areas. Four of them car
 > **Screenshot — AI ▸ Draft: a draft written beside the page, with Accept and Discard.**
 > `media/publishing/20-ai-draft.png`
 
-**Forum** keeps questions and answers beside the documentation, so an answer can point at a page and a page can point at an answer.
+**Forum** is the community site, `forums.temcocontrols.com`, as the platform reads it — so you can see what people are asking about your pages without leaving the window. The panel lists its categories with how many topics each holds; a category opens as a table of topics; a topic opens as a tab with the conversation, the page it is about, and a suggestion for what the docs should do. Nothing is posted from here, because the forum owns the conversation, and a topic nobody has answered in a month is called out rather than left in the table.
 
-**Tools** holds the hardware studios — SQL, network, BACnet, devices — for looking at a controller rather than at a page.
+> **Screenshot — Forum ▸ Browse: the categories with their topic counts, and a topic open beside them.**
+> `media/publishing/23-forum.png`
 
-**Settings** holds six pages: General, Modules, AI Runtime, Branding, Publishing, and Repositories, where the three paths this guide depends on are set ([Before you start](#before-you-start)).
+**Tools** looks at the platform rather than at a page, one studio per subject. One studio is there today: **SQL**, the platform's own database, in two jobs — *Tables & queries* (the query editor, the rows, a table's structure, the history and the query library) and *The file* (where it lives, its integrity, a backup, a reset). A query runs **read-only** unless you reach for the writing command. The other studios — Devices, I/O, BACnet and Network — are not built yet, and the panel is a table so each one arrives as a row of its own.
+
+> **Screenshot — Tools ▸ Studios: the SQL studio, its two jobs, and the pages under each.**
+> `media/publishing/24-tools.png`
+
+**Settings** holds the six pages the application is configured from. Each is a row in the panel, and each opens a page of its own:
+
+| Page | Configures |
+|---|---|
+| *General* | its look, what it opens with, where work is kept, what it reports |
+| *Repositories* | the default enterprise, where clones are kept, where projects are made, and the GitHub token |
+| *Modules* | the modules loaded into this window, and what each owns |
+| *AI Runtime* | the local model, the servers that run it, and what they may reach |
+| *Publishing* | where a release goes and what it may overwrite |
+| *Branding* | the mark, the colour roles and the identity |
+
+The three paths this guide depends on are on *Repositories*, and [Before you start](#before-you-start) settles them first. Every page writes to your **user** settings — the same file `settings.json` holds — so a choice belongs to the machine rather than to a folder. Repositories has a **Save** button, so read the resolved lines under its fields rather than trusting what you typed.
+
+> **Screenshot — Settings: the six pages, each a row that opens a page of its own.**
+> `media/publishing/25-settings.png`
 
 ### The editor
 
