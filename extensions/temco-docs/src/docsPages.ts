@@ -52,14 +52,20 @@ const azButton = kitButton;
  * So this is the same `.az-entry` markup with the right-hand cell written by the page, which is what keeps a list of
  * rows on the same rhythm as the cards and headings above it without a second row style in the product.
  */
-const azRow = (options: { mark?: string; tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent'; title: string; mono?: boolean; tag?: string; meta?: string; actions?: string; command?: string; args?: unknown; go?: string }): string => {
+const azRow = (options: { mark?: string; tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent'; title: string; mono?: boolean; tag?: string; meta?: string; actions?: string; command?: string; args?: unknown; go?: string; titleCommand?: { command: string; args?: unknown } }): string => {
 	const plain = options.command === undefined;
 	const attr = plain ? '' : ` data-command="${options.command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}`;
 	const mark = options.mark === undefined ? '' : `<span class="az-entry__icon">${toneMark(options.mark, options.tone)}</span>`;
 	const tag = options.tag === undefined ? '' : `<span class="az-state">${esc(options.tag)}</span>`;
 	const meta = options.meta === undefined ? '' : `<span class="az-entry__meta">${options.meta}</span>`;
+	const mono = options.mono === true ? ' cell-mono' : '';
+	// A title that is a way in is a link, not a button at the end of the row: the name is what a hand reaches for, and a
+	// trailing "Open" on every row of a long list says the same word five hundred times.
+	const title = options.titleCommand === undefined
+		? `<span class="az-entry__title${mono}">${esc(options.title)}</span>`
+		: `<button type="button" class="az-entry__title az-entry__title--link${mono}" data-command="${esc(options.titleCommand.command)}"${options.titleCommand.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.titleCommand.args))}"`}>${esc(options.title)}</button>`;
 	const end = options.actions ?? (plain ? '' : `<span class="az-entry__go">${esc(options.go ?? 'Open')}${icon('chevron-right', 'icon--sm')}</span>`);
-	return `<div class="az-entry${plain ? '' : ' az-entry--action'}"${attr}>${mark}<div class="az-entry__main"><span class="az-entry__title${options.mono === true ? ' cell-mono' : ''}">${esc(options.title)}${tag}</span>${meta}</div>${end}</div>`;
+	return `<div class="az-entry${plain ? '' : ' az-entry--action'}"${attr}>${mark}<div class="az-entry__main"><span class="az-entry__head">${title}${tag}</span>${meta}</div>${end}</div>`;
 };
 
 /** The rows of one section, in the kit's spacing. `log` draws them as a record rather than as a stack of cards. */
@@ -632,7 +638,7 @@ ${roots.length === 0
 		} finally {
 			catalog?.close();
 		}
-		this.open('review', REVIEW_VIEW_TYPE, 'Review Center', reviewBody(drafts, project), 'check', PIPE_CSS, restored);
+		this.open('review', REVIEW_VIEW_TYPE, 'Review Center', reviewBody(drafts, project), 'check', PIPE_CSS, restored, TABS_SCRIPT);
 	}
 
 	builds(restored?: vscode.WebviewPanel): void {
@@ -696,7 +702,7 @@ ${roots.length === 0
 	}
 
 	private async openReleases(restored?: vscode.WebviewPanel): Promise<void> {
-		this.open('releases', RELEASES_VIEW_TYPE, 'Publish & Releases', releasesBody(await this.buildFacts()), 'upload', PIPE_CSS, restored);
+		this.open('releases', RELEASES_VIEW_TYPE, 'Publish & Releases', releasesBody(await this.buildFacts()), 'upload', PIPE_CSS, restored, TABS_SCRIPT);
 	}
 
 	dispose(): void {
@@ -1552,34 +1558,126 @@ const PIPE_CSS = `
 .az-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 /* A long list folds after a handful of rows: a site build leaves hundreds of pages, and a page that prints them all is a
    page nobody reads to the end of. Native summary, so it opens in place and closes again. */
+/* The outputs are a row of tabs: the category is chosen first, and the files of that category sit under the row rather
+   than three lists deep in one column. The tab is a button, so a keyboard reaches it; the panel it names is the answer. */
+.az-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--sp-2); margin: var(--sp-3) 0 var(--sp-3); }
+.az-tab { display: flex; align-items: flex-start; gap: var(--sp-2); min-width: 0; padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--hairline); border-radius: var(--r-2); background: var(--surface-card); color: inherit;
+  font: inherit; text-align: left; cursor: pointer; transition: border-color 120ms ease, background 120ms ease; }
+.az-tab:hover { border-color: var(--az-blue-pale); }
+.az-tab:focus-visible { outline: 2px solid var(--az-blue); outline-offset: 1px; }
+.az-tab.is-on { border-color: var(--az-blue); background: var(--az-blue-selected); }
+.az-tab.is-muted { border-style: dashed; background: transparent; }
+.az-tab__icon { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: var(--r-2);
+  background: var(--az-blue-selected); color: var(--az-blue); }
+.az-tab.is-muted .az-tab__icon { background: var(--surface-2); color: var(--ink-3); }
+.az-tab.is-on .az-tab__icon { background: var(--az-blue); color: var(--surface-card); }
+.az-tab__icon .icon { width: 15px; height: 15px; }
+.az-tab__main { display: flex; flex-direction: column; min-width: 0; }
+.az-tab__title { color: var(--ink-1); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.az-tab.is-muted .az-tab__title, .az-tab.is-muted .az-tab__note { color: var(--ink-3); }
+.az-tab__note { color: var(--ink-3); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.az-tabpanel[hidden] { display: none; }
+.az-tabpanel__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4); margin-bottom: var(--sp-2); }
+.az-tabpanel__note { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 18px; }
+.az-tabpanel__title { margin: 0 0 var(--sp-1); color: var(--ink-1); font-size: 13px; font-weight: 600; line-height: 18px; }
+/* The queue is a tab list standing up: the draft chosen on the left is the one read on the right, and the chosen row
+   wears the accent bar rather than a box, so the list reads as one queue and not as four unrelated cards. */
+.az-queue { display: flex; flex-direction: column; margin: 0; border-top: 1px solid var(--hairline); }
+.az-queue__tab { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3); border: 0; border-bottom: 1px solid var(--hairline); background: transparent;
+  color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.az-queue__tab:hover { background: var(--surface-2); }
+.az-queue__tab.is-on { background: var(--az-blue-selected); box-shadow: inset 2px 0 0 var(--az-blue); }
+.az-queue__tab:focus-visible { outline: 2px solid var(--az-blue); outline-offset: -2px; }
+.az-queue__main { display: flex; flex-direction: column; min-width: 0; }
+.az-queue__title { color: var(--ink-1); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.az-queue__meta { color: var(--ink-3); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+/* The queue is narrow and the draft is what is read, so this split is not the page's usual 1.4 to 1. */
+.az-split--review { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.5fr); }
 /* A tile here says a state in a phrase, not an identifier: let it wrap, and set it in the page's own face. */
 .az-entries--row > .az-entry > .az-entry__main > .az-entry__meta {
   white-space: normal; overflow: visible; font-family: inherit;
 }
 `;
 
-function reviewBody(drafts: readonly DraftRow[], project: string | undefined): string {
+/**
+ * The script the releases page runs over its tab row.
+ *
+ * Presentation only: which panel is open is a thing the page can answer itself, and a round trip to the module to hide a
+ * `<div>` would make a tab feel like a navigation. The markup already carries the answer without it — every panel is
+ * rendered and the first is open — so a window with scripts off still shows the files, one output at a time being a
+ * nicety rather than the content. Arrow keys, Home and End move the selection, as a tab list is expected to.
+ */
+const TABS_SCRIPT = `
+(function () {
+	const lists = [].slice.call(document.querySelectorAll('[role="tablist"]'));
+	lists.forEach(function (list) {
+		const tabs = [].slice.call(list.querySelectorAll('[role="tab"]'));
+		function pick(index, focus) {
+			tabs.forEach(function (tab, at) {
+				const on = at === index;
+				tab.classList.toggle('is-on', on);
+				tab.setAttribute('aria-selected', on ? 'true' : 'false');
+				tab.tabIndex = on ? 0 : -1;
+				const panel = document.getElementById(tab.getAttribute('aria-controls'));
+				if (panel) { panel.hidden = !on; }
+			});
+			if (focus && tabs[index]) { tabs[index].focus(); }
+		}
+		tabs.forEach(function (tab, at) { tab.addEventListener('click', function () { pick(at, false); }); });
+		list.addEventListener('keydown', function (event) {
+			const at = tabs.indexOf(document.activeElement);
+			if (at === -1) { return; }
+			if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { event.preventDefault(); pick((at + 1) % tabs.length, true); }
+			else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { event.preventDefault(); pick((at - 1 + tabs.length) % tabs.length, true); }
+			else if (event.key === 'Home') { event.preventDefault(); pick(0, true); }
+			else if (event.key === 'End') { event.preventDefault(); pick(tabs.length - 1, true); }
+		});
+	});
+})();
+`;
+
+/**
+ * *Review Center* — the drafts the platform is holding, and the one a reviewer is reading.
+ *
+ * A queue is not a list of files: the point of the page is that somebody reads a draft before it becomes a page. So it is
+ * one queue on the left and one draft on the right, and choosing in the queue chooses what is read — the page used to
+ * show the newest draft whatever was clicked, which meant the second draft could be accepted without ever being seen.
+ *
+ * Accept and Discard sit in the draft, not on the queue's rows: an act that writes a page belongs beside the text it
+ * writes, and a button on a row invites settling a draft nobody has read. The queue's rows are a vertical tab list, so a
+ * keyboard reaches them the way it reaches the tabs on Publish & Releases.
+ */
+export function reviewBody(drafts: readonly DraftRow[], project: string | undefined): string {
 	const waiting = drafts.length;
 	const fromSources = drafts.filter((draft) => draft.source !== undefined).length;
 	const proposed = new Set(drafts.map((draft) => draft.pageId)).size;
 	const newest = drafts[0];
+	// The draft that is open: the newest, which is the one a reviewer most often wants first.
+	const selected = newest?.id;
+	const tabId = (draft: DraftRow): string => `draft-tab-${draft.id}`;
+	const panelId = (draft: DraftRow): string => `draft-panel-${draft.id}`;
 
-	const row = (draft: DraftRow): string =>
-		azRow({
-			mark: 'sparkle',
-			tone: draft === newest ? 'accent' : undefined,
-			title: draft.title,
-			tag: draft.kind || 'Draft',
-			meta: facts([
-				draft.pageId,
-				`written ${waitingSince(draft.createdAt)}`,
-				draft.source === undefined ? 'no source' : `read from ${draft.source}`
-			]),
-			actions: azButton('Accept', 'temcoDocs.acceptDraft', { small: true, kind: draft === newest ? 'primary' : undefined, args: [draft.id] })
-				+ azButton('Discard', 'temcoDocs.discardDraft', { small: true, args: [draft.id] })
-		});
+	/** One row of the queue: the draft's name, and enough to decide whether it is the one to read. */
+	const queueRow = (draft: DraftRow): string => {
+		const on = draft.id === selected;
+		return `<button type="button" class="az-queue__tab${on ? ' is-on' : ''}" role="tab" id="${tabId(draft)}" aria-selected="${on ? 'true' : 'false'}" aria-controls="${panelId(draft)}" tabindex="${on ? '0' : '-1'}"><span class="az-queue__main"><span class="az-queue__title">${esc(draft.title)}</span><span class="az-queue__meta">${esc([draft.pageId, waitingSince(draft.createdAt), draft.source === undefined ? 'no source' : `from ${draft.source}`].join(' · '))}</span></span>${draft === newest ? '<span class="az-state">Latest</span>' : ''}</button>`;
+	};
 
-	const step = (mark: string, title: string, note: string): string => azRow({ mark, title, meta: esc(note) });
+	/** One draft in full, with the two acts that settle it — beside the text they settle. */
+	const detail = (draft: DraftRow): string => {
+		const on = draft.id === selected;
+		const lines = draft.body.split('\n').length;
+		return `<div class="az-tabpanel" id="${panelId(draft)}" role="tabpanel" aria-labelledby="${tabId(draft)}"${on ? '' : ' hidden'}>
+<p class="az-tabpanel__title">${esc(draft.title)}</p>
+<div class="az-tabpanel__head"><p class="az-tabpanel__note">${esc(`Proposed for ${draft.pageId}${draft.source === undefined ? '' : `, written from ${draft.source}`}, ${waitingSince(draft.createdAt)}.`)}</p><span>${badge(draft.kind || 'Draft', 'info')} ${badge(`${lines} ${lines === 1 ? 'line' : 'lines'}`, 'neutral')}</span></div>
+<pre class="code" style="max-height:360px;margin:0">${esc(draft.body)}</pre>
+<div class="az-actions">${azButton('Accept', 'temcoDocs.acceptDraft', { mark: 'check', kind: 'primary', args: [draft.id] })}${azButton('Discard', 'temcoDocs.discardDraft', { mark: 'close', args: [draft.id] })}</div>
+<p class="az-note">Accepting writes the page exactly as it reads above · discarding keeps the page as it was and settles the draft.</p>
+</div>`;
+	};
 
 	// The figures as one sentence rather than a row of numbers: a queue is read, not measured, and four large figures
 	// over a list of drafts made the page look like a dashboard that had lost its chart.
@@ -1613,32 +1711,29 @@ ${waiting === 0
 				mark: 'check',
 				actions: azButton('New Page', 'temcoDocs.newPage', { mark: 'plus' })
 			})}</div>`
-			: `<div class="az-split">
+			: `<div class="az-split az-split--review">
 <div>
 ${section({
 				title: 'The queue',
-				desc: `${waiting} ${waiting === 1 ? 'draft' : 'drafts'} waiting${fromSources > 0 ? `, ${fromSources} of them written from a source` : ''}. Newest first; the one beside this list is open in full.`,
+				desc: `${waiting} ${waiting === 1 ? 'draft' : 'drafts'} waiting${fromSources > 0 ? `, ${fromSources} of them written from a source` : ''}. Newest first; choosing one opens it beside this list.`,
 				actions: azButton('Refresh', 'temcoDocs.review', { small: true })
 			})}
-${azEntries(drafts.map(row))}
+<div class="az-queue" role="tablist" aria-orientation="vertical" aria-label="Drafts">${drafts.map(queueRow).join('')}</div>
 </div>
 <div>
-${section({
-				title: `Open · ${newest.title}`,
-				desc: `Proposed for ${newest.pageId}${newest.source === undefined ? '' : `, written from ${newest.source}`}, ${waitingSince(newest.createdAt)}.`,
-				actions: badge(newest.kind || 'Draft', 'info') + ' ' + badge(`${newest.body.split('\n').length} lines`, 'neutral')
-			})}
-<pre class="code" style="max-height:360px;margin:0">${esc(newest.body)}</pre>
-<div class="az-actions">${azButton('Accept', 'temcoDocs.acceptDraft', { mark: 'check', kind: 'primary', args: [newest.id] })}${azButton('Discard', 'temcoDocs.discardDraft', { mark: 'close', args: [newest.id] })}</div>
-<p class="az-note">Accepting writes the page exactly as it reads above · discarding keeps the page as it was and settles the draft.</p>
+${section({ title: 'The draft', desc: 'Exactly what will be written if this one is accepted — nothing else changes.' })}
+${drafts.map(detail).join('')}
 </div>
 </div>`}
 ${section({ title: 'What settling a draft does', desc: 'Three things happen, in this order — and only the last one reaches anybody.' })}
-${azEntries([
-				step('check', 'Accepting writes the page', 'the draft becomes the file at the id it proposed, and the row is settled as accepted'),
-				step('document', 'The text stays as evidence', 'it remains in the database as an accepted draft, so what a page was written from survives the write'),
-				step('upload', 'Only a release reaches a reader', 'a build and a publish, in that order')
-			])}
+${cards(
+				[
+					{ mark: 'check', title: 'Accepting writes the page', desc: 'The draft becomes the file at the id it proposed, and the row is settled as accepted.' },
+					{ mark: 'document', title: 'The text stays as evidence', desc: 'It remains in the database as an accepted draft, so what a page was written from survives the write.' },
+					{ mark: 'upload', title: 'Only a release reaches a reader', desc: 'A build and a publish, in that order — the queue is not a publication.' }
+				],
+				{ dense: true }
+			)}
 <p class="az-note">A draft is a proposal, not a page. It belongs to the project it was written for and remembers the source it read, and it leaves this queue the moment a person settles it.</p>`;
 }
 
@@ -1819,41 +1914,22 @@ export function releasesBody(facts1: BuildFacts): string {
 				+ azButton('Open', 'temcoDocs.openPublished', { small: true, args: [release.destination] })
 		});
 
-	const fileRow = (file: ArtifactFact): string =>
-		azRow({
+	/**
+	 * One file a build left.
+	 *
+	 * Only the site's own data files are links, and the link is the name itself — a page or a picture under them is read
+	 * in the site, and a trailing "Open" on every one of five hundred rows said the same word five hundred times.
+	 */
+	const fileRow = (file: ArtifactFact): string => {
+		const name = file.path.split(/[\\/]/).pop() ?? file.path;
+		const opens = /\.json$/iu.test(name);
+		return azRow({
 			mark: markOf(file.kind, file.path),
-			title: file.path.split(/[\\/]/).pop() ?? file.path,
+			title: name,
 			mono: true,
 			meta: `<span class="cell-mono">${esc(folderOf(file.path))}</span><span>built ${waitingSince(file.builtAt)}</span>`,
-			command: 'temcoDocs.openArtifact',
-			args: [file.path]
+			...(opens ? { titleCommand: { command: 'temcoDocs.openArtifact', args: [file.path] } } : {})
 		});
-
-	/**
-	 * One output, as the first level: the website, the PDFs, the offline help, the indexes.
-	 *
-	 * What a person publishes is an output, not a file, so the row says how many files it holds and what they are
-	 * ("129 Markdown · 386 pictures · 2 JSON") — the types are a sentence here rather than a level, because a reader who
-	 * wants the website does not first want to choose between its pages and its pictures. The files are behind one
-	 * "Show all", which closes again the same way.
-	 */
-	const outputBlock = (output: Output, files: readonly ArtifactFact[]): string => {
-		const size = files.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
-		const newest = files.reduce((last, file) => (file.builtAt > last ? file.builtAt : last), '');
-		const folder = commonFolder(files.map((file) => file.path));
-		return `${section({
-			title: output.label,
-			desc: [
-				`${n(files.length, 'file', 'files')}${size === 0 ? '' : `, ${megabytes(size)}`}`,
-				composition(files),
-				newest === '' ? '' : `newest ${waitingSince(newest)}`,
-				output.purpose
-			]
-				.filter((part) => part !== '')
-				.join(' · '),
-			actions: folder === undefined ? undefined : button('Open folder', 'temcoDocs.revealArtifactFolder', { small: true, mark: 'folder', args: [folder] })
-		})}
-${folded(files.map(fileRow), 6, 'more files')}`;
 	};
 
 	const fact = (mark: string, title: string, note: string): string => azRow({ mark, title, meta: note });
@@ -1867,6 +1943,15 @@ ${folded(files.map(fileRow), 6, 'more files')}`;
 			.filter((artifact) => outputs.byKind(artifact.kind)?.value === output.value)
 			.sort((one, other) => (one.builtAt < other.builtAt ? 1 : -1));
 	const scriptOf = (output: Output): string | undefined => outputs.scriptFor(output, facts1.scripts.map((script) => script.name));
+
+	// Which tab is open: the first output with files, so the page opens on something to look at rather than on an excuse.
+	const selected = ((made.find((output) => filesOf(output).length > 0) ?? made[0] ?? outputs.all[0])?.value) ?? '';
+	const tabId = (output: Output): string => `output-tab-${output.value}`;
+	const panelId = (output: Output): string => `output-panel-${output.value}`;
+
+	/** A tab's second line is short enough to sit under a name: what the output holds, or why it holds nothing. */
+	const shortMadeBy = (output: Output): string =>
+		output.value === 'search' ? 'written by the site' : output.value === 'ai' ? 'kept on this machine' : 'not a build output';
 
 	/** What this output is, in one sentence: built, nothing here makes it, or it is made somewhere other than a build. */
 	const stateOf = (output: Output): string => {
@@ -1884,45 +1969,63 @@ ${folded(files.map(fileRow), 6, 'more files')}`;
 	};
 
 	/**
-	 * The categories, at the top, as cards — one per output, the ticks of the create form in its own order.
+	 * The categories, at the top, as a row of tabs — one per output, the ticks of the create form in its own order.
 	 *
-	 * An output the project was not made with is greyed rather than hidden: five exist, four were chosen, and a page that
-	 * showed four would leave a person wondering whether the fifth had been lost.
+	 * An output the project was not made with is greyed rather than hidden: five exist, four were chosen, and a row that
+	 * showed four would leave a person wondering whether the fifth had been lost. Choosing it says why it holds nothing.
 	 */
-	const outputCards = (): string =>
-		cards(
-			outputs.all.map((output) => {
-				const files = filesOf(output);
-				const size = files.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
-				const part = isMade(output);
-				return {
-					mark: output.mark,
-					title: output.label,
-					desc: part ? stateOf(output) : 'Not part of this project — the create form did not tick it',
-					note: part && files.length > 0 ? `${n(files.length, 'file', 'files')} · ${megabytes(size)}` : undefined,
-					muted: !part
-				};
-			}),
-			{ dense: true }
-		);
+	const isOn = (output: Output): boolean => output.value === selected;
+	const tabOf = (output: Output): string => {
+		const files = filesOf(output);
+		const size = files.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
+		const part = isMade(output);
+		const script = scriptOf(output);
+		const note = part
+			? files.length > 0
+				? `${n(files.length, 'file', 'files')} · ${megabytes(size)}`
+				: output.madeBy !== undefined
+					? shortMadeBy(output)
+					: script === undefined
+						? `no ${output.scripts[0]} script`
+						: 'not built yet'
+			: 'not part of this project';
+		return `<button type="button" class="az-tab${isOn(output) ? ' is-on' : ''}${part ? '' : ' is-muted'}" role="tab" id="${tabId(output)}" aria-selected="${isOn(output) ? 'true' : 'false'}" aria-controls="${panelId(output)}" tabindex="${isOn(output) ? '0' : '-1'}"><span class="az-tab__icon">${icon(output.mark)}</span><span class="az-tab__main"><span class="az-tab__title">${esc(output.label)}</span><span class="az-tab__note">${esc(note)}</span></span></button>`;
+	};
 
-	/** An output with no file of its own: the reason, and what would change it — never an empty list. */
-	const emptyOutput = (output: Output): string =>
-		azCallout({
-			title: `${output.label}: nothing to list yet`,
-			desc:
-				output.madeBy !== undefined
-					? `${output.madeBy}. It is not a file this project's build writes, so it never appears as one.`
-					: `${stateOf(output)}. Add one to the repository and the build will have something to run.`,
-			mark: output.mark,
-			actions: azButton('Build Center', 'temcoDocs.builds', { small: true, mark: 'list' })
-		});
+	/** What the chosen output holds: its files, folding after six, or the reason there are none to list. */
+	const panelOf = (output: Output): string => {
+		const files = filesOf(output);
+		const script = scriptOf(output);
+		const folder = commonFolder(files.map((file) => file.path));
+		const size = files.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
+		const newest = files.reduce((last, file) => (file.builtAt > last ? file.builtAt : last), '');
+		const openFolder = folder === undefined ? '' : azButton('Open folder', 'temcoDocs.revealArtifactFolder', { small: true, mark: 'folder', args: [folder] });
+		const body = !isMade(output)
+			? azCallout({
+				title: `${output.label} is not part of this project`,
+				desc: `The create form did not tick it, so no build of this project writes it. ${output.purpose}.`,
+				mark: output.mark,
+				actions: azButton('Edit the project', 'temcoProjects.editProject', { small: true, mark: 'gear' })
+			})
+			: files.length === 0
+				? azCallout({
+					title: `${output.label}: nothing to list yet`,
+					desc: output.madeBy !== undefined
+						? `${output.madeBy}. It is not a file this project's build writes, so it never appears as one.`
+						: `${stateOf(output)}. Add one to the repository and the build will have something to run.`,
+					mark: output.mark,
+					actions: script === undefined
+						? azButton('Build Center', 'temcoDocs.builds', { small: true, mark: 'list' })
+						: azButton(`Build the ${output.label}`, 'temcoDocs.buildOutput', { small: true, mark: 'play', args: [output.value] })
+				})
+				: `<div class="az-tabpanel__head"><p class="az-tabpanel__note">${esc([`${n(files.length, 'file', 'files')}${size === 0 ? '' : `, ${megabytes(size)}`}`, composition(files), newest === '' ? '' : `newest ${waitingSince(newest)}`, output.purpose].filter((part) => part !== '').join(' · '))}</p>${openFolder}</div>${folded(files.map(fileRow), 6, 'more files', { log: true })}`;
+		return `<div class="az-tabpanel" id="${panelId(output)}" role="tabpanel" aria-labelledby="${tabId(output)}"${isOn(output) ? '' : ' hidden'}>${body}</div>`;
+	};
 
 	const outputsSection = (): string => `${section({
 		title: 'The files a reader can be given',
-		desc: 'One card per output the project was made with, in the order the create form asked for, and under them what each one holds. A downloadable file is the release; the site is the only one that has to be published.'
+		desc: 'Pick an output to see what it holds — the ticks the create form asked for, in its own order. A downloadable file is the release; the site is the only one that has to be published.'
 	})}
-${outputCards()}
 ${made.length === 0
 			? azCallout({
 				title: 'This project has no outputs recorded',
@@ -1930,7 +2033,9 @@ ${made.length === 0
 				mark: 'info',
 				actions: azButton('Edit the project', 'temcoProjects.editProject', { small: true, mark: 'gear' })
 			})
-			: made.map((output) => (filesOf(output).length === 0 ? emptyOutput(output) : outputBlock(output, filesOf(output)))).join('')}`;
+			: ''}
+<div class="az-tabs" role="tablist" aria-label="Outputs">${outputs.all.map(tabOf).join('')}</div>
+${outputs.all.map(panelOf).join('')}`;
 
 	return `${hero({
 		eyebrow: 'Documentation',
@@ -1985,12 +2090,15 @@ ${azEntries(publish === undefined
 </div>
 </div>
 ${outputsSection()}
-${section({ title: 'What publishing does', desc: 'Three facts, in the order they happen.' })}
-${azEntries([
-				fact('upload', 'Copies the site', 'the files a build wrote, into a folder the platform owns — nothing is uploaded anywhere'),
-				fact('document', 'Records the release', 'version, build, destination and date, so “when did 13.0 go out” is a query rather than a memory'),
-				fact('check', 'Leaves the old one alone', 'a new version is a new row beside the last one; no published file is ever rewritten in place')
-			])}`;
+${section({ title: 'What publishing does', desc: 'Three facts, in the order they happen — read across, because publishing is one act with three parts.' })}
+${cards(
+				[
+					{ mark: 'upload', title: 'Copies the site', desc: 'The files a build wrote, into a folder the platform owns — nothing is uploaded anywhere.' },
+					{ mark: 'document', title: 'Records the release', desc: 'Version, build, destination and date, so “when did 13.0 go out” is a query rather than a memory.' },
+					{ mark: 'check', title: 'Leaves the old one alone', desc: 'A new version is a new row beside the last one; no published file is ever rewritten in place.' }
+				],
+				{ dense: true }
+			)}`;
 }
 
 /**

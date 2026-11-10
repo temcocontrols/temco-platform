@@ -161,6 +161,21 @@ interface Pages {
 		folder?: string;
 		scripts: { name: string; command: string }[];
 	}): string;
+	/** The queue, and the draft it opens: the drafts the Review Center is holding. */
+	reviewBody(
+		drafts: readonly {
+			id: number;
+			documentSlug: string;
+			source?: string;
+			pageId: string;
+			title: string;
+			kind: string;
+			body: string;
+			createdAt: string;
+			state: 'draft' | 'accepted' | 'discarded';
+		}[],
+		project: string | undefined
+	): string;
 }
 
 const pages = createRequire(import.meta.url)(fileURLToPath(new URL('../out/docsPages.js', import.meta.url))) as Pages;
@@ -208,6 +223,18 @@ const rows = (html: string): { title: string; meta: string; command: string }[] 
 			title: /az-entry__title[^>]*">([^<]*)</u.exec(chunk)?.[1] ?? '',
 			meta: /az-entry__meta[^>]*">([\s\S]*?)<\/span>(?=<\/div>|$)/u.exec(chunk)?.[1] ?? '',
 			command: /data-command="([^"]+)"/u.exec(chunk)?.[1] ?? ''
+		}));
+
+/** The cards of a page, as `title — the sentence — the note — whether it is greyed`. */
+const cardsOf = (html: string): { title: string; desc: string; note: string; muted: boolean }[] =>
+	html
+		.split(/(?=<div class="az-card)/u)
+		.slice(1)
+		.map((chunk) => ({
+			title: /az-card__title">([^<]*)</u.exec(chunk)?.[1] ?? '',
+			desc: /az-card__desc">([^<]*)</u.exec(chunk)?.[1] ?? '',
+			note: /az-card__note">([^<]*)</u.exec(chunk)?.[1] ?? '',
+			muted: chunk.startsWith('<div class="az-card az-card--muted"')
 		}));
 
 test('the title block offers the two acts it owns, and only those', () => {
@@ -279,7 +306,7 @@ test('one card per output the project was made with, in the create form\'s order
 			]
 		})
 	);
-	const named = categoryCards(html)
+	const named = cardsOf(html)
 		.filter((card) => ['Website', 'PDF', 'Offline help', 'Search index', 'AI index'].includes(card.title))
 		.map((card) => card.title);
 	assert.deepEqual(named, ['Website', 'PDF', 'Offline help', 'Search index', 'AI index'], 'the outputs are not in the form\'s order');
@@ -324,7 +351,7 @@ test('an output this repository has no script for is reported by name, never run
 
 test('an output the project was not made with says so, and offers nothing', () => {
 	const html = pages.buildsBody(facts({ outputs: ['website'] }));
-	const ai = categoryCards(html).find((card) => card.title === 'AI index');
+	const ai = cardsOf(html).find((card) => card.title === 'AI index');
 	assert.match(String(ai?.desc), /Not part of this project/u, 'an unused output is not explained');
 	assert.equal(ai?.note, 'Embeddings for answers, kept on this machine', 'the card does not say what the output is for');
 	assert.equal(ai?.muted, true, 'an unused output is not greyed');
@@ -353,18 +380,31 @@ test('builds but no files: the page says nothing was written instead of drawing 
 	assert.match(html, /az-number__value">0</u, 'the strip does not count the files');
 });
 
-// ---------- Publish & Releases: the same outputs, as the categories of the files ----------
+// ---------- Publish & Releases: the same outputs, as the tabs of the files ----------
 
-/** The cards of "The files a reader can be given", as `title — the sentence — the note — whether it is greyed`. */
-const categoryCards = (html: string): { title: string; desc: string; note: string; muted: boolean }[] =>
+/** The tabs of "The files a reader can be given": the name, the line under it, and what the tab says about itself. */
+const tabsOf = (html: string): { title: string; note: string; selected: boolean; muted: boolean; controls: string }[] =>
 	html
-		.split(/(?=<div class="az-card)/u)
+		.split(/(?=<button type="button" class="az-tab)/u)
 		.slice(1)
 		.map((chunk) => ({
-			title: /az-card__title">([^<]*)</u.exec(chunk)?.[1] ?? '',
-			desc: /az-card__desc">([^<]*)</u.exec(chunk)?.[1] ?? '',
-			note: /az-card__note">([^<]*)</u.exec(chunk)?.[1] ?? '',
-			muted: chunk.startsWith('<div class="az-card az-card--muted"')
+			title: /az-tab__title">([^<]*)</u.exec(chunk)?.[1] ?? '',
+			note: /az-tab__note">([^<]*)</u.exec(chunk)?.[1] ?? '',
+			selected: /aria-selected="true"/u.test(chunk),
+			muted: /class="az-tab[^"]*is-muted/u.test(chunk),
+			controls: /aria-controls="([^"]*)"/u.exec(chunk)?.[1] ?? ''
+		}));
+
+/** The panels: which output each one belongs to, and whether it is the one showing. */
+const panelsOf = (html: string): { id: string; hidden: boolean; text: string }[] =>
+	html
+		.split(/(?=<div class="az-tabpanel")/u)
+		.slice(1)
+		.map((chunk) => ({
+			id: /id="output-panel-([^"]*)"/u.exec(chunk)?.[1] ?? '',
+			// The attribute is written only when the panel is closed, so its absence is the open panel.
+			hidden: /^<div class="az-tabpanel" id="[^"]*" role="tabpanel" aria-labelledby="[^"]*" hidden/u.test(chunk),
+			text: chunk.replace(/<[^>]+>/gu, ' ').replace(/\s+/gu, ' ').trim()
 		}));
 
 const artifactsWithBytes = [
@@ -376,10 +416,10 @@ const artifactsWithBytes = [
 	}))
 ];
 
-test('the categories are the five outputs in the form\'s order, greyed for the ones the project was not made with', () => {
+test('the outputs are a row of tabs in the form\'s order, greyed for the ones the project was not made with', () => {
 	const html = pages.releasesBody(facts({ artifacts: artifactsWithBytes }));
 	assert.deepEqual(
-		categoryCards(html).map((card) => [card.title, card.muted]),
+		tabsOf(html).map((tab) => [tab.title, tab.muted]),
 		[
 			['Website', false],
 			['PDF', false],
@@ -390,43 +430,175 @@ test('the categories are the five outputs in the form\'s order, greyed for the o
 	);
 });
 
-test('a category says what it holds, or what makes it, and never reads as an empty file list', () => {
+test('a tab says what its output holds, or what makes it, in a line short enough to sit under the name', () => {
 	const html = pages.releasesBody(facts({ artifacts: artifactsWithBytes }));
-	const cards = categoryCards(html);
-	assert.match(cards[0]?.desc ?? '', /Built — newest .* ago/u, 'a built category does not say it is built');
-	assert.match(cards[0]?.note ?? '', /files · /u, 'a built category does not weigh its files');
-	assert.match(cards[1]?.desc ?? '', /this folder has no docs:pdf or build:pdf script/u, 'an unbuildable category names no reason');
-	assert.match(cards[3]?.desc ?? '', /The site writes this index/u, 'the index does not say who writes it');
-	assert.match(cards[4]?.desc ?? '', /Not part of this project/u, 'an unticked output does not say so');
+	const tabs = tabsOf(html);
+	assert.match(tabs[0]?.note ?? '', /^8 files · /u, 'a built output does not say what it holds');
+	assert.match(tabs[1]?.note ?? '', /no docs:pdf script/u, 'an unbuildable output names no reason');
+	assert.match(tabs[3]?.note ?? '', /written by the site/u, 'the index does not say who writes it');
+	assert.match(tabs[4]?.note ?? '', /not part of this project/u, 'an unticked output does not say so');
 });
 
-test('every picked output gets its own block below, folding its files, and unticked ones do not', () => {
+test('the page opens on the first output that holds something, and every tab names the panel it opens', () => {
 	const html = pages.releasesBody(facts({ artifacts: artifactsWithBytes }));
-	const sections = [...html.matchAll(/az-section__title">([^<]*)</gu)].map((match) => match[1] ?? '');
+	const tabs = tabsOf(html);
+	const panels = panelsOf(html);
+	assert.equal(tabs.filter((tab) => tab.selected).length, 1, 'more than one tab is drawn as chosen');
+	assert.equal(tabs.find((tab) => tab.selected)?.title, 'Website', 'the page does not open on the built output');
+	// Five tabs, five panels, and each tab points at the panel of its own output.
 	assert.deepEqual(
-		sections.filter((title) => ['Website', 'PDF', 'Offline help', 'Search index', 'AI index'].includes(title)),
-		['Website'],
-		'a block is drawn for an output that holds no file of its own'
+		panels.map((panel) => panel.id),
+		tabs.map((tab) => tab.controls.replace('output-panel-', '')),
+		'a tab opens a panel that is not its own'
 	);
-	// The website's files fold; the three that hold nothing are callouts with the reason instead of an empty list.
-	assert.match(html, /<span class="az-more__closed">Show \d+ more files</u, 'the website files do not fold');
-	assert.match(html, /PDF: nothing to list yet/u);
-	assert.match(html, /Offline help: nothing to list yet/u);
-	assert.match(html, /Search index: nothing to list yet/u);
-	assert.doesNotMatch(html, /AI index: nothing to list yet/u, 'an unticked output is drawn as a block');
+	assert.deepEqual(panels.filter((panel) => panel.hidden).map((panel) => panel.id), ['pdf', 'help', 'search', 'ai']);
 });
 
-test('a built output sorts its files newest first under its own heading', () => {
+test('the chosen panel lists its files, folding after six, and an empty one says why instead of listing nothing', () => {
+	const html = pages.releasesBody(facts({ artifacts: artifactsWithBytes }));
+	const panels = panelsOf(html);
+	assert.match(panels[0]?.text ?? '', /page-0\.md/u, 'the open panel does not list its files');
+	assert.match(html, /<span class="az-more__closed">Show 2 more files</u, 'the files do not fold inside the panel');
+	assert.match(panels[0]?.text ?? '', /Open folder/u, 'the panel has no way into the folder');
+	assert.match(panels[1]?.text ?? '', /nothing to list yet/u, 'an empty output has no explanation');
+	assert.match(panels[4]?.text ?? '', /is not part of this project/u, 'an unticked output has no explanation');
+});
+
+test('a built output sorts its files newest first and is weighed in its own tab and panel', () => {
 	const html = pages.releasesBody(facts({ artifacts: [...artifactsWithBytes, { kind: 'pdf', path: 'C:/Temco/t3000/dist/T3000.pdf', builtAt: at(5), bytes: 1024 * 1024 }] }));
-	const cards = categoryCards(html);
-	assert.match(cards[1]?.desc ?? '', /Built — newest .* ago/u, 'a PDF that exists is not reported as built');
-	assert.match(cards[1]?.note ?? '', /1 file · 1\.0 MB/u, 'the PDF is not weighed');
-	assert.match(html, /PDF<\/h2>|az-section__title">PDF</u, 'the PDF has no block of its own');
+	const tabs = tabsOf(html);
+	const panels = panelsOf(html);
+	assert.match(tabs[1]?.note ?? '', /^1 file · 1\.0 MB$/u, 'the PDF is not weighed on its tab');
+	assert.match(panels[1]?.text ?? '', /T3000\.pdf/u, 'the PDF is not listed in its own panel');
+	assert.equal(panels.find((panel) => panel.id === 'pdf')?.hidden, true, 'a closed panel is drawn as open');
+});
+
+test('what publishing does is three facts in a row, read across rather than down', () => {
+	const html = pages.releasesBody(facts({ artifacts: artifactsWithBytes }));
+	const section = html.slice(html.indexOf('What publishing does'));
+	// A row of cards, not a column of rows: the three parts of one act are read side by side.
+	assert.match(section, /What publishing does/u);
+	const cards = cardsOf(section).map((card) => card.title);
+	assert.deepEqual(cards, ['Copies the site', 'Records the release', 'Leaves the old one alone']);
+	assert.equal(cardsOf(section).filter((card) => card.muted).length, 0, 'a fact of publishing is drawn as greyed out');
+});
+
+test('only the site\'s data files are links, the link is the name, and no row carries a trailing Open', () => {
+	const html = pages.releasesBody(facts({
+		artifacts: [...artifactsWithBytes, { kind: 'site', path: 'C:/Temco/t3000/dist/site.json', builtAt: at(180), bytes: 64 }]
+	}));
+	const links = [...html.matchAll(/<button type="button" class="az-entry__title az-entry__title--link[^"]*" data-command="temcoDocs\.openArtifact"[^>]*>([^<]*)</gu)]
+		.map((match) => match[1]);
+	// The name itself is the way in — a page or a picture under it is read in the site, and a trailing "Open" on every
+	// one of five hundred rows said the same word five hundred times.
+	assert.deepEqual(links, ['site.json'], 'a file other than the JSON is offered as a link, or the JSON is not one');
+	assert.doesNotMatch(html, /az-entry__go/u, 'a row still ends in a trailing Open');
+	assert.match(panelsOf(html)[0]?.text ?? '', /page-0\.md/u, 'the panel does not name its files');
+	assert.match(html, /<div class="az-entries az-entries--log">/u, 'the file list is still drawn as boxes');
+	// The fold is a word, not a disclosure triangle.
+	assert.match(html, /<summary><span class="az-more__closed">/u);
 });
 
 test('a project with no output recorded says so rather than showing five empty categories', () => {
 	const html = pages.releasesBody(facts({ artifacts: artifactsWithBytes, outputs: [] }));
 	assert.match(html, /This project has no outputs recorded/u);
+});
+
+// ---------- Review Center: one queue, and the draft it opens ----------
+
+const drafts = [
+	{
+		id: 7,
+		documentSlug: 't3000',
+		source: 'T3000 release history',
+		pageId: 't3000/commissioning/ports',
+		title: 'Port configuration',
+		kind: 'Markdown',
+		body: '# Port configuration\n\nThe first line.\n\nThe second paragraph.',
+		createdAt: at(4),
+		state: 'draft' as const
+	},
+	{
+		id: 6,
+		documentSlug: 't3000',
+		pageId: 't3000/commissioning/subnets',
+		title: 'Subnet planning',
+		kind: 'Markdown',
+		body: '# Subnet planning\n\nPlaceholder.',
+		createdAt: at(120),
+		state: 'draft' as const
+	}
+];
+
+/** The rows of a review queue, as `title — the line under it — whether it is the one open`. */
+const tabsOf2 = (html: string): { title: string; meta: string; on: boolean }[] =>
+	html
+		.split(/(?=<button type="button" class="az-queue__tab)/u)
+		.slice(1)
+		.map((chunk) => ({
+			title: /az-queue__title">([^<]*)</u.exec(chunk)?.[1] ?? '',
+			meta: /az-queue__meta">([^<]*)</u.exec(chunk)?.[1] ?? '',
+			on: /aria-selected="true"/u.test(chunk)
+		}));
+
+test('the queue is a vertical tab list: the row chosen is the draft opened beside it', () => {
+	const html = pages.reviewBody(drafts, 't3000');
+	assert.match(html, /<div class="az-queue" role="tablist" aria-orientation="vertical"/u, 'the queue is not a tab list');
+	const tabs = [...html.matchAll(/<button type="button" class="az-queue__tab([^"]*)" role="tab" id="([^"]+)" aria-selected="(true|false)" aria-controls="([^"]+)"/gu)]
+		.map((match) => ({ on: match[3] === 'true', tab: match[2], panel: match[4] }));
+	assert.equal(tabs.length, 2, 'the queue does not have one row per draft');
+	assert.equal(tabs.filter((tab) => tab.on).length, 1, 'more than one draft is drawn as chosen');
+	assert.equal(tabs.find((tab) => tab.on)?.tab, 'draft-tab-7', 'the newest draft is not the one opened');
+	assert.deepEqual(
+		tabs.map((tab) => tab.panel),
+		['draft-panel-7', 'draft-panel-6'],
+		'a queue row opens a panel that is not its own draft'
+	);
+	assert.deepEqual(tabsOf2(html).map((row) => row.on), [true, false], 'the queue does not mark the open draft');
+});
+
+test('one draft is open at a time, and accepting writes the draft whose text is showing', () => {
+	const html = pages.reviewBody(drafts, 't3000');
+	// Exactly one panel without `hidden`, and it is the newest draft's.
+	const panels = html.split(/(?=<div class="az-tabpanel" id="draft-panel-)/u).slice(1);
+	assert.equal(panels.filter((panel) => !/role="tabpanel"[^>]*hidden/u.test(panel)).length, 1, 'two drafts are open at once');
+	const open = panels.find((panel) => !/role="tabpanel"[^>]*hidden/u.test(panel)) ?? '';
+	assert.match(open, /id="draft-panel-7"/u, 'the open panel is not the chosen draft');
+	// The acts belong to the draft they settle: each panel names its own, so a closed draft cannot be accepted by mistake.
+	for (const [panel, id] of [[7, 7], [6, 6]] as const) {
+		const chunk = panels.find((one) => one.includes(`id="draft-panel-${panel}"`)) ?? '';
+		assert.match(chunk, new RegExp(`data-command="temcoDocs\\.acceptDraft"[^>]*data-args="\\[${id}\\]"`, 'u'), `Accept does not name draft ${id}`);
+		assert.match(chunk, new RegExp(`data-command="temcoDocs\\.discardDraft"[^>]*data-args="\\[${id}\\]"`, 'u'), `Discard does not name draft ${id}`);
+	}
+	assert.doesNotMatch(html, /az-queue__tab[^>]*>[^<]*<[^>]*data-command/u, 'a queue row carries an act');
+});
+
+test('a draft shows the text as it will be written, its kind, and how long it has waited', () => {
+	const html = pages.reviewBody(drafts, 't3000');
+	assert.match(html, /# Port configuration/u, 'the draft text is not on the page');
+	assert.match(html, /Proposed for t3000\/commissioning\/ports, written from T3000 release history/u);
+	assert.match(html, /5 lines/u, 'the line count is not shown');
+	assert.match(html, /Latest/u, 'the newest draft is not marked');
+	const older = tabsOf2(html)[1];
+	assert.match(older?.meta ?? '', /no source/u, 'the older draft does not say where it came from');
+	assert.match(older?.meta ?? '', /h ago/u, 'the older draft is not dated');
+});
+
+test('with nothing waiting, the page says so and draws no queue', () => {
+	const html = pages.reviewBody([], 't3000');
+	assert.match(html, /Nothing is waiting to be reviewed/u);
+	assert.match(html, /az-callout/u);
+	assert.doesNotMatch(html, /class="az-queue"/u, 'an empty queue is still drawn');
+});
+
+test('what settling a draft does is three facts in a row, read across', () => {
+	const html = pages.reviewBody(drafts, 't3000');
+	const section = html.slice(html.indexOf('What settling a draft does'));
+	assert.deepEqual(cardsOf(section).map((card) => card.title), [
+		'Accepting writes the page',
+		'The text stays as evidence',
+		'Only a release reaches a reader'
+	]);
 });
 
 let failedCount = 0;

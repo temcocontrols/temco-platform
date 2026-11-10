@@ -4198,15 +4198,23 @@ body {
 }
 
 .az-more > summary {
+	display: inline-block;
 	padding: 2px 0;
-	color: var(--fg-muted);
+	color: var(--az-blue, #0078d4);
 	font-size: 12px;
 	line-height: 17px;
 	cursor: pointer;
+	/* A link does not wear a disclosure triangle: the words already say what the click does. */
+	list-style: none;
+	text-decoration: none;
+}
+
+.az-more > summary::-webkit-details-marker {
+	display: none;
 }
 
 .az-more > summary:hover {
-	color: var(--az-blue, #0078d4);
+	text-decoration: underline;
 }
 
 /*
