@@ -625,6 +625,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Page Properties** | editor title | `temcoDocs.pageProperties` |
 | **Capture / Paste Screenshot** | editor title | `temcoDocs.captureImage`, `temcoDocs.pasteImage` |
 | **Open the source** (plain text) | editor title, ribbon `···` | `temcoEditor.openSource` |
+| **Translate This Page…** | Command Palette only, under `Temco Docs` | `temcoDocs.translatePage` |
 | **Temco Markdown** (whole menu) | editor right-click | submenu with every format verb |
 
 ### The pages themselves
