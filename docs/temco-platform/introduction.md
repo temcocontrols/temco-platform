@@ -226,8 +226,7 @@ This is the step that produces a PDF or a `.chm` **for the docs module**: the co
 
 ![The version box: the title naming the project, `project t3000` in the prompt, and the version field with `1.0` in it.](media/publishing/07-add-build-01.png)
 
-> **Screenshot — what follows the box: the site page opened on `t3000` version `1.0`, with that version selected.**
-> `media/publishing/07-add-build-02.png`
+![What follows the box: the site page opened on `t3000` version `1.0`, with that version selected.](media/publishing/07-add-build-02.png)
 
 It finds every `dist/site` and `dist/docs` two folders below the window's folders, the projects folder and the working folder, and offers the ones that contain an `index.html` or, for a documentation project, an `index.md`. A Markdown build is added as content, so its pages become editable pages of the site; an HTML build is copied beside the catalog as it came. The box then names the project it will land in (`project t3000`) and asks one question: which version. Type `1.0`.
 
@@ -255,8 +254,7 @@ Adding a build is a local act. Nothing is published by this step.
 
 **Make the Downloads** (`temcoLearn.site.downloads`) is the step between *Add* and *Publish* on the Publishing page.
 
-> **Screenshot — the Publishing page, with the five steps visible and the downloads step running.**
-> `media/publishing/08-downloads.png`
+![The Publishing page, with the five steps visible and the downloads step running.](media/publishing/08-downloads.png)
 
 It runs the site's own scripts in this order, and stops at the first real failure:
 
@@ -279,8 +277,7 @@ These files are the one thing the deploy cannot make for you. The site's CI has 
 
 **Start the Site** (`temcoLearn.site.start`).
 
-> **Screenshot — the site in a browser at localhost:1025: T3000's card under Documentation, and its page open.**
-> `media/publishing/09-preview.png`
+![The site in a browser at localhost:1025: T3000's card under Documentation, and its page open.](media/publishing/09-preview.png)
 
 It builds the site first if `dist/index.html` is not there, then serves the built pages on one port: `temcoLearn.sitePort`, 1025 by default. What you are looking at is the **clone**, with the catalog that step 5 wrote. It is what a reader will see, minus the address.
 
@@ -303,8 +300,7 @@ If a page is missing, it is either unregistered or marked `ship: false`, so go b
 
 **Publish** (`temcoLearn.publish`) opens the publishing page: what changed, the steps of a publish in order, and the button. Press *Publish* there and confirm the message. **Publish Now** (`temcoLearn.publishNow`) does the same thing from the palette.
 
-> **Screenshot — the Publishing page before the push: the changed paths, the five steps, and the Publish button.**
-> `media/publishing/10-publish.png`
+![The Publishing page before the push: the changed paths, the five steps, and the Publish button.](media/publishing/10-publish.png)
 
 It does four things in order, and it stops at the first one that says no:
 
@@ -330,8 +326,7 @@ You will spend most of your time here, so five minutes learning the surface save
 
 A page opens in **Temco Editor**, the editor that owns `*.md`. It has one row of controls above the text, the text in the middle, and a **Page** container on the far right. The headings you see in the text are the page's prose; its title in the navigation comes from the registry, so renaming one does not rename the other.
 
-> **Screenshot — a page open in Temco Editor, with the ribbon groups numbered: undo/redo, Style, Lists, marks, blocks, insert, `···`, and the right group.**
-> `media/publishing/11-editor-ribbon.png`
+![A page open in Temco Editor, with the ribbon groups numbered: undo/redo, Style, Lists, marks, blocks, insert, `···`, and the right group.](media/publishing/11-editor-ribbon.png)
 
 ### The ribbon, left to right
 
@@ -354,8 +349,7 @@ The same actions are in the editor title bar and in the right-click menu under *
 
 Click a picture once to select it. A ring appears, with drag handles at its edges. Drag a handle to resize, and the width is written into the Markdown title as `"w=480"`, so the built site and the offline help honour it too.
 
-> **Screenshot — a picture selected in the editor, with the drag handles and the 25% · 50% · 75% · 100% · Delete menu visible.**
-> `media/publishing/12-editor-picture.png`
+![A picture selected in the editor, with the drag handles and the 25% · 50% · 75% · 100% · Delete menu visible.](media/publishing/12-editor-picture.png)
 
 With a picture selected, the inline menu offers the widths **25% · 50% · 75% · 100%** and **Delete**. `Ctrl+Z` puts a resize back. Nothing is written to the file until the editor saves, so an experiment costs you nothing until you decide to keep it.
 
@@ -363,15 +357,13 @@ With a picture selected, the inline menu offers the widths **25% · 50% · 75% �
 
 ### The Page container, on the right
 
-> **Screenshot — the Page container: the page's Outline, and the Draft the AI wrote beside the page's own text.**
-> `media/publishing/13-editor-sidebar.png`
+![The Page container: the page's Outline, and the Draft the AI wrote beside the page's own text.](media/publishing/13-editor-sidebar.png)
 
 Two things live there. The **Outline** lists the page's headings, and clicking one jumps to it. The **Draft** appears when the AI module has written one. A draft is never applied by itself: you accept it, and it becomes a single undoable edit.
 
 ### Preview, Diff and Source
 
-> **Screenshot — Preview of a page beside the editor, then the Diff view against HEAD.**
-> `media/publishing/14-editor-preview.png`
+![Preview of a page beside the editor, then the Diff view against HEAD.](media/publishing/14-editor-preview.png)
 
 | Control | Shows | Use it when |
 |---|---|---|
@@ -489,8 +481,7 @@ If you already have a `docs/` folder, create the project with **From existing fi
 
 **Export…** on **Publish & Releases**, or **Exports** in the Command Palette (`temcoDocs.export` — it has no button of its own in the activity bar), opens the Exports page, which tells you what you get before you get it. Every export writes into the project's `dist/`, and the notification offers *Show in Folder*.
 
-> **Screenshot — the Exports page: the four shapes, each saying what is inside it and where it lands.**
-> `media/publishing/15-exports.png`
+![The Exports page: the four shapes, each saying what is inside it and where it lands.](media/publishing/15-exports.png)
 
 | Shape | Command | You get |
 |---|---|---|
