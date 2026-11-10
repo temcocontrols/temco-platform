@@ -206,6 +206,59 @@ test('a source\'s page list is replaced, never appended to', async () => {
 	});
 });
 
+test('a target records the folder it writes, and the files it stopped writing go away', async () => {
+	await withCatalog(async catalog => {
+		const id = catalog.createDocument(project('T3000 Platform', 't3000-platform'));
+		assert.ok(id > 0);
+
+		// A first build: a website of two pages, filed under the name an older build path used.
+		catalog.replaceArtifacts('t3000-platform', 'output', [
+			{ path: 'C:\\site\\index.html', bytes: 10, builtAt: '2026-01-01T00:00:00.000Z' },
+			{ path: 'C:\\site\\ports.html', bytes: 10, builtAt: '2026-01-01T00:00:00.000Z' },
+			{ path: 'C:\\site\\retired.html', bytes: 10, builtAt: '2026-01-01T00:00:00.000Z' }
+		]);
+		assert.equal(catalog.documentArtifacts('t3000-platform').length, 3, 'the first set is recorded');
+
+		// The same target, built again as Markdown — the kind it is filed under now, superseding `output`.
+		const removed = catalog.replaceArtifacts(
+			't3000-platform',
+			'site',
+			[
+				{ path: 'C:\\site\\index.md', bytes: 3, builtAt: '2026-02-01T00:00:00.000Z' },
+				{ path: 'C:\\site\\ports.md', bytes: 3, builtAt: '2026-02-01T00:00:00.000Z' }
+			],
+			undefined,
+			['output']
+		);
+
+		const held = catalog.documentArtifacts('t3000-platform');
+		assert.deepEqual(held.map(row => row.path).sort(), ['C:\\site\\index.md', 'C:\\site\\ports.md'], 'only what the build writes now');
+		assert.equal(removed, 3, 'the three files of the old set went with it, retired.html included');
+		assert.equal(held[0]?.bytes, 3, 'the size comes back, so a page can total a target');
+	});
+});
+
+test('a second build of the same target keeps the files it did not touch', async () => {
+	await withCatalog(async catalog => {
+		catalog.createDocument(project('T3000 Platform', 't3000-platform'));
+		catalog.replaceArtifacts('t3000-platform', 'site', [
+			{ path: 'C:\\site\\a.md', bytes: 1 },
+			{ path: 'C:\\site\\b.md', bytes: 1 },
+			{ path: 'C:\\site\\c.md', bytes: 1 }
+		]);
+
+		// A build that rewrote one page: the set is still three files, because the folder still holds three.
+		const removed = catalog.replaceArtifacts('t3000-platform', 'site', [
+			{ path: 'C:\\site\\a.md', bytes: 2 },
+			{ path: 'C:\\site\\b.md', bytes: 1 },
+			{ path: 'C:\\site\\c.md', bytes: 1 }
+		]);
+
+		assert.equal(removed, 0, 'nothing was forgotten');
+		assert.equal(catalog.documentArtifacts('t3000-platform').length, 3, 'and nothing was lost');
+	});
+});
+
 test('the catalog outlives the handle that wrote it', async () => {
 	const folder = mkdtempSync(join(tmpdir(), 'temco-store-'));
 	try {

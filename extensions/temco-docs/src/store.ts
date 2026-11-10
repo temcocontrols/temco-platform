@@ -333,7 +333,9 @@ export interface Catalog {
 	documentSourceSlugs(documentSlug: string): string[];
 	setDocumentSources(documentSlug: string, sourceSlugs: readonly string[]): void;
 	documentSources(documentSlug: string): { name: string; kind: string; branch?: string }[];
-	documentArtifacts(documentSlug: string): { kind: string; path: string; builtAt: string }[];
+	documentArtifacts(documentSlug: string): { kind: string; path: string; bytes?: number; builtAt: string }[];
+	/** One target's output as the build left it: recorded, and the rows of that kind it no longer writes removed. */
+	replaceArtifacts(documentSlug: string, kind: string, artifacts: readonly { path: string; bytes?: number; builtAt?: string }[], buildId?: number, alsoReplace?: readonly string[]): number;
 	documentPages(documentSlug: string): (PageRow & { source: string })[];
 	startBuild(documentSlug: string, revision?: string): number;
 	finishBuild(buildId: number, status: string): void;

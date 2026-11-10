@@ -426,6 +426,11 @@
         "icon": "$(file)"
       },
       {
+        "command": "temcoDocs.revealArtifactFolder",
+        "title": "Open the Folder an Output Is In",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "temcoDocs.openFile",
         "title": "Open the File",
         "icon": "$(go-to-file)"
@@ -1278,7 +1283,7 @@
     "activationEvents": null
   },
   "scripts": {
-    "vscode:prepublish": "npm run check-commands && npm run check-record && npm run check-icons && npm run check-types && npm run compile && npm run check-builds && npm run check-site && npm run check-export && npm run check-docx && npm run check-tree && npm run check-panel && npm run check-status && npm run check-grid && npm run check-translate && npm run build-webview",
+    "vscode:prepublish": "npm run check-commands && npm run check-record && npm run check-icons && npm run check-types && npm run compile && npm run check-builds && npm run check-site && npm run check-export && npm run check-docx && npm run check-tree && npm run check-releases && npm run check-panel && npm run check-status && npm run check-grid && npm run check-translate && npm run build-webview",
     "check-commands": "node --experimental-strip-types scripts/check-commands.mts",
     "check-record": "node --experimental-strip-types scripts/check-record.mts",
     "check-types": "node node_modules/typescript/bin/tsc -p tsconfig.webview.json && node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
@@ -1289,6 +1294,7 @@
     "check-icons": "node --experimental-strip-types scripts/check-icons.mts",
     "check-panel": "node --experimental-strip-types scripts/check-panel.mts",
     "check-tree": "node --experimental-strip-types scripts/check-tree.mts",
+    "check-releases": "node --experimental-strip-types scripts/check-releases.mts",
     "check-status": "node --experimental-strip-types scripts/check-status.mts",
     "check-grid": "node --experimental-strip-types scripts/check-grid.mts",
     "check-translate": "node --experimental-strip-types scripts/check-translate.mts",

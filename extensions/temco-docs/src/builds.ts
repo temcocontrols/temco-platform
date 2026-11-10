@@ -100,7 +100,9 @@ async function buildSiteFor(
     // docfx.json writes here: the generated project names its destination `../dist/docs`.
     roots: [path.join(root.folder.uri.fsPath, 'dist', 'docs'), path.join(root.folder.uri.fsPath, 'dist', 'site')],
     siblingHelpDocs: false,
-    pattern: /\.(html|json)$/i,
+    // What this run wrote, for the log: the artifact set itself is read from the folder (see outputsOf), because a
+    // documentation build writes Markdown and the pictures beside it as much as any page of HTML.
+    pattern: /\.(html|json|md|png|jpe?g|gif|svg|webp|css|js|pdf)$/i,
     generate,
   });
 }
@@ -135,11 +137,16 @@ interface Recipe {
  */
 interface BuildWatch {
   artifact(kind: string, file: string): void;
+  /**
+   * The target's output as it now stands: every file in the folder the build writes, not only the ones this run
+   * touched. Recording the whole set is what lets the rows of files the build stopped writing go away.
+   */
+  outputs(kind: string, files: readonly string[]): void;
   finish(status: string): void;
 }
 
 /** Nothing to record when no project is selected: a build without a project is a build about nothing. */
-async function openWatch(context: vscode.ExtensionContext): Promise<BuildWatch | undefined> {
+async function openWatch(context: vscode.ExtensionContext, output: vscode.OutputChannel): Promise<BuildWatch | undefined> {
   const project = selection.project();
   if (project === undefined) {
     return undefined;
@@ -154,6 +161,23 @@ async function openWatch(context: vscode.ExtensionContext): Promise<BuildWatch |
           catalog?.recordArtifact(project, { kind, path: file, bytes: bytesOf(file), buildId });
         } catch {
           // An artifact that cannot be recorded is still a file on disk; the log above says where it is.
+        }
+      },
+      outputs: (kind, files) => {
+        try {
+          const recorded = catalog?.replaceArtifacts(
+            project,
+            kind,
+            files.map((file) => ({ path: file, bytes: bytesOf(file), builtAt: modifiedIso(file) })),
+            buildId,
+            // An earlier build path filed a website under `output`: the same target, so its rows go with it.
+            kind === 'site' ? ['output'] : []
+          );
+          if (recorded !== undefined && recorded > 0) {
+            output.appendLine(`Forgot ${recorded} file(s) of ${kind} that this build no longer writes.`);
+          }
+        } catch {
+          // A set that cannot be recorded leaves the last one in place, which the page then shows honestly.
         }
       },
       finish: (status) => {
@@ -176,6 +200,58 @@ function bytesOf(file: string): number | undefined {
     return fs.statSync(file).size;
   } catch {
     return undefined;
+  }
+}
+
+/** When a file was written, as the catalog stores it. ISO, because every other time in a row is. */
+function modifiedIso(file: string): string | undefined {
+  try {
+    return new Date(fs.statSync(file).mtimeMs).toISOString();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Everything the target holds after the build — the set that replaces the last one.
+ *
+ * Two shapes, because the targets are two shapes. A site is a folder this application can read whole, so every file in
+ * it is the site: the Markdown, the pictures it points at, the index, the stylesheet. A help file or a PDF is one kind of
+ * file among a repository's sources, so there the extension decides, and only the folders the target writes are walked.
+ *
+ * Deliberately not filtered by time: a file this run did not touch is still part of what a reader gets.
+ */
+function outputsOf(recipe: Recipe): string[] {
+  const found: string[] = [];
+  const roots = [...recipe.roots, ...(recipe.siblingHelpDocs ? siblingHelpDocs(recipe.roots[0] ?? '') : [])];
+  const site = recipe.kind === 'site';
+  for (const root of roots) {
+    collect(root, site ? undefined : recipe.pattern, found, site ? 10 : 6);
+  }
+  return [...new Set(found)].sort();
+}
+
+/** A whole folder, or every file in it whose name matches: one walker for both, because the skip list is the same. */
+function collect(directory: string, pattern: RegExp | undefined, found: string[], depth: number): void {
+  if (depth < 0) {
+    return;
+  }
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (SKIP.has(entry.name)) {
+        continue;
+      }
+      collect(full, pattern, found, depth - 1);
+    } else if (pattern === undefined || pattern.test(entry.name)) {
+      found.push(full);
+    }
   }
 }
 
@@ -219,7 +295,7 @@ async function build(context: vscode.ExtensionContext, root: DocsRoot, output: v
   output.appendLine('');
   output.appendLine(`Building ${recipe.label} in ${root.folder.name}: npm run ${script}`);
   // Opened before the script runs: the attempt is a fact whether or not anything comes of it.
-  const watch = await openWatch(context);
+  const watch = await openWatch(context, output);
 
   // The generator first, when the repository carries one: `docs:registry` is what writes the index, the headings
   // and the stale verdict, so a build that skips it renders whatever the last person happened to leave behind —
@@ -242,9 +318,9 @@ async function build(context: vscode.ExtensionContext, root: DocsRoot, output: v
   }
   output.show(true);
 
-  for (const file of files) {
-    watch?.artifact(recipe.kind, file);
-  }
+  // What the target holds now, not what this run touched: unchanged files are still its output, and files the build
+  // stopped writing are not.
+  watch?.outputs(recipe.kind, outputsOf(recipe));
   watch?.finish(files.length > 0 ? 'succeeded' : 'no artifact');
 
   const answer =

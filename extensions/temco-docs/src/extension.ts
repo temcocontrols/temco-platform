@@ -6,6 +6,7 @@
 // read, so the view can never answer about a folder nobody named. Nothing is written to a page without an
 // explicit command, and nothing is published from here at all.
 
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -1119,6 +1120,19 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
         return;
       }
       await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(file));
+    }),
+    // A target's folder, revealed rather than opened: what a person wants after reading "517 files" is the folder they
+    // are in, in the file manager they already use, not a page inside this editor.
+    vscode.commands.registerCommand('temcoDocs.revealArtifactFolder', async (folder?: unknown) => {
+      if (typeof folder !== 'string' || folder.length === 0) {
+        return;
+      }
+      const where = vscode.Uri.file(folder);
+      if (fs.existsSync(folder)) {
+        await vscode.commands.executeCommand('revealFileInOS', where);
+        return;
+      }
+      void vscode.window.showWarningMessage(`Temco Docs: ${folder} is not on disk any more — build again to recreate it.`);
     }),
     // A page is a file too: the page view shows it read-only, and this is the way into editing it.
     vscode.commands.registerCommand('temcoDocs.openFile', async (file?: unknown) => {

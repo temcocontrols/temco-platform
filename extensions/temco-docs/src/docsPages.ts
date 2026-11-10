@@ -12,6 +12,7 @@ import * as vscode from 'vscode';
 import { DocsRoot, PageEntry, collectPages } from './registry';
 import { pagesTarget } from './pages';
 import { firstVersionReport } from './versionReport';
+import { ArtifactFact, artifactLabel, commonFolder, composition, folderOf, markOf, megabytes, rankOf } from './releaseFacts';
 import { BuildRow, Catalog, DraftRow, ReleaseRow, ScanRow, selection, slugOf } from './store';
 import { button as kitButton, callout as azCallout, cards, commandScript, entries, entry, entryRow, escapeHtml as esc, figures, head, hero, icon, n, notice, numbers, page, pageColumn, part, remember, runCommand, section, toneMark } from './ui';
 
@@ -155,13 +156,6 @@ const table = (head: string[], rows: string[][], rowCommand?: (index: number) =>
 		const action = rowCommand?.(index);
 		return `<tr${action ? ` data-command="${action.command}"${action.args === undefined ? '' : ` data-args="${esc(JSON.stringify(action.args))}"`} style="cursor:pointer"` : ''}>${cells.map((cell) => `<td>${cell}</td>`).join('')}</tr>`;
 	}).join('')}</tbody></table></div>`;
-
-/** One file a build left. */
-interface ArtifactFact {
-	kind: string;
-	path: string;
-	builtAt: string;
-}
 
 /** What the Build Center and Releases show: the builds of the project on, every file they left, and releases. */
 export interface BuildFacts {
@@ -1535,6 +1529,10 @@ ${files.length === 0
  * a column of full-width blocks makes the reader scroll past one to reach the other.
  */
 const PIPE_CSS = `
+/* "Show N more" closes again: the two labels swap with the element, so the summary always says what a click does. */
+.az-more summary .az-more__open { display: none; }
+.az-more[open] summary .az-more__closed { display: none; }
+.az-more[open] summary .az-more__open { display: inline; }
 .az-split { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start;
   gap: var(--sp-6) var(--sp-8); margin-top: var(--sp-2); }
 .az-split > * { min-width: 0; }
@@ -1712,14 +1710,6 @@ export function buildsBody(facts1: BuildFacts): string {
 			go: 'Open'
 		});
 
-	/** First `open` rows, the rest behind a native summary: no script, and it closes again. */
-	const folded = (rows: readonly string[], open: number, more: string): string =>
-		rows.length <= open
-			? azEntries(rows)
-			: `${azEntries(rows.slice(0, open))}<details class="az-more"><summary>Show ${esc(
-					`${rows.length - open} ${more}`
-				)}</summary>${azEntries(rows.slice(open))}</details>`;
-
 	const heroBlock = hero({
 		eyebrow: 'Documentation',
 		title: 'Build Center',
@@ -1836,9 +1826,10 @@ ${targetTile({
 }
 
 /** *Publish & Releases* — what a build left behind, and what a reader can be given. The files are the release. */
-function releasesBody(facts1: BuildFacts): string {
+export function releasesBody(facts1: BuildFacts): string {
 	const { artifacts, releases, publish } = facts1;
-	const kinds = [...new Set(artifacts.map((artifact) => artifact.kind))];
+	// The targets in the order a reader meets them: the website first, then what is printed, then the help file.
+	const kinds = [...new Set(artifacts.map((artifact) => artifact.kind))].sort((one, other) => rankOf(one) - rankOf(other) || one.localeCompare(other));
 
 	const releaseRow = (release: ReleaseRow): string =>
 		azRow({
@@ -1854,21 +1845,39 @@ function releasesBody(facts1: BuildFacts): string {
 
 	const fileRow = (file: ArtifactFact): string =>
 		azRow({
-			mark: file.kind === 'chm' ? 'package' : file.kind === 'pdf' ? 'document' : 'globe',
+			mark: markOf(file.kind, file.path),
 			title: file.path.split(/[\\/]/).pop() ?? file.path,
 			mono: true,
-			meta: `<span class="cell-mono">${esc(file.path)}</span><span>built ${waitingSince(file.builtAt)}</span>`,
+			meta: `<span class="cell-mono">${esc(folderOf(file.path))}</span><span>built ${waitingSince(file.builtAt)}</span>`,
 			command: 'temcoDocs.openArtifact',
 			args: [file.path]
 		});
 
-	const filesOf = (kind: string): string => {
-		const files = artifacts.filter((artifact) => artifact.kind === kind);
+	/**
+	 * One target, as the first level: the website, the PDFs, the offline help.
+	 *
+	 * What a person publishes is a target, not a file, so the row says how many files it holds and what they are
+	 * ("129 Markdown · 386 pictures · 2 JSON") — the types are a sentence here rather than a level, because a reader who
+	 * wants the website does not first want to choose between its pages and its pictures. The files are behind one
+	 * "Show all", which closes again the same way.
+	 */
+	const targetBlock = (kind: string): string => {
+		const files = artifacts.filter((artifact) => artifact.kind === kind).sort((one, other) => (one.builtAt < other.builtAt ? 1 : -1));
+		const size = files.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
+		const newest = files.reduce((last, file) => (file.builtAt > last ? file.builtAt : last), '');
+		const folder = commonFolder(files.map((file) => file.path));
 		return `${section({
 			title: artifactLabel(kind),
-			desc: `${files.length} file${files.length === 1 ? '' : 's'}, newest first. This is what a reader gets: nothing is copied, the path is the release.`
+			desc: [
+				`${n(files.length, 'file', 'files')}${size === 0 ? '' : `, ${megabytes(size)}`}`,
+				composition(files),
+				newest === '' ? '' : `newest ${waitingSince(newest)}`
+			]
+				.filter((part) => part !== '')
+				.join(' · '),
+			actions: folder === undefined ? undefined : button('Open folder', 'temcoDocs.revealArtifactFolder', { small: true, mark: 'folder', args: [folder] })
 		})}
-${azEntries(files.map(fileRow))}`;
+${folded(files.map(fileRow), 6, 'more files')}`;
 	};
 
 	const fact = (mark: string, title: string, note: string): string => azRow({ mark, title, meta: note });
@@ -1929,9 +1938,9 @@ ${artifacts.length === 0
 			? ''
 			: `${section({
 				title: 'The files a reader can be given',
-				desc: 'Everything the builds left, grouped by what it is. A downloadable file is the release; the site is the only one that has to be published.'
+				desc: 'One block per target — the website, the PDFs, the offline help — with what each one holds and a way into its folder. A downloadable file is the release; the site is the only one that has to be published.'
 			})}
-${kinds.map(filesOf).join('')}`}
+${kinds.map(targetBlock).join('')}`}
 ${section({ title: 'What publishing does', desc: 'Three facts, in the order they happen.' })}
 ${azEntries([
 				fact('upload', 'Copies the site', 'the files a build wrote, into a folder the platform owns — nothing is uploaded anywhere'),
@@ -1940,8 +1949,20 @@ ${azEntries([
 			])}`;
 }
 
-/** The words for an artifact's kind, in the order a build produces them. */
-function artifactLabel(kind: string): string {
-	return kind === 'chm' ? 'Offline help (CHM)' : kind === 'pdf' ? 'PDF' : kind === 'site' ? 'Website' : kind === 'search' ? 'Search index' : kind;
+/**
+ * First `open` rows, the rest behind a native summary — no script, and it closes again.
+ *
+ * The summary says how many are behind it and turns into "Show less" once they are out: a `<details>` toggles both ways,
+ * so the words have to say which way, or the second click looks like it did nothing.
+ */
+function folded(rows: readonly string[], open: number, more: string): string {
+	if (rows.length <= open) {
+		return azEntries(rows);
+	}
+	const hidden = rows.length - open;
+	return `${azEntries(rows.slice(0, open))}<details class="az-more"><summary><span class="az-more__closed">Show ${esc(
+		`${hidden} ${more}`
+	)}</span><span class="az-more__open">Show less</span></summary>${azEntries(rows.slice(open))}</details>`;
 }
+
 

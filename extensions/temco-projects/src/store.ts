@@ -140,7 +140,9 @@ export interface Catalog {
 	documentSources(documentSlug: string): { name: string; kind: string; branch?: string }[];
 	setDocumentSources(documentSlug: string, sourceSlugs: readonly string[]): void;
 	documentPages(documentSlug: string): (PageRow & { source: string })[];
-	documentArtifacts(documentSlug: string): { kind: string; path: string; builtAt: string }[];
+	documentArtifacts(documentSlug: string): { kind: string; path: string; bytes?: number; builtAt: string }[];
+	/** One target's output as the build left it: recorded, and the rows of that kind it no longer writes removed. */
+	replaceArtifacts(documentSlug: string, kind: string, artifacts: readonly { path: string; bytes?: number; builtAt?: string }[], buildId?: number, alsoReplace?: readonly string[]): number;
 	addSource(source: {
 		kind: 'git' | 'folder' | 'archive';
 		name: string;

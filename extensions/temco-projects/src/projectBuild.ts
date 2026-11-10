@@ -126,9 +126,30 @@ async function buildProject(
     }
     output.show(true);
 
-    const kind = detail.outputs[0] ?? 'output';
-    for (const file of produced) {
-      catalog.recordArtifact(slug, { kind, path: file, bytes: sizeOf(file), buildId });
+    // What each target holds *now*, which is not the set of files this run happened to touch: a build that rewrites two
+    // pages still leaves the other hundred and twenty-seven, and one that stops writing a folder has to say so.
+    // Recording the whole set is what lets the rows of files it no longer writes go.
+    let forgotten = 0;
+    for (const output of detail.outputs) {
+      const files = outputSet(folder, output);
+      if (files.length === 0) {
+        continue;
+      }
+      try {
+        forgotten += catalog.replaceArtifacts(
+          slug,
+          kindOf(output),
+          files.map((file) => ({ path: file, bytes: sizeOf(file), builtAt: modifiedIso(file) })),
+          buildId,
+          // A website an earlier build filed under `output` is the same website: its rows go with this one.
+          kindOf(output) === 'site' ? ['output'] : []
+        );
+      } catch {
+        // A set that cannot be recorded leaves the last one in place, which the page then shows honestly.
+      }
+    }
+    if (forgotten > 0) {
+      output.appendLine(`Forgot ${forgotten} file(s) the build no longer writes.`);
     }
     catalog.finishBuild(buildId, produced.length > 0 ? 'produced' : 'nothing new');
 
@@ -283,6 +304,75 @@ function findArtifacts(folder: string, outputs: readonly string[], since: number
     }
   }
   return [...new Set(found)].sort((a, b) => modified(b) - modified(a));
+}
+
+/**
+ * The catalog's name for a target.
+ *
+ * Three things can be published — a website, a PDF, the offline help — and the page groups by them. `website`, `site`
+ * and `html` are the same target under the names three generations of the recipe have used.
+ */
+function kindOf(output: string): string {
+  const name = output.toLowerCase();
+  if (name === 'website' || name === 'site' || name === 'html' || name === '') {
+    return 'site';
+  }
+  return name === 'help' ? 'chm' : name;
+}
+
+/**
+ * Everything a target holds after the build — the set that replaces the last one.
+ *
+ * A website is a folder this application can read whole, so every file in it is the website: pages, pictures, the index,
+ * the stylesheet. A PDF or a help file is one kind of file among a repository's sources, so there the extension decides
+ * and only the folders the target writes are walked. Files this run did not touch are part of it too.
+ */
+function outputSet(folder: string, output: string): string[] {
+  const name = output.toLowerCase();
+  const found: string[] = [];
+  const roots = [
+    ...(name === 'chm' || name === 'help' || name === 'pdf'
+      ? [folder, ...siblingHelpDocs(folder)]
+      : [path.join(folder, 'dist', 'docs'), path.join(folder, 'dist', 'site'), path.join(folder, 'docs', '_site')]),
+  ];
+  const pattern = name === 'chm' || name === 'help' ? /\.chm$/i : name === 'pdf' ? /\.pdf$/i : undefined;
+  for (const root of roots) {
+    collect(root, pattern, found, pattern === undefined ? 10 : 6);
+  }
+  return [...new Set(found)].sort();
+}
+
+/** A whole folder, or the files in it whose name matches: one walker for both, because the skip list is the same. */
+function collect(directory: string, pattern: RegExp | undefined, found: string[], depth: number): void {
+  if (depth < 0) {
+    return;
+  }
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (SKIP.has(entry.name)) {
+        continue;
+      }
+      collect(full, pattern, found, depth - 1);
+    } else if (pattern === undefined || pattern.test(entry.name)) {
+      found.push(full);
+    }
+  }
+}
+
+/** When a file was written, as the catalog stores it: a build re-records files it did not touch, and "now" would lie. */
+function modifiedIso(file: string): string | undefined {
+  try {
+    return new Date(fs.statSync(file).mtimeMs).toISOString();
+  } catch {
+    return undefined;
+  }
 }
 
 function patternsFor(outputs: readonly string[]): RegExp[] {

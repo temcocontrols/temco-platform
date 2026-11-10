@@ -611,10 +611,10 @@ export class Catalog {
   }
 
   /** What a document has produced, newest first — the artifacts, by file. */
-  documentArtifacts(documentSlug: string): { kind: string; path: string; builtAt: string }[] {
+  documentArtifacts(documentSlug: string): { kind: string; path: string; bytes?: number; builtAt: string }[] {
     const rows = this.db
       .prepare(
-        `SELECT a.kind AS kind, a.path AS path, a.built_at AS builtAt
+        `SELECT a.kind AS kind, a.path AS path, a.bytes AS bytes, a.built_at AS builtAt
            FROM artifacts a JOIN documents d ON d.id = a.document_id
           WHERE d.slug = ? ORDER BY a.built_at DESC`
       )
@@ -622,8 +622,61 @@ export class Catalog {
     return rows.map((row) => ({
       kind: String(row.kind ?? ''),
       path: String(row.path ?? ''),
+      ...(row.bytes === null || row.bytes === undefined ? {} : { bytes: Number(row.bytes) }),
       builtAt: String(row.builtAt ?? ''),
     }));
+  }
+
+  /**
+   * One target's output, as the build that just ran left it.
+   *
+   * A build writes a *folder*, not a list. The files it did not touch are still there, and the files it stopped
+   * writing are gone — recording only what the run happened to touch leaves the old ones on the page forever, which is
+   * how a database came to hold 367 HTML pages of a site that is Markdown now. So this replaces the target's set:
+   * every path given is recorded, and every row of the same kind that is not in the set is deleted.
+   *
+   * The kind stays the outer grouping (`site`, `pdf`, `chm`), because that is the thing a person publishes; what each
+   * file *is* is read from its extension where it is displayed.
+   *
+   * Returns how many rows went away.
+   */
+  replaceArtifacts(
+    documentSlug: string,
+    kind: string,
+    artifacts: readonly { path: string; bytes?: number; builtAt?: string }[],
+    buildId?: number,
+    alsoReplace: readonly string[] = []
+  ): number {
+    const id = this.documentId(documentSlug);
+    if (id === 0) {
+      throw new Error(`there is no document called ${documentSlug}`);
+    }
+      for (const artifact of artifacts) {
+        this.recordArtifact(documentSlug, {
+          kind,
+          path: artifact.path,
+          ...(artifact.bytes === undefined ? {} : { bytes: artifact.bytes }),
+          ...(buildId === undefined ? {} : { buildId }),
+          ...(artifact.builtAt === undefined ? {} : { builtAt: artifact.builtAt }),
+        });
+      }
+      const kept = new Set(artifacts.map((artifact) => artifact.path));
+      let removed = 0;
+      // The kinds this target *is*, including the names an earlier build path filed it under: a website recorded once
+      // as `output` is the same website, and leaving that row behind is what puts a page of HTML in a Markdown build.
+      for (const stale of [kind, ...alsoReplace]) {
+        const held = this.db
+          .prepare('SELECT id, path FROM artifacts WHERE document_id = ? AND kind = ?')
+          .all(id, stale) as { id: number; path: string }[];
+        for (const row of held) {
+          if (stale === kind && kept.has(row.path)) {
+            continue;
+          }
+          this.db.prepare('DELETE FROM artifacts WHERE id = ?').run(row.id);
+          removed += 1;
+        }
+      }
+      return removed;
   }
 
   /**
@@ -659,26 +712,28 @@ export class Catalog {
    */
   recordArtifact(
     documentSlug: string,
-    artifact: { kind: string; path: string; bytes?: number; buildId?: number }
+    artifact: { kind: string; path: string; bytes?: number; buildId?: number; builtAt?: string }
   ): void {
     const id = this.documentId(documentSlug);
     if (id === 0) {
       throw new Error(`there is no document called ${documentSlug}`);
     }
-    const now = new Date().toISOString();
+    // When a file was written, not when it was recorded: a build that rewrites a whole folder re-records files it did
+    // not touch, and "built now" would be a lie about those.
+    const when = artifact.builtAt ?? new Date().toISOString();
     const updated = this.db
       .prepare(
         `UPDATE artifacts SET build_id = ?, kind = ?, bytes = ?, built_at = ?
           WHERE document_id = ? AND path = ?`
       )
-      .run(artifact.buildId ?? null, artifact.kind, artifact.bytes ?? null, now, id, artifact.path);
+      .run(artifact.buildId ?? null, artifact.kind, artifact.bytes ?? null, when, id, artifact.path);
 
     if (updated.changes === 0) {
       this.db
         .prepare(
           'INSERT INTO artifacts (build_id, document_id, kind, path, bytes, built_at) VALUES (?, ?, ?, ?, ?, ?)'
         )
-        .run(artifact.buildId ?? null, id, artifact.kind, artifact.path, artifact.bytes ?? null, now);
+        .run(artifact.buildId ?? null, id, artifact.kind, artifact.path, artifact.bytes ?? null, when);
     }
   }
 
