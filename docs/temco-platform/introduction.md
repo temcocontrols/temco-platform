@@ -29,13 +29,13 @@ a page          →      builds and publishes  →     one commit on main   → 
 
 ## What is in this guide
 
-| Part | Answers |
+| Part | The question it answers |
 |---|---|
-| [Part 1 — Temco Platform](#part-1--temco-platform-the-application) | the application: each of its eight features, one by one, the editor, and the four things to settle before you start |
-| [Part 2 — Temco Learn](#part-2--temco-learn-the-site) | the site from a reader's side: five levels, the version selector, downloads, search |
-| [Part 3 — The walk](#part-3--the-walk-step-by-step) | the eight steps that publish one project, and what to re-run next time |
-| [Part 4 — Beyond the flow](#part-4--beyond-the-flow-and-when-it-goes-wrong) | importing, validating, releasing locally, exporting, and what to do when something fails |
-| [Appendix](#appendix--every-control-and-its-command) | every button the platform puts on screen, grouped by where it lives, with its command id |
+| [Part 1 — Temco Platform](#part-1--temco-platform-the-application) | What is in the application, and what does each of the eight features do? |
+| [Part 2 — Temco Learn](#part-2--temco-learn-the-site) | What does a reader see on the site, from the address down to one page? |
+| [Part 3 — The walk](#part-3--the-walk-step-by-step) | How does one project go from an empty folder to a live page? |
+| [Part 4 — Beyond the flow](#part-4--beyond-the-flow-and-when-it-goes-wrong) | What else can a project do, and what do I do when a step fails? |
+| [Appendix](#appendix--every-control-and-its-command) | Which button runs which command? |
 
 Three habits make the rest easy:
 
