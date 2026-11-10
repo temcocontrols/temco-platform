@@ -10,7 +10,7 @@
 
 **Temco Learn** is the site a reader opens. Everything on it — the pages, the search, the PDF, the help file — came from a build that was published.
 
-This guide follows one product through that loop once, from an empty folder to a live page. It assumes you have never opened the application before, and it assumes no background in VS Code, in Git, or in the site's own code: where one of those cannot be avoided — a commit, a catalog — it is explained at the step where you meet it.
+This guide takes one product, T3000, from an empty folder to a live page in eight steps: create the project, write the pages, build the site, build the project's own outputs, add the build to the site, make the downloads, serve it and look, then publish. Each step names the command it runs and the file it leaves behind, and the folders and the site clone the first step reads are set in [Before you start](#before-you-start).
 
 ## The application and the site
 
