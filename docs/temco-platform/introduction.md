@@ -131,7 +131,7 @@ Open **Settings ▸ Repositories** and read the two sentences under the fields, 
 | **You should see** | `Clones land in …\temco\source` and `Projects are made in …\temco\projects` |
 | **If not** | a value you typed but did not save still shows as the old one. Press *Choose* or leave the field, then look again. If it says `Projects are made in …\temco`, the projects folder is still empty, and new projects will land beside the clones |
 
-The third setting this guide depends on is **not** on that page. `temcoLearn.siteRepo` is the site clone; set it from the Site page with **Choose the Site Folder**. It defaults to `~/temco/temco-learn`. Check it now, because the whole right-hand half of the flow writes there.
+The third setting is not on that page: the site clone, `temcoLearn.siteRepo`, is chosen from the Site page with **Choose the Site Folder**, and defaults to `~/temco/temco-learn`. Check it now — the whole right-hand half of the flow writes there.
 
 ## Step 2 — create a project
 
@@ -183,7 +183,7 @@ You are then in the editor. Each page is a Markdown file **and** a row in `docs/
 
 A page that is registered but whose file does not exist is an **error**, and the module reports it on refresh. That is what makes the `missing` rows in `Pages` mean something.
 
-**Everything else you will want on a page** lives on its row. *Rename the Page Title*, *Move Up* and *Move Down* change where it sits; *Retire* keeps the file and drops it from the site; *Create the Missing Page File* fills a `missing` row; *New Folder…* (`temcoDocs.newChapter`) adds a chapter. Right-clicking a captured screenshot in `Needs You` offers *Attach the Screenshot to a Page…*.
+**Everything else you will want on a page** lives on its row: *Rename the Page Title*, *Move Up*, *Move Down*, *Retire* (keeps the file, drops it from the site), *Create the Missing Page File* (fills a `missing` row), and *New Folder…* (`temcoDocs.newChapter`) for a new chapter.
 
 | | |
 |---|---|
@@ -217,7 +217,7 @@ The exit code is never the verdict. What counts is a file that did not exist bef
 
 ## Step 5 — build the project's own outputs (only for a repository)
 
-Skip this step unless T3000 cites a real repository clone under `~/temco/source/`. **Temco Projects: Build** (`temcoProjects.buildProject`) takes the outputs you ticked and runs the repository's own script for each one, **once each**:
+Skip it unless T3000 cites a real repository clone under `~/temco/source/`. **Temco Projects: Build** (`temcoProjects.buildProject`) takes the outputs you ticked and runs the repository's own script for each one, **once each**:
 
 > **Screenshot — the terminal during a project build: `docs:registry`, then one script per ticked output, then the list of files it left behind.**
 > `media/publishing/06-project-outputs.png`
@@ -240,7 +240,7 @@ This is the step that produces a PDF or a `.chm` **for the docs module**: the co
 
 ## Step 6 — add the build to the site
 
-**Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the Publishing page. The page that lists every build on disk is `temcoLearn.addBuilds`.
+**Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the Publishing page; **Add a Build to the Site** (`temcoLearn.addBuilds`) lists every build on disk.
 
 > **Screenshot — the version box, showing “project t3000” and the version field.**
 > `media/publishing/07-add-build.png`
@@ -324,12 +324,10 @@ If a page is missing, it is either unregistered or marked `ship: false`, so go b
 
 It does four things in order, and it stops at the first one that says no:
 
-| | |
-|---|---|
-| 1 | runs the site's `catalog`, so that what is committed matches what the pages say |
-| 2 | runs the site's **`guard`**, the same gate its CI runs, and refuses to commit when a version is missing a download |
-| 3 | runs `git add --all` and makes one commit. The message defaults to `docs: publish the site (<date>)`, and you can replace it |
-| 4 | runs `git push origin HEAD:main` |
+1. runs the site's `catalog`, so that what is committed matches what the pages say
+2. runs the site's **`guard`**, the same gate its CI runs, and refuses to commit when a version is missing a download
+3. runs `git add --all` and makes one commit. The message defaults to `docs: publish the site (<date>)`, and you can replace it
+4. runs `git push origin HEAD:main`
 
 Nothing is ever force-pushed. If `main` carries work this clone does not know about, the push is refused, the commit stays local, and a pull followed by another publish fast-forwards it.
 
