@@ -28,7 +28,7 @@ When you need to jump:
 | to do the whole thing, once | [Step by step](#step-by-step) |
 | to publish again next week | [Running it again](#running-it-again) |
 | to work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
-| to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
+| to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [The two files you will edit](#the-two-files-you-will-edit) |
 | to fix something | [When something else goes wrong](#when-something-else-goes-wrong) |
 | to look up a button or a command id | [Appendix](#appendix--every-control-and-its-command) |
 
@@ -98,15 +98,7 @@ write, then build             add, then the downloads        publish, then CI de
 ~/temco/projects/t3000        ~/temco/temco-learn            temcocontrols/temco-learn
 ```
 
-| Act | Command | Writes |
-|---|---|---|
-| write | the editor, `temcoDocs.newPage` | `docs/**/*.md`, `docs/help/registry.json` |
-| build | `temcoDocs.buildSite` | `<project>/dist/site` |
-| add | `temcoLearn.addBuild` | `public/imported/<id>/<version>/`, `content/<id>/site.json` |
-| make the downloads | `temcoLearn.site.downloads` | `public/pdf/…`, `public/chm/…`, the download manifest |
-| publish | `temcoLearn.publish`, then *Publish* | one commit, one push |
-
-Steps 1 to 8 are this table with the details filled in. When you are done, T3000 has a card under **Documentation**, every version you added is selectable with its own **Downloads** menu, your pages answer searches — and one commit on `main` has been deployed by CI, a minute after it was pushed.
+The acts are write, build, add, the downloads, publish — one command each, and steps 1 to 8 are those acts with the details filled in. When you are done, T3000 has a card under **Documentation**, every version you added is selectable with its own **Downloads** menu, your pages answer searches — and one commit on `main` has been deployed by CI, a minute after it was pushed.
 
 A few words mean something narrower here than elsewhere:
 
@@ -443,9 +435,9 @@ Two habits save the most time. **Add a new version for a new release**, because 
 └── dist/                                 step 8: what CI deploys
 ```
 
-## What the files look like
+## The two files you will edit
 
-Three files carry the whole arrangement. Knowing their shape lets you tell a wrong page from a wrong build without guessing.
+Everything else in the arrangement is written for you. These two are yours, and knowing their shape lets you tell a wrong page from a wrong build without guessing.
 
 **`~/temco/projects/t3000/docs/help/registry.json`** is written by the create flow and by every page you add. It is the only list of pages; nothing else decides what exists.
 
@@ -465,23 +457,15 @@ Three files carry the whole arrangement. Knowing their shape lets you tell a wro
 
 `ship: false` leaves a page out of the built site, and `order` decides its place inside the chapter. The key (`t3000/commissioning/ports`) must equal the file's path under `docs/`, or the page counts as missing.
 
-**`~/temco/temco-learn/content/t3000/site.json`** is written once by step 5 and kept after that. It is how the site names the project and files it under a section.
+**`~/temco/temco-learn/content/t3000/site.json`** is written once by step 5 and kept after that: the project's name, and the section it is filed under.
 
 ```json
 { "title": "T3000", "section": "documentation" }
 ```
 
-Add `"summary"` for the sentence shown on the project's card, and change `"section"` to move the whole project to another category.
+Add `"summary"` for the sentence on the project's card, and change `"section"` to move the whole project to another category.
 
-**`~/temco/temco-learn/public/catalog.json`** is generated and never edited. Every row is either a Markdown page the site owns or an imported page your build wrote, in one reading order.
-
-```json
-{ "projects": [ { "id": "t3000", "title": "T3000", "section": "documentation",
-                  "versions": [ { "version": "1.0",
-                                  "pages": [ { "href": "index.html", "title": "T3000", "kind": "build" } ] } ] } ] }
-```
-
-That `"kind": "build"` is the giveaway: the page came from your build rather than from the site's own content. If it is missing after step 5, the catalog did not run.
+The third file, `public/catalog.json`, is generated and never edited. A `"kind": "build"` row in it is the giveaway that the page came from your build rather than from the site's own content — and if your version is not listed after step 5, the catalog did not run.
 
 ## Beyond the flow
 
