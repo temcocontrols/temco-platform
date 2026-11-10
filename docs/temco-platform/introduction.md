@@ -117,7 +117,7 @@ A few words mean something narrower here than elsewhere:
 
 ## Step by step
 
-Nine steps take an empty folder to a live page. Four of them set up, write and build the project; four — one of them optional — put that build on the site, give it its downloads and check it; the last one publishes. Each step ends with **You should see**, a file or a screen to check, and each reads what the one before it wrote, so a step that fails stops the ones after it.
+Each step does one thing and leaves something to check: the first four write and build the project, the next four take that build to the site and give it its downloads, and the last one publishes. Take them in order — each step reads what the one before it wrote, so a step that fails stops the rest.
 
 ## Step 1 — check the folders
 
