@@ -195,7 +195,7 @@ Two things can produce the site, and what is in the folder decides which one run
 | a `package.json` with `docs:site` or `docs:build` | that script, after `docs:registry` when the repository has one | wherever the script writes, commonly `dist/site` or docfx's `dist/docs` |
 | neither | the **built-in generator** | `<project>/dist/site` |
 
-Either way, the attempt is recorded in the Build Center (`temcoDocs.builds`), and every file the build wrote is recorded against it, so Publish & Releases can list real files rather than hopes.
+Either way, the attempt is recorded in the Build Center (`temcoDocs.builds`), and every file the build wrote is recorded against it, so **Publish & Releases** (Documentation ▸ Publish) can list real files rather than hopes.
 
 | | |
 |---|---|
@@ -230,7 +230,7 @@ This is the step that produces a PDF or a `.chm` **for the docs module**: the co
 
 ## Step 5 — add the build to the site
 
-**Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the Publishing page; **Add a Build to the Site** (`temcoLearn.addBuilds`) lists every build on disk.
+**Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the **Publishing** page (Temco Learn ▸ Publish — a different page from Documentation ▸ Publish & Releases); **Add a Build to the Site** (`temcoLearn.addBuilds`) lists every build on disk.
 
 ![The version box: the title naming the project, `project t3000` in the prompt, and the version field with `1.0` in it.](media/publishing/07-add-build-01.png)
 
@@ -417,10 +417,10 @@ After the first publish, the loop is shorter than the guide above, because the f
 The four commands, in order:
 
 ```text
-Temco Docs:    Build the Site                  temcoDocs.buildSite
-Temco Learn:   Add This Build to the Site      temcoLearn.addBuild
-Temco Learn:   Make the Downloads              temcoLearn.site.downloads
-Temco Learn:   Publish                         temcoLearn.publish
+Build the Site                  temcoDocs.buildSite
+Add This Build to the Site      temcoLearn.addBuild
+Make the Downloads              temcoLearn.site.downloads
+Publish                         temcoLearn.publish
 ```
 
 Two habits save the most time. **Add a new version for a new release**, because re-adding the same version replaces it and readers lose the old one. And **redo the downloads every time you add a version**, because the guard counts versions, so a new version without its PDF blocks the publish rather than the deploy.
