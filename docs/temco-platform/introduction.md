@@ -21,7 +21,7 @@ you, writing          Temco Platform              the site clone            Temc
 a page          →      builds and publishes  →     one commit on main   →    what a reader opens
 ```
 
-**In the application**, four of the eight areas carry the whole flow: **Repositories** is where the folders are set, before step 1; **Home** (step 1) is where a project is made; **Documentation** (steps 2 to 4) holds the pages and runs the build; and **Temco Learn** (steps 5 to 8) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and the [appendix](#appendix--every-control-and-its-command) names every button by area if you go looking.
+**In the application**, four of its eight features carry the whole flow: **Repositories** is where the folders are set, before step 1; **Home** (step 1) is where a project is made; **Documentation** (steps 2 to 4) holds the pages and runs the build; and **Temco Learn** (steps 5 to 8) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and the [appendix](#appendix--every-control-and-its-command) names every button by area if you go looking.
 
 **On the site**, a reader moves down five levels — a home page, a section, a project, a version, the page. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it. [Part 2](#part-2--temco-learn-the-site) shows what each level holds.
 
@@ -31,7 +31,7 @@ You only need the left-hand side to finish this guide. The right-hand side is wh
 
 | Part | Answers |
 |---|---|
-| [Part 1 — Temco Platform](#part-1--temco-platform-the-application) | the application: what each of its eight areas can do, the editor, and the four things to settle before you start |
+| [Part 1 — Temco Platform](#part-1--temco-platform-the-application) | the application: each of its eight features, one by one, the editor, and the four things to settle before you start |
 | [Part 2 — Temco Learn](#part-2--temco-learn-the-site) | the site from a reader's side: five levels, the version selector, downloads, search |
 | [Part 3 — The walk](#part-3--the-walk-step-by-step) | the eight steps that publish one project, and what to re-run next time |
 | [Part 4 — Beyond the flow](#part-4--beyond-the-flow-and-when-it-goes-wrong) | importing, validating, releasing locally, exporting, and what to do when something fails |
@@ -45,16 +45,16 @@ Three habits make the rest easy:
 
 ## Part 1 — Temco Platform, the application
 
-The activity bar down the left of the window holds eight areas. Four of them carry the walk, and each gets a paragraph of its own here, so that nothing surprises you later.
+**Temco Platform has eight features, and they are the eight you see down the activity bar on the left.** Four of them carry this walk; the other four are here so that nothing surprises you when you go looking.
 
-### Area 1 — Home
+### #1 Home
 
 The library at a glance: every project you have made, what needs doing across them, and the pages that have no file yet.
 
 > **Screenshot — the Home page: the projects, and what needs doing across them.**
 > `media/publishing/16-home-overview.png`
 
-### Area 2 — Documentation
+### #2 Documentation
 
 A project's three views. **Project** shows one project's state — its pages, the outputs it produces, and the button that builds it. **Pages** is the tree of areas, chapters and pages, with the row actions that rename, move, retire a page, or create the file a `missing` row is waiting for. **Publish** is where a build becomes something a reader can be given: the Review Center, the Build Center, and Publish & Releases.
 
@@ -64,25 +64,25 @@ A project's three views. **Project** shows one project's state — its pages, th
 > **Screenshot — the Review Center: drafts waiting, each shown on its own page with Accept and Discard.**
 > `media/publishing/18-review-center.png`
 
-### Area 3 — Repositories
+### #3 Repositories
 
 Where pages are written from: a repository, a folder on this machine, or a document. One source can be cited by several projects, and nothing is ever written back into it. Its own page is the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it, because you set it before anything else.
 
-### Area 4 — Temco Learn
+### #4 Temco Learn
 
 The site from this side: **Overview** (its projects, versions and pages), **Site** (the builds waiting to be added, the versions already on the site, and the serve/stop controls), and **Artifacts** (the files the site actually serves).
 
 > **Screenshot — Temco Learn ▸ Site: builds waiting to be added, and the versions already on the site.**
 > `media/publishing/19-learn-site.png`
 
-### Area 5 — AI
+### #5 AI
 
 A draft written beside your text, applied only when you accept it. Its server runs on your own machine, and the tools it may use are the ones the application itself has.
 
 > **Screenshot — AI ▸ Draft: a draft written beside the page, with Accept and Discard.**
 > `media/publishing/20-ai-draft.png`
 
-### Area 6 — Forum
+### #6 Forum
 
 The community site, `forums.temcocontrols.com`, brought into the window, and its point is one question: **what should the documentation do about this thread?** The panel lists the forum's categories with how many topics each holds, a category opens as a table of topics, and a topic opens as a tab with the conversation and the page whose title the thread uses.
 
@@ -96,14 +96,14 @@ A suggestion is advice, not a decision: nothing is written to a page, and nothin
 > **Screenshot — the AI panel answering that thread: the question above the streamed answer.**
 > `media/publishing/23-forum-02.png`
 
-### Area 7 — Tools
+### #7 Tools
 
 Looks at the platform rather than at a page, one studio per subject. One studio is there today: **SQL**, the platform's own database, in two jobs — *Tables & queries* (the query editor, the rows, a table's structure, the history and the query library) and *The file* (where it lives, its integrity, a backup, a reset). A query runs **read-only** unless you reach for the writing command. The other studios — Devices, I/O, BACnet and Network — are not built yet, and the panel is a table, so each one arrives as a row of its own.
 
 > **Screenshot — Tools ▸ Studios: the SQL studio, its two jobs, and the pages under each.**
 > `media/publishing/24-tools.png`
 
-### Area 8 — Settings
+### #8 Settings
 
 The six pages the application is configured from. Each is a row in the panel, and each opens a page of its own:
 
@@ -219,29 +219,29 @@ Three settings decide every path. Set them once; every page reads them back, so 
 
 A reader opens the address and moves down five levels. Every level is written by the same catalog, so a page you publish appears at all five at once.
 
-### Level 1 — the home page
+### #1 The home page
 
 The site's sections as tiles, with Documentation where a product appears.
 
 > **Screenshot — the site's home page at localhost:1025: the sections as tiles, Documentation first.**
 > `media/publishing/21-learn-home.png`
 
-### Level 2 — a section
+### #2 A section
 
 The projects filed under it, each with its title, its summary and its newest version.
 
-### Level 3 — a project
+### #3 A project
 
 Every version you have added, newest first.
 
 > **Screenshot — the version selector open on a product page, listing every version added.**
 > `media/publishing/22-learn-versions.png`
 
-### Level 4 — a version
+### #4 A version
 
 That version's pages, in the order the registry gives them.
 
-### Level 5 — a page
+### #5 A page
 
 The page, its "in this page" list, and the previous and next links.
 
@@ -623,7 +623,7 @@ Each step names its own failure. These are the ones that are not about a step:
 | a picture is full width on the web but small in the editor | the page is older than the width support | reselect the picture, drag a handle, save |
 | **The Temco Editor surface is not built** — `markdown.js`, `markdown.css` are missing | the window is running compiled extension-host code whose webview bundle was never built, or was removed by a build that cleans `out/` | `npm run compile-temco` from the repository root, then **Developer: Reload Window**. A plain `npm run compile` stops before the webviews when an earlier check fails, so the application compiles and its pages still have no surface |
 
-The output explains itself. `View → Output` offers one channel per area, and the name on the dropdown is the part of the application that wrote the line: **`Temco Docs`** for the site build and the outputs it makes, **`Temco Projects`** for a project's own build (step 4), and **`Temco Learn`** for adding a build, the downloads, the serve and the publish. Every decision is written there with the path it used.
+The output explains itself. `View → Output` offers one channel per feature, and the name on the dropdown is the part of the application that wrote the line: **`Temco Docs`** for the site build and the outputs it makes, **`Temco Projects`** for a project's own build (step 4), and **`Temco Learn`** for adding a build, the downloads, the serve and the publish. Every decision is written there with the path it used.
 
 ## Appendix — every control, and its command
 
