@@ -52,7 +52,7 @@ const ILLUSTRATIVE = [
 const FOLLOWED = [
 	join(docs, 'README.md'),
 	join(docs, 'temco-platform', 'README.md'),
-	join(docs, 'temco-platform', 'getting-started.md'),
+	join(docs, 'temco-platform', 'introduction.md'),
 	join(docs, 'temco-learn', 'README.md')
 ];
 
@@ -295,7 +295,7 @@ const TEETH: { rule: string; lines: string[] }[] = [
 const group = suite();
 
 // The guide the rules are pointed at for the tooth tests: a real path, so link resolution behaves as it does in practice.
-const guide = join(docs, 'temco-platform', 'getting-started.md');
+const guide = join(docs, 'temco-platform', 'introduction.md');
 
 for (const one of TEETH) {
 	group.test(`the rule “${one.rule}” catches a document that breaks it`, () => {

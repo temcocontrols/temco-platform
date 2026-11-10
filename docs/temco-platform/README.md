@@ -18,7 +18,7 @@ write  →  build  →  add  →  make the downloads  →  publish  →  GitHub 
 
 | Start here | For |
 |---|---|
-| [getting-started.md](./getting-started.md) | **using** the platform: the flow above, step by step, with a file to look at after each step |
+| [introduction.md](./introduction.md) | **using** the platform: the flow above, step by step, with a file to look at after each step |
 | this file | **working on** the platform: the shell, the modules, the rules that keep them apart |
 
 ## Repositories
@@ -111,7 +111,7 @@ Nothing needs registering for a module to build or ship: the build picks up ever
 
 ## Publishing your documentation
 
-New to the platform? Start here: from an empty folder to a page on Temco Learn, in nine steps, each with a file to look at before you go on — [getting-started.md](./getting-started.md). The same document carries the rest of what a project can do — sources, the editor, validate, release, export, translate — in *Beyond the flow*.
+New to the platform? Start here: from an empty folder to a page on Temco Learn, in nine steps, each with a file to look at before you go on — [introduction.md](./introduction.md). The same document carries the rest of what a project can do — sources, the editor, validate, release, export, translate — in *Beyond the flow*.
 
 ## Naming
 
@@ -165,10 +165,10 @@ A container with no views is not shown, so a container may be declared before it
 5. `temco-docs` owns the catalog and every page write.
 6. Read-only by default. The application writes only in the five documented cases, each behind its own command and a confirmation naming the path or the value.
 7. Nothing is ever written to a source repository.
-8. The only thing the application pushes is the site: a publish commits `temco-learn` and pushes `main`, and its CI deploys to Pages ([getting-started.md](./getting-started.md)). A project's own build is never deployed from here.
+8. The only thing the application pushes is the site: a publish commits `temco-learn` and pushes `main`, and its CI deploys to Pages ([introduction.md](./introduction.md)). A project's own build is never deployed from here.
 9. A build engine sits behind the content-package contract ([content-package.md](../temco-learn/content-package.md)); nothing outside the engine's own folder names it.
 10. Runtimes and models are downloaded on request into the user's own folder; the engine runs on loopback only.
-11. A guide is a promise, so the docs are checked against the manifests: every `temco*.*` id in backticks must be a declared command, a registered command or a setting, every relative link and `#anchor` must land, `json` examples must parse, screenshot slots must be numbered `00, 01, 02 …`, and `## Step N` must not skip. Rename a command and the guide fails ([getting-started.md](./getting-started.md) is the guide; `npm run check-temco-docs` is the check).
+11. A guide is a promise, so the docs are checked against the manifests: every `temco*.*` id in backticks must be a declared command, a registered command or a setting, every relative link and `#anchor` must land, `json` examples must parse, screenshot slots must be numbered `00, 01, 02 …`, and `## Step N` must not skip. Rename a command and the guide fails ([introduction.md](./introduction.md) is the guide; `npm run check-temco-docs` is the check).
 
 ## Checks
 

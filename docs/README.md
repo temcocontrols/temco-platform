@@ -9,7 +9,7 @@ Two products, and a mock of the window they live in.
 | [`mock/`](mock/README.md) | **The layout mock** — a static, interactive site that draws the whole window so a layout can be settled before the shell is changed |
 
 Read [`temco-platform/README.md`](temco-platform/README.md) when you are writing code.
-Read [`temco-platform/getting-started.md`](temco-platform/getting-started.md) when you are putting a project on the site — it is the place to start as a new user.
+Read [`temco-platform/introduction.md`](temco-platform/introduction.md) when you are putting a project on the site — it is the place to start as a new user.
 Read [`temco-learn/README.md`](temco-learn/README.md) when you are changing the site itself.
 Open [`mock/index.html`](mock/index.html) when you are arguing about the layout.
 
@@ -21,7 +21,7 @@ docs/
 │  ├─ README.md            the application: the shell, the modules, the build
 │  ├─ naming.md            ids, titles, settings and namespaces
 │  ├─ entry-points.md      the two seams where product code joins VS Code
-│  ├─ getting-started.md   where a new user starts: the whole app, the publish flow first
+│  ├─ introduction.md      where a new user starts: the whole app, the publish flow first
 │  ├─ catalog.md           the tables the store keeps, and every setting a module declares
 │  ├─ platform-design.md   the engineering design: what the platform is and why
 │  ├─ design/              two specifications: the assistant's MCP server, the authoring and MSDN target

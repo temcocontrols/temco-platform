@@ -17,7 +17,7 @@ Temco Learn         catalog → guard → build → deploy
 | **Publish** | the platform, in this clone | one commit and a push to `main` |
 | `catalog` → `guard` → `build:fast` | this repository's CI | `public/catalog.json` it then deploys as `dist/` |
 
-The full path, from an empty folder to a live page, is [getting-started.md](../temco-platform/getting-started.md). It is its own repository (`temcocontrols/temco-learn`), cloned to `~/temco/temco-learn` unless `temcoLearn.siteRepo` says otherwise — the application is a client of that checkout, not its owner.
+The full path, from an empty folder to a live page, is [introduction.md](../temco-platform/introduction.md). It is its own repository (`temcocontrols/temco-learn`), cloned to `~/temco/temco-learn` unless `temcoLearn.siteRepo` says otherwise — the application is a client of that checkout, not its owner.
 
 ## Stack
 
@@ -57,7 +57,7 @@ temco-learn/
 3. `npm run catalog` turns both kinds of page into one version in one reading order, and rewrites `public/catalog.json`, `public/content/` and the download bundles.
 4. `npm run pdf` prints the PDFs and mirrors them into `public/pdf/`; `npm run chm` compiles the help files and writes `public/download/manifest.json`.
 
-Committing the imports is deliberate: reviewable, free to host, and simple to roll back. The whole path, from an empty folder to a live page, is [getting-started.md](../temco-platform/getting-started.md).
+Committing the imports is deliberate: reviewable, free to host, and simple to roll back. The whole path, from an empty folder to a live page, is [introduction.md](../temco-platform/introduction.md).
 
 ## What the deploy does
 

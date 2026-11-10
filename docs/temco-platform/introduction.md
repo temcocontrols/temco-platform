@@ -1,13 +1,12 @@
-# Getting started
+# Platform introduction
 
 **Temco Platform is where product documentation is written and published.** It is a desktop application, built on VS Code. In it you write pages and group them into a **project**. You then build that project into a website, with a printable PDF and a Windows help file, and publish the result to **Temco Learn**: the documentation site readers actually open, at `https://temcocontrols.github.io/temco-learn/`.
 
 Two windows, one loop: every step below happens between them.
 
-> **Screenshot — Temco Platform with a project open: its pages listed on the left, and one of them being written in the middle.**
-> `media/publishing/00-temco-platform.png`
+![The welcome page, with the Documentation panel down the left showing one project's pages.](media/publishing/00-temco-platform.png)
 
-**Temco Platform is the window you work in.** The list on the left is a folder of Markdown files, the middle is the file you are editing, and nothing you type is visible to anyone else: the application keeps no server, and the only copy is on your own disk.
+**Temco Platform is the window you work in.** It opens on the welcome page, and the **Documentation** panel down the left lists a project's pages — one Markdown file each. Pick one and it opens in the middle of the window; nothing you type is visible to anyone else until you build and publish.
 
 > **Screenshot — Temco Learn in a browser, on a product's documentation page: the reading menu beside the page, and the version selector with its download menu at the top.**
 > `media/publishing/01-temco-learn.png`
