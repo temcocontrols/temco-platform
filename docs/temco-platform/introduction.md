@@ -26,11 +26,10 @@ When you need to jump:
 | to understand the pieces and the flow | [What you are making](#what-you-are-making) · [The application and the site](#the-application-and-the-site) |
 | to set up a machine | [Before you start](#before-you-start) |
 | to do the whole thing, once | [Step by step](#step-by-step) |
-| to publish again next week | [Running it again](#running-it-again) · [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) |
+| to publish again next week | [Running it again](#running-it-again) |
 | to work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
 | to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
-| to know what an output tick means | [Reference: the outputs](#reference-what-the-outputs-mean) |
-| to fix something | [When a step goes wrong](#when-a-step-goes-wrong) · [When something else goes wrong](#when-something-else-goes-wrong) |
+| to fix something | [When something else goes wrong](#when-something-else-goes-wrong) |
 | to look up a button or a command id | [Appendix](#appendix--every-button-one-page) |
 
 ## The application and the site
@@ -217,6 +216,8 @@ Skip it unless T3000 cites a real repository clone under `~/temco/source/`. **Te
 | Offline help | `build:help:dry` |
 | PDF | `build:help:dry`, else `docs:pdf` |
 | Search index, AI index | nothing: no script here writes them |
+
+Two of the ticks have no script here: **Search index** is the index the site loads, which the site builds with its own `npm run search`, and **AI index** is embeddings kept on this machine. Everything a build writes lands inside your project folder — the site in `dist/site`, or `dist/docs` when a repository's own generator wrote it, and the PDF and the `.chm` wherever the script puts them, commonly `dist/` or a `HelpDocs` folder beside the repository.
 
 `docs:registry` runs first whenever the repository has it, because it is what the other scripts read their structure from. The build then records every file that appeared during the run, whatever the exit codes said.
 
@@ -482,40 +483,6 @@ Add `"summary"` for the sentence shown on the project's card, and change `"secti
 
 That `"kind": "build"` is the giveaway: the page came from your build rather than from the site's own content. If it is missing after step 5, the catalog did not run.
 
-## Reference: what the outputs mean
-
-The ticks on a project say what it is meant to produce, and one build is meant to produce all of them.
-
-| Output | Is | Which script runs, in your repository |
-|---|---|---|
-| Website | static pages for Temco Learn | `docs:site`, else `docs:build`, else the built-in generator |
-| PDF | one document in a printed layout | `build:help:dry`, else `docs:pdf` |
-| Offline help | the `.chm` | `build:help:dry` |
-| Search index | the index the site loads | none here: the site builds it with `npm run search` |
-| AI index | embeddings, kept on this machine only | none here: nothing is uploaded |
-
-A build writes inside your project folder. The site goes to `dist/site` (or `dist/docs`, when a repository's own generator wrote it), and the PDF and the `.chm` go wherever your scripts put them, commonly `dist/` or a `HelpDocs` folder beside the repository. Every file a build leaves behind is recorded against it, so the Builds and Downloads pages can list it.
-
-## Two things worth doing on purpose
-
-A guard nobody has watched refuse is a guard nobody can trust.
-
-| Try this | You should see |
-|---|---|
-| Delete `public/pdf/t3000/1.0.pdf`, then publish | the publish **stops before committing** and names the missing file. Run *Make the Downloads* and publish again, and it goes through |
-| Rename the project's page title, rebuild, then add the build again as `1.1` | version `1.1` lands under `t3000`: `content/` still holds one folder, and the catalog lists one project with two versions |
-
-## When a step goes wrong
-
-| Step | What you see | What it usually is | Where to look |
-|---|---|---|---|
-| 4 | the build is not in the list to add | there is no `index.html` or `index.md` in it, or it sits more than two folders below a root | the folder itself. The roots are the window's folders, the projects folder and the working folder |
-| 6 | adding refuses | the site clone is not where `temcoLearn.siteRepo` says | that setting, and whether the folder has `package.json` and `content/sections.json` |
-| 6, 9 | the catalog did not run | there is no `npm ci` in the clone, or no `catalog` script | the site log |
-| 9 | publishing refuses | the site's guard: a version has no committed PDF | the guard lines in the log |
-| 9 | publishing pushes, but the site looks unchanged | the commit carried nothing, because the clone matched the last publish | `git log` and `git status` in the clone |
-| 6 | the site page is wrong after a rebuild | the build was rebuilt but never added again as a new version | `public/catalog.json` and `public/imported/` |
-
 ## Beyond the flow
 
 A project can do more than publish. None of the following is needed to get a page live, and all of it is available once you have one.
@@ -552,14 +519,11 @@ Nothing is uploaded. A page with very large pictures makes a very large single f
 
 ## When something else goes wrong
 
-The table above covers the publishing pipeline. These are the rest:
+Each step names its own failure. These are the ones that are not about a step:
 
 | What you see | What it means | What to do |
 |---|---|---|
-| Build the Site says *no `docs:site` (or `docs:build`) script* | the project has a `package.json` but no site script | add one, or delete the `package.json` so the built-in generator takes over |
 | Build the Site says *has no pages marked for publishing* | no page is registered for the site, or every registered page is missing its file | open `Pages`, look for `missing` rows, and use **Create the Missing Page File** |
-| the site builds but a page is empty | the page is registered and its file exists, but the Markdown is empty | write it, or **Retire the Page** |
-| a page is missing from the published site | it is not registered, or it is not marked for the site | `Pages` → `…` → **Open Registry** |
 | an export says *has no pages to export* | no registered page has a file yet | create or generate the pages first |
 | a single-file page shows a broken picture | the picture's path in the Markdown is wrong, or it is not under the page's `media/` | fix the reference, because the same link is broken on the site |
 | the editor shows raw Markdown | the file opened as text | in `Pages`, right-click the page → **Open the Page**; or in Explorer, **Reopen Editor With…** → **Temco Editor** |
