@@ -23,7 +23,7 @@ a page          →      builds and publishes  →     one commit on main   → 
 
 **In the application**, four of the eight areas carry the whole flow: **Repositories** is where the folders are set, before step 1; **Home** (step 1) is where a project is made; **Documentation** (steps 2 to 4) holds the pages and runs the build; and **Temco Learn** (steps 5 to 8) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and the [appendix](#appendix--every-control-and-its-command) names every button by area if you go looking.
 
-**On the site**, a reader moves down five levels: a **home page** listing the sections, a **section** listing the projects filed under it, a **project** listing its versions, a **version** listing its pages, and the **page** itself, with a download menu for the PDF, the help file and the Markdown. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it.
+**On the site**, a reader moves down five levels — a home page, a section, a project, a version, the page. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it. [Part 2](#part-2--temco-learn-the-site) shows what each level holds.
 
 You only need the left-hand side to finish this guide. The right-hand side is why the work has a point — and the reason one step makes a PDF by hand, since the site cannot make one for you.
 
@@ -35,6 +35,7 @@ You only need the left-hand side to finish this guide. The right-hand side is wh
 | [Part 2 — Temco Learn](#part-2--temco-learn-the-site) | the site from a reader's side: five levels, the version selector, downloads, search |
 | [Part 3 — The walk](#part-3--the-walk-step-by-step) | the eight steps that publish one project, and what to re-run next time |
 | [Part 4 — Beyond the flow](#part-4--beyond-the-flow-and-when-it-goes-wrong) | importing, validating, releasing locally, exporting, and what to do when something fails |
+| [Appendix](#appendix--every-control-and-its-command) | every button the platform puts on screen, grouped by where it lives, with its command id |
 
 Three habits make the rest easy:
 
@@ -145,6 +146,7 @@ Two things live there. The **Outline** lists the page's headings, and clicking o
 | `Ctrl+Alt+P` / `Ctrl+Alt+D` | preview / diff with HEAD |
 | `Ctrl+Z` / `Ctrl+Y` | undo / redo |
 | `Ctrl+S` | save the page to disk |
+
 ### Before you start
 
 | You need | Why |
@@ -328,7 +330,7 @@ The exit code is never the verdict. What counts is a file that did not exist bef
 
 Skip it unless T3000 cites a real repository clone under `~/temco/source/`. **Temco Projects: Build** (`temcoProjects.buildProject`) takes the outputs you ticked and runs the repository's own script for each one, **once each**:
 
-![The terminal during a project build: `docs:registry`, then one script per ticked output, then the list of files it left behind.](media/publishing/06-project-outputs.png)
+![The Temco Projects output channel during a project build: `docs:registry`, then one script per ticked output, then the list of files it left behind.](media/publishing/06-project-outputs.png)
 
 | Ticked output | Script it looks for, in the repository |
 |---|---|
@@ -343,7 +345,7 @@ Two of the ticks have no script here: **Search index** is the index the site loa
 
 | | |
 |---|---|
-| **You should see** | the terminal run `docs:registry`, then the scripts above, and the log list the files they left behind |
+| **You should see** | the **Output** panel open on the channel **`Temco Projects`** (`View → Output`), running `docs:registry`, then the scripts above, and listing the files they left behind |
 | **If not** | the warning names the scripts it looked for. A repository with none of them runs nothing, which is the honest answer. A scaffolded project has no `package.json` at all, so step 3 is its build, and this step is not for it |
 
 This is the step that produces a PDF or a `.chm` **for the docs module**: the copies it records and Publish & Releases lists, under their own output. The PDF that the website serves is a different file, made in step 6 from the site's own content.
@@ -568,13 +570,13 @@ Each step names its own failure. These are the ones that are not about a step:
 | a picture is full width on the web but small in the editor | the page is older than the width support | reselect the picture, drag a handle, save |
 | **The Temco Editor surface is not built** — `markdown.js`, `markdown.css` are missing | the window is running compiled extension-host code whose webview bundle was never built, or was removed by a build that cleans `out/` | `npm run compile-temco` from the repository root, then **Developer: Reload Window**. A plain `npm run compile` stops before the webviews when an earlier check fails, so the application compiles and its pages still have no surface |
 
-The output explains itself: **View → Output → `Temco Docs`**. Every build, publish, export and generator decision is written there, with the path it used.
+The output explains itself. `View → Output` offers one channel per area, and the name on the dropdown is the part of the application that wrote the line: **`Temco Docs`** for the site build and the outputs it makes, **`Temco Projects`** for a project's own build (step 4), and **`Temco Learn`** for adding a build, the downloads, the serve and the publish. Every decision is written there with the path it used.
 
-### Appendix — every control, and its command
+## Appendix — every control, and its command
 
 Every control the platform puts on screen, grouped by where it lives. The command id beside each one runs the same action from the Command Palette (`Ctrl+Shift+P`). Every id here was checked against the manifests, so if a row is in this table, the command exists.
 
-#### Projects (activity bar)
+### Projects (activity bar)
 
 | Button | Where | Command |
 |---|---|---|
@@ -587,7 +589,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Build** (the project's own build) | right-click a project row | `temcoProjects.buildProject` |
 | **Stop Working on a Project** | right-click the *current* row | `temcoProjects.clearProject` |
 
-#### Documentation (activity bar)
+### Documentation (activity bar)
 
 | Button | Where | Command |
 |---|---|---|
@@ -617,7 +619,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Build Center** (row) | `Publish` view | `temcoDocs.builds` → opens the Build Center page |
 | **Publish & Releases** (row) | `Publish` view | `temcoDocs.releases` → opens the Publish & Releases page |
 
-#### Editor (while a page is open)
+### Editor (while a page is open)
 
 | Button | Where | Command |
 |---|---|---|
@@ -629,7 +631,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Open the source** (plain text) | editor title, ribbon `···` | `temcoEditor.openSource` |
 | **Temco Markdown** (whole menu) | editor right-click | submenu with every format verb |
 
-#### The pages themselves
+### The pages themselves
 
 | Button | On the page | Command |
 |---|---|---|
@@ -646,7 +648,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Open** (a release) | Publish & Releases → release rows | `temcoDocs.openPublished` |
 | **Stop Serving the Site** | palette | `temcoDocs.stopServing` |
 
-#### The site
+### The site
 
 | Button | On the page | Command |
 |---|---|---|
@@ -658,7 +660,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Publish** | Publishing | `temcoLearn.publish` |
 | **Publish Now** | Publishing | `temcoLearn.publishNow` |
 
-#### Settings
+### Settings
 
 | Button | On the page | Command |
 |---|---|---|
