@@ -550,19 +550,6 @@ If you already have a `docs/` folder, create the project with **From existing fi
 
 Nothing is uploaded. A page with very large pictures makes a very large single file, so export the site as a zip when the pictures matter more than the convenience.
 
-### Translating a page
-
-**Translate This Page…** (`temcoDocs.translatePage`) writes the translation **beside** the page, never over it: `docs/guide/setup.md` becomes `docs/guide/setup.de.md`.
-
-> **Screenshot — the language picker, and the translated sibling page open beside the original.**
-> `media/publishing/16-translate.png`
-
-- Only the prose is translated. Code fences, inline code, table rules, link targets, image paths, front matter and the leading `#`, `-` and `>` markers are preserved byte for byte, so a translated page still builds, still links and still shows its pictures.
-- **Once**: an Azure AI Translator resource. Its key goes into the OS keychain with **Set the Translator Key** (`temcoDocs.setTranslatorKey`), and the endpoint and region are the settings `temcoDocs.translator.endpoint` and `temcoDocs.translator.region`.
-- **One request per page**, sent only when you run the command. Nothing is translated in the background.
-- **Errors**: `401` means a key that was refused, `403` a key without a Translator resource (check the region), and `429` the free tier's rate limit. A page that is all code only says there is no prose, and costs nothing. Translating again asks before replacing the sibling file.
-- A translation is an ordinary page. The registry and the review flow treat it like any other file, and a build includes it. Listing it in a language menu on the site is a registry decision, not the translator's.
-
 ## When something else goes wrong
 
 The table above covers the publishing pipeline. These are the rest:
