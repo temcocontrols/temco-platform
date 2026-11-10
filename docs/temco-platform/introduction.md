@@ -21,41 +21,11 @@ you, writing          Temco Platform              the site clone            Temc
 a page          →      builds and publishes  →     one commit on main   →    what a reader opens
 ```
 
-| | **Temco Platform** | **Temco Learn** |
-|---|---|---|
-| is | a desktop application, with VS Code underneath | a static site on GitHub Pages |
-| is for | whoever writes, reviews and owns product documentation | whoever reads it: customers, field engineers, support |
-| what it holds | your project folder, and the site clone it publishes into | one imported build per version, the catalog, the downloads |
-| where it lives | the application on your machine | its own repository, `~/temco/temco-learn`, deployed by CI |
+**On your side**, four of the application's eight areas carry the whole flow: **Repositories** (step 1) decides where the folders live, **Home** (step 2) is where a project is made, **Documentation** (steps 3 to 5) holds the pages and runs the build, and **Temco Learn** (steps 6 to 9) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and the [appendix](#appendix--every-button-one-page) names every button by area if you go looking.
 
-You only need the left-hand column to finish this guide. The right-hand one is what gives the work its point, and it is also the reason there is a step that produces a PDF by hand: the site cannot make one for you.
+**On the reader's side**, the site has five levels: a **home page** listing the sections, a **section** listing the projects filed under it, a **project** listing its versions, a **version** listing its pages, and the **page** itself, with a download menu for the PDF, the help file and the Markdown. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it.
 
-### Where you work: four of the eight areas
-
-The activity bar down the left of the window holds eight areas. These four carry this guide:
-
-| Area | Holds | In this guide |
-|---|---|---|
-| **Home** | Overview, Projects, What needs doing | step 2: where a project is created |
-| **Documentation** | Project, Pages, Publish | steps 3 to 5: the pages, the build, and what it left behind |
-| **Repositories** | Sources: organisations, clones, the folder settings | step 1: the folders everything lands in |
-| **Temco Learn** | Overview, Site, Artifacts | steps 6 to 9: add, downloads, preview, publish |
-
-The other four are not part of the walk, and they are worth one line each so they do not surprise you: **AI** writes drafts beside your text ([Beyond the flow](#beyond-the-flow)); **Forum** is the question board; **Tools** holds the hardware studios (SQL, network, BACnet, devices); and **Settings** holds the four pages step 1 asks you to check — General, Modules, AI Runtime, Branding and Publishing.
-
-If you cannot find something in the activity bar, you can still reach it by name: the [appendix](#appendix--every-button-one-page) lists every control together with the command id behind it.
-
-### What a reader gets: five levels
-
-A reader opens the site and moves down five levels. Every level is written by the same catalog, so a page you publish appears at all five at once:
-
-| The reader opens | And gets |
-|---|---|
-| the home page | the site's sections as tiles; Documentation is where your project will appear |
-| a section | the projects filed under it, each with its title and summary |
-| a project | its versions — every version you add is a separate entry, never an overwrite |
-| a version | that version's pages, in the reading order the registry gives them |
-| a page | the page itself, a download menu for the PDF, the help file and the Markdown, and a way to say it was wrong |
+You only need the left-hand side to finish this guide. The right-hand side is why the work has a point — and the reason one step makes a PDF by hand, since the site cannot make one for you.
 
 ## How to use this guide
 
