@@ -21,11 +21,11 @@ you, writing          Temco Platform              the site clone            Temc
 a page          →      builds and publishes  →     one commit on main   →    what a reader opens
 ```
 
-**In the application**, four of its eight features carry the whole flow: **Repositories** is where the folders are set, before step 1; **Home** (step 1) is where a project is made; **Documentation** (steps 2 to 4) holds the pages and runs the build; and **Temco Learn** (steps 5 to 8) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and the [appendix](#appendix--every-control-and-its-command) names every button by area if you go looking.
+**In the application**, a project is one folder of Markdown, and it is written from **sources**: a repository, a folder on this machine, or a document. **Repositories** reads a source into the catalog — the page registry it declares, and the code files a draft can be written from — and the project then cites it, so one source can serve several projects and nothing is ever written back into it. **Documentation** holds the pages and runs the build, **Temco Learn** takes that build, makes the downloads and publishes it, and **Home** is where the project is made. [Part 1](#part-1--temco-platform-the-application) takes each feature in turn, and the [appendix](#appendix--every-control-and-its-command) names every button.
 
 **On the site**, a reader moves down five levels — a home page, a section, a project, a version, the page. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it. [Part 2](#part-2--temco-learn-the-site) shows what each level holds.
 
-You only need the left-hand side to finish this guide. The right-hand side is why the work has a point — and the reason one step makes a PDF by hand, since the site cannot make one for you.
+A source gives material, not pages. Reading it records the registry it declares, the pages that registry names, and the code files a draft may quote; a draft written from one of those files waits in the Review Center until a person accepts it, so nothing reaches a page without that decision. The downloads are the same shape of work: the PDF needs a browser and the help file needs `hhc.exe`, and the site's own deploy has neither, so both are made here and committed.
 
 ## What is in this guide
 
@@ -79,7 +79,7 @@ A project's three views. **Project** shows one project's state — its pages, th
 
 ### #3 Repositories
 
-Where pages are written from: a repository, a folder on this machine, or a document. One source can be cited by several projects, and nothing is ever written back into it. Its own page is the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it, because you set it before anything else.
+Where pages are written from: a repository, a folder on this machine, or a document. **Reading** a source records what it declares into the catalog — its `docs/help/registry.json`, the pages that registry names, and when it was read — and never writes to it. A repository is read over its API at the branch you choose, or cloned into the working area when a draft or a build needs the files on disk; the **dashboard** then shows what moved since the last read, and which pages name the files that changed. One source can be cited by several projects. Its own page is also the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it.
 
 ### #4 Temco Learn
 
@@ -640,7 +640,7 @@ The output explains itself. `View → Output` offers one channel per feature, an
 
 ## Appendix — every control, and its command
 
-Every control the platform puts on screen, grouped by where it lives. The command id beside each one runs the same action from the Command Palette (`Ctrl+Shift+P`). Every id here was checked against the manifests, so if a row is in this table, the command exists.
+The buttons you will go looking for, grouped by where they live: the activity bar, the editor, the pages themselves, the site, and Settings. The command id beside each one runs the same action from the Command Palette (`Ctrl+Shift+P`), and every id here was checked against the manifests, so if a row is in a table, the command exists.
 
 ### Projects (activity bar)
 
