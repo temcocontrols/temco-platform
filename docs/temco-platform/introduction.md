@@ -30,7 +30,7 @@ When you need to jump:
 | to work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
 | to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
 | to fix something | [When something else goes wrong](#when-something-else-goes-wrong) |
-| to look up a button or a command id | [Every control, by area](#every-control-by-area) |
+| to look up a button or a command id | [Appendix](#appendix--every-control-and-its-command) |
 
 ## The application and the site
 
@@ -41,7 +41,7 @@ you, writing          Temco Platform              the site clone            Temc
 a page          →      builds and publishes  →     one commit on main   →    what a reader opens
 ```
 
-**In the application**, four of the eight areas carry the whole flow: **Repositories** is where the folders are set, before step 1; **Home** (step 1) is where a project is made; **Documentation** (steps 2 to 4) holds the pages and runs the build; and **Temco Learn** (steps 5 to 8) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and [Every control, by area](#every-control-by-area) names every button by area if you go looking.
+**In the application**, four of the eight areas carry the whole flow: **Repositories** is where the folders are set, before step 1; **Home** (step 1) is where a project is made; **Documentation** (steps 2 to 4) holds the pages and runs the build; and **Temco Learn** (steps 5 to 8) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and the [appendix](#appendix--every-control-and-its-command) names every button by area if you go looking.
 
 **On the site**, a reader moves down five levels: a **home page** listing the sections, a **section** listing the projects filed under it, a **project** listing its versions, a **version** listing its pages, and the **page** itself, with a download menu for the PDF, the help file and the Markdown. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it.
 
@@ -532,7 +532,7 @@ Each step names its own failure. These are the ones that are not about a step:
 
 The output explains itself: **View → Output → `Temco Docs`**. Every build, publish, export and generator decision is written there, with the path it used.
 
-## Every control, by area
+## Appendix — every control, and its command
 
 Every control the platform puts on screen, grouped by where it lives. The command id beside each one runs the same action from the Command Palette (`Ctrl+Shift+P`). Every id here was checked against the manifests, so if a row is in this table, the command exists.
 
