@@ -30,9 +30,9 @@ a page          →      builds and publishes  →     one commit on main   → 
 
 You only need the left-hand column to finish this guide. The right-hand one is what gives the work its point, and it is also the reason there is a step that produces a PDF by hand: the site cannot make one for you.
 
-## The eight areas of the application
+### Where you work: four of the eight areas
 
-The activity bar down the left of the window holds eight areas. Four of them carry this guide:
+The activity bar down the left of the window holds eight areas. These four carry this guide:
 
 | Area | Holds | In this guide |
 |---|---|---|
@@ -45,7 +45,7 @@ The other four are not part of the walk, and they are worth one line each so the
 
 If you cannot find something in the activity bar, you can still reach it by name: the [appendix](#appendix--every-button-one-page) lists every control together with the command id behind it.
 
-## The five levels a reader walks
+### What a reader gets: five levels
 
 A reader opens the site and moves down five levels. Every level is written by the same catalog, so a page you publish appears at all five at once:
 
@@ -56,17 +56,6 @@ A reader opens the site and moves down five levels. Every level is written by th
 | a project | its versions — every version you add is a separate entry, never an overwrite |
 | a version | that version's pages, in the reading order the registry gives them |
 | a page | the page itself, a download menu for the PDF, the help file and the Markdown, and a way to say it was wrong |
-
-## Who this is for
-
-| If you are… | Start at | You end with |
-|---|---|---|
-| **writing documentation** for a Temco product (T3000, a controller, a protocol) | step 2, *Create a project* | a project of your own, built and live under Documentation on the site |
-| **taking over documentation that already exists** — a folder of Markdown, a Word manual, a compiled `.chm` | step 2, *Import a document set* | the same result, with the existing pages converted once |
-| **working inside a product repository** that already has `docs/` and its own build scripts | step 1 to point the application at the clone, then step 4 | the same result, with your repository's own `docs:site` or `build:help:dry` doing the building instead of the built-in generator |
-| **reviewing someone else's documentation** | step 6 | enough of the flow to read what they changed, and to publish it |
-
-You do not have to be the person who set the machine up. If somebody else did, [Before the first time](#before-the-first-time) shows you how to check that the three settings and the site clone are right before you begin.
 
 ## How to use this guide
 
@@ -87,14 +76,13 @@ You do not have to be the person who set the machine up. If somebody else did, [
 | an hour for the first run | steps 2 and 7 account for most of it |
 | rather less every time after | a repeat publish is four commands and about two minutes |
 
+You do not have to be the person who set the machine up. If somebody else did, [Before the first time](#before-the-first-time) shows you how to check that the three settings and the site clone are right before you begin.
+
 ## In this guide
 
 | Section | Answers |
 |---|---|
-| [The two halves](#the-two-halves) | Temco Platform and Temco Learn, and where they meet |
-| [The eight areas of the application](#the-eight-areas-of-the-application) | the activity bar, and which four areas this guide uses |
-| [The five levels a reader walks](#the-five-levels-a-reader-walks) | the site from the reader's side, so you know what you are aiming at |
-| [Who this is for](#who-this-is-for) | whether this guide is the right one for you |
+| [The two halves](#the-two-halves) | the loop between the application and the site, the four areas of the app you use, and the five levels a reader walks |
 | [What you are making](#what-you-are-making) | what a project, a build and the site are, and where each one lives |
 | [The general flow](#the-general-flow) | the five acts, what each writes, and what a reader notices |
 | [Words this guide uses](#words-this-guide-uses) | page id, area, chapter, version, section, catalog, guard, downloads |
