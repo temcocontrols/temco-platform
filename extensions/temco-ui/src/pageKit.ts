@@ -82,9 +82,14 @@ export function part(options: PartOptions): string {
 	});
 }
 
-/** The list a part's rows lie in. */
-export function entries(rows: string): string {
-	return `<div class="az-entries">${rows}</div>`;
+/**
+ * The list a part's rows lie in.
+ *
+ * `log` draws the rows as a record read downwards — no boxes, a hairline between one row and the next — which is what a
+ * history is: a run and the run before it, not a set of unrelated objects that happen to share a page.
+ */
+export function entries(rows: string, options: { log?: boolean } = {}): string {
+	return `<div class="az-entries${options.log === true ? ' az-entries--log' : ''}">${rows}</div>`;
 }
 
 /** One row: the glyph, the thing, the facts about it, and what can be done to it. */

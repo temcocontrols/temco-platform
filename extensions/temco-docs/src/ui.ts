@@ -94,7 +94,7 @@ interface UiApi {
 		note?: { text: string; mark?: string; mono?: boolean };
 	}): string;
 	part(options: { title: string; note?: string; count?: string; actions?: string }): string;
-	entries(rows: string): string;
+	entries(rows: string, options?: { log?: boolean }): string;
 	entry(options: {
 		mark?: string;
 		tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent';

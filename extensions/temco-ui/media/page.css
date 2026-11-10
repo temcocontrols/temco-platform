@@ -4497,6 +4497,26 @@ body {
 	gap: var(--sp-2);
 }
 
+/*
+ * A record read downwards: the runs of a build, the entries of a log. One list rather than a stack of cards, so the
+ * hairline is the only thing between two rows — a box per row turns a history into objects that look unrelated, and a
+ * box per row also costs the height that would show five runs where one fits.
+ */
+.az-entries--log {
+	gap: 0;
+}
+
+.az-entries--log > .az-entry {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	padding: var(--sp-2) 0;
+}
+
+.az-entries--log > .az-entry + .az-entry {
+	border-top: 1px solid var(--hairline);
+}
+
 .az-entry__go .icon {
 	width: 12px;
 	height: 12px;

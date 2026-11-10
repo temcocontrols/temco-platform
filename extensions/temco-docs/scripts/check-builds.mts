@@ -1,10 +1,10 @@
 // The two pages a build's files appear on: the Build Center and Publish & Releases.
 //
-// Four things this check keeps true. A page offers the acts it owns and nothing else. Both lists fold, because a site
-// build leaves hundreds of pages and a page that prints all of them is a page nobody reads to the end. Build Center's
-// third answer is one row per output the project was made with — the script it would run here, or the sentence saying
-// why nothing would — and a Build button only where this repository has a script, because a target that cannot be made
-// is reported rather than approximated with a different one. Publish & Releases shows the same five outputs as the
+// Four things this check keeps true. A page offers the acts it owns and nothing else. Build Center is two answers — what
+// this project can be built into (one card per output, the script it would run here or the sentence saying why nothing
+// would, and a Build button only where this repository has a script) and the runs themselves, drawn as a record: one
+// list, a hairline between two runs, no box around either. It does not reprint every file a build wrote — five hundred
+// rows of names is a copy, not a record; the files are listed on Publish & Releases, which shows the same outputs as the
 // categories of the files, so the ticks of the create form are what a person sees when they come to collect them.
 
 import assert from 'node:assert/strict';
@@ -27,7 +27,14 @@ const ui = {
 		`<div class="az-wash"><h1>${esc(options.title)}</h1>${(options.actions ?? [])
 			.map((action) => `<button data-command="${action.command}">${esc(action.label)}</button>`)
 			.join('')}</div>`,
-	numbers: () => '',
+	numbers: (items: readonly { value: string; label: string }[]) =>
+		`<div class="az-numbers">${items
+			.map(
+				(item) =>
+					`<div class="az-number"><span class="az-number__value">${esc(item.value)}</span>` +
+					`<span class="az-number__label">${esc(item.label)}</span></div>`
+			)
+			.join('')}</div>`,
 	optionCards: () => '',
 	callout: (options: { title: string; desc: string; actions?: string }) =>
 		`<aside class="az-callout"><p>${esc(options.title)}</p>${options.actions ?? ''}</aside>`,
@@ -57,12 +64,20 @@ const ui = {
 		`<span class="az-entry__meta">${esc((options.meta ?? []).filter((fact) => fact !== undefined).join(' · '))}</span>` +
 		`${options.actions ?? ''}` +
 		`<span class="az-entry__go">${esc(options.state ?? '')}</span></div>`,
-	/** The list a part's rows lie in. */
-	entries: (rows: string) => rows,
+	/** The list a part's rows lie in; `log` keeps the variant the page asked for, so the check can read it. */
+	entries: (rows: string, options: { log?: boolean } = {}) =>
+		`<div class="az-entries${options.log === true ? ' az-entries--log' : ''}">${rows}</div>`,
 	/** One part of a page: only the heading matters to the order this check reads. */
 	part: (options: { title: string }) => `<div class="az-section"><h2 class="az-section__title">${esc(options.title)}</h2></div>`,
 	head: () => '',
-	figures: () => '',
+	figures: (items: readonly { value: string; label: string }[]) =>
+		`<div class="az-numbers">${items
+			.map(
+				(item) =>
+					`<div class="az-number"><span class="az-number__value">${esc(item.value)}</span>` +
+					`<span class="az-number__label">${esc(item.label)}</span></div>`
+			)
+			.join('')}</div>`,
 	notice: () => '',
 	button: (label: string, command: string, options: { args?: unknown } = {}) =>
 		`<button data-command="${command}"${options.args === undefined ? '' : ` data-args="${esc(JSON.stringify(options.args))}"`}>${esc(label)}</button>`,
@@ -212,11 +227,33 @@ test('the title block offers the two acts it owns, and only those', () => {
 	assert.doesNotMatch(head, /temcoDocs\.releases|temcoDocs\.builds/u, 'a navigation act is still in the title block');
 });
 
-test('the page answers in order: what has run, what it left, what this project builds', () => {
+test('the page answers in order: what it can build, then the runs', () => {
 	assert.deepEqual(
 		[...pages.buildsBody(facts()).matchAll(/az-section__title">([^<]*)</gu)].map((match) => match[1]),
-		['Builds', 'What they left', 'What this project builds']
+		['What this project builds', 'Builds']
 	);
+});
+
+test('the page opens on four figures, so the state of the project is read at a glance', () => {
+	const html = pages.buildsBody(facts());
+	const numbers = [...html.matchAll(/class="az-number__value">([^<]*)</gu)].map((match) => match[1]);
+	assert.equal(numbers.length, 4, 'the strip does not carry four figures');
+	assert.deepEqual(numbers.slice(0, 3), ['9', '9', '0 KB'], 'the counts and the weight are not the recorded ones');
+	assert.match(numbers[3] ?? '', /ago/u, 'the last build is not dated');
+});
+
+test('the runs are a record, not a stack of cards: one list, drawn as a log', () => {
+	const html = pages.buildsBody(facts());
+	assert.match(html, /<div class="az-entries az-entries--log">/u, 'the builds are not drawn as a log');
+	assert.doesNotMatch(html, /<div class="az-entries"><div class="az-entry"><span class="tone-mark"/u, 'the builds are still boxes');
+});
+
+test('the page does not reprint every file: the files live on Publish & Releases, one block per output', () => {
+	const html = pages.buildsBody(facts({ artifacts: artifactsWithBytes }));
+	assert.doesNotMatch(html, /pic-\d+\.png/u, 'a file of the site is printed on the build page');
+	assert.doesNotMatch(html, /file-3\.pdf/u, 'a file of the site is printed on the build page');
+	assert.match(html, /The files themselves are listed on Publish &amp; Releases|The files themselves are listed on Publish & Releases/u);
+	assert.match(html, /data-command="temcoDocs\.releases"/u, 'the way to the files is not on the page');
 });
 
 test('a build row says when it started and how long it took, counted from the two timestamps', () => {
@@ -227,18 +264,10 @@ test('a build row says when it started and how long it took, counted from the tw
 	assert.match(pages.buildsBody(facts()), /Latest/u, 'the newest build is not marked');
 });
 
-test('both lists fold after a handful of rows', () => {
+test('the older runs fold after a handful of rows', () => {
 	const html = pages.buildsBody(facts());
 	// The summary carries both labels — what is hidden, and what the second click does — so it is read by its first span.
 	assert.match(html, /<details class="az-more"><summary><span class="az-more__closed">Show 4 older builds</u, 'the older builds do not fold');
-	assert.match(html, /<details class="az-more"><summary><span class="az-more__closed">Show 3 more files</u, 'the files do not fold');
-});
-
-test('a file row opens the file, and says what it is and when it was written', () => {
-	const file = rows(pages.buildsBody(facts())).find((row) => row.command === 'temcoDocs.openArtifact');
-	assert.equal(file?.title, 'site');
-	assert.match(String(file?.meta), /built .* ago/u);
-	assert.match(pages.buildsBody(facts()), /Website|Offline help/u, 'the kind of the file is not shown');
 });
 
 test('one card per output the project was made with, in the create form\'s order, saying what it would run', () => {
@@ -315,10 +344,13 @@ test('with nothing recorded, the callout says what a build is and the page still
 	assert.doesNotMatch(html, /az-section__title">Builds</u, 'an empty page draws a builds list');
 });
 
-test('builds but no files: the files section says so instead of drawing nothing', () => {
-	const html = pages.buildsBody(facts({ builds: [builds[0]], artifacts: [] }));
-	assert.match(html, /No file has been written yet/u);
-	assert.match(html, /a build that wrote none is not counted as one that worked/u);
+test('builds but no files: the page says nothing was written instead of drawing an empty list', () => {
+	const html = pages.buildsBody(
+		facts({ builds: [builds[0]], artifacts: [], scripts: [{ name: 'docs:site', command: 'docfx build' }] })
+	);
+	// The cards are where "what is in it now" lives, and the figures strip is where the total lives.
+	assert.match(html, /nothing written yet/u, 'an output with no file does not say so');
+	assert.match(html, /az-number__value">0</u, 'the strip does not count the files');
 });
 
 // ---------- Publish & Releases: the same outputs, as the categories of the files ----------

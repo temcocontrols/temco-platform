@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import { DocsRoot, PageEntry, collectPages } from './registry';
 import { pagesTarget } from './pages';
 import { firstVersionReport } from './versionReport';
-import { ArtifactFact, artifactLabel, commonFolder, composition, folderOf, markOf, megabytes } from './releaseFacts';
+import { ArtifactFact, commonFolder, composition, folderOf, markOf, megabytes } from './releaseFacts';
 import { BuildRow, Catalog, DraftRow, Output, ReleaseRow, ScanRow, outputs, selection, slugOf } from './store';
 import { button as kitButton, callout as azCallout, cards, commandScript, entries, entry, entryRow, escapeHtml as esc, figures, head, hero, icon, n, notice, numbers, page, pageColumn, part, remember, runCommand, section, toneMark } from './ui';
 
@@ -62,8 +62,8 @@ const azRow = (options: { mark?: string; tone?: 'ok' | 'warn' | 'err' | 'info' |
 	return `<div class="az-entry${plain ? '' : ' az-entry--action'}"${attr}>${mark}<div class="az-entry__main"><span class="az-entry__title${options.mono === true ? ' cell-mono' : ''}">${esc(options.title)}${tag}</span>${meta}</div>${end}</div>`;
 };
 
-/** The rows of one section, in the kit's spacing. */
-const azEntries = (rows: readonly string[]): string => entries(rows.join(''));
+/** The rows of one section, in the kit's spacing. `log` draws them as a record rather than as a stack of cards. */
+const azEntries = (rows: readonly string[], options: { log?: boolean } = {}): string => entries(rows.join(''), options);
 
 /**
  * The project page's own layout: two columns of blocks, which is what a wide tab is for.
@@ -1666,15 +1666,16 @@ function waitingSince(iso: string): string {
 }
 
 /**
- * *Build Center* — the builds of the project on, and the files they left.
+ * *Build Center* — what this project can be built into, and what each run left.
  *
- * One column, in the order a person asks the questions: **what has run** (newest first, with how long each took), **what
- * the files are** (newest first, each one a way in), and **where a build writes** — the two scripts and the folders they
- * fill, which is the one fact this page can state that nothing else in the window does. The page keeps no split: the
- * artifacts are not a column beside the builds, because one is the record and the other is what the record produced.
+ * The page is two answers, in the order a person needs them: **what this project builds** (the ticks the create form
+ * asked for, one card each, with the script that would run here and the button that runs it) and **the runs** (a log,
+ * newest first: the attempt, how long it took, and the verdict). Where the files themselves are listed is *Publish &
+ * Releases* — one block per output, with the fold that a hundred and twenty pages need — because printing all of them
+ * here as well was five hundred rows of the same names, which is not a record, it is a copy.
  *
- * Both lists fold after a handful of rows. A site build leaves hundreds of `.html` files, and a page that prints all of
- * them is a page nobody scrolls to the end of.
+ * The log is drawn as a record and not as a stack of cards: a hairline between two runs, no box around either. A build
+ * history is a sequence, and a box per row says each entry is an unrelated object.
  */
 export function buildsBody(facts1: BuildFacts): string {
 	const { builds, artifacts } = facts1;
@@ -1682,6 +1683,7 @@ export function buildsBody(facts1: BuildFacts): string {
 	const running = builds.filter((build) => build.status === 'running').length;
 	const newest = builds[0];
 	const last = newest === undefined ? undefined : waitingSince(newest.startedAt);
+	const bytes = artifacts.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
 
 	/** How long a build took, from the two timestamps the catalog keeps — never from the status. */
 	const took = (build: BuildRow): string => {
@@ -1697,28 +1699,20 @@ export function buildsBody(facts1: BuildFacts): string {
 		return seconds < 60 ? `${seconds} s` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
 	};
 
+	/** One run of the log: the attempt, when it started, how long it took, and the verdict in a word. */
 	const buildRow = (build: BuildRow): string =>
-		azRow({
+		entry({
 			mark: build.status === 'succeeded' ? 'check' : build.status === 'running' ? 'sync' : 'alert',
 			tone: build.status === 'succeeded' ? 'ok' : build.status === 'running' ? 'info' : 'warn',
 			title: `#${build.id}`,
-			mono: true,
-			tag: build.revision,
-			meta: facts([`started ${waitingSince(build.startedAt)}`, `took ${took(build)}`]),
-			// The status is the row's verdict, and the verdict is what a person scans for.
-			actions: (build === newest ? badge('Latest', 'accent') : '') + badge(build.status, build.status === 'succeeded' ? 'ok' : build.status === 'running' ? 'info' : 'warn')
-		});
-
-	const artifactRow = (artifact: ArtifactFact): string =>
-		azRow({
-			mark: artifact.kind === 'chm' ? 'package' : artifact.kind === 'pdf' ? 'document' : artifact.kind === 'search' ? 'search' : 'globe',
-			title: artifact.path.split(/[\\/]/).pop() ?? artifact.path,
-			mono: true,
-			tag: artifactLabel(artifact.kind),
-			meta: `<span>built ${waitingSince(artifact.builtAt)}</span><span class="cell-mono">${esc(artifact.path)}</span>`,
-			command: 'temcoDocs.openArtifact',
-			args: [artifact.path],
-			go: 'Open'
+			status: build === newest ? 'Latest' : undefined,
+			meta: [
+				`started ${waitingSince(build.startedAt)}`,
+				`took ${took(build)}`,
+				build.revision === undefined ? undefined : `<span class="cell-mono">${esc(build.revision)}</span>`
+			],
+			// The verdict is a word, not only a colour: the mark carries it for the eye and this carries it for the reader.
+			state: build.status
 		});
 
 	const heroBlock = hero({
@@ -1734,12 +1728,13 @@ export function buildsBody(facts1: BuildFacts): string {
 		]
 	});
 
-	const stateLine = `<p class="az-note">${facts([
-		`${builds.length} ${builds.length === 1 ? 'build' : 'builds'} recorded`,
-		last === undefined ? 'nothing has run here' : `last started ${last}`,
-		`${artifacts.length} ${artifacts.length === 1 ? 'file' : 'files'} to take`,
-		running > 0 ? `${running} running now` : 'nothing running now'
-	])}</p>`;
+	// What the page opens on: four numbers, so the state of the project is one glance rather than one sentence.
+	const strip = figures([
+		{ value: String(builds.length), label: builds.length === 1 ? 'build' : 'builds' },
+		{ value: String(artifacts.length), label: artifacts.length === 1 ? 'file' : 'files' },
+		{ value: megabytes(bytes), label: 'written' },
+		{ value: last ?? 'never', label: 'last build' }
+	]);
 
 	/** The newest moment among a set of files, or `undefined` when there are none. */
 	const newestOf = (files: readonly ArtifactFact[]): string | undefined =>
@@ -1750,7 +1745,7 @@ export function buildsBody(facts1: BuildFacts): string {
 	 *
 	 * The script is read from the folder being built, never assumed — so an output this repository cannot make says what
 	 * it would need instead of offering a button that runs something else. The card itself is not a button: reading it
-	 * cannot start a build, and the act is the word under it.
+	 * cannot start a build, and the acts are the words under it.
 	 */
 	const made = outputs.chosen(facts1.outputs);
 	const outputCard = (output: Output): { mark: string; title: string; desc: string; note: string; actions?: string; muted?: boolean } => {
@@ -1758,6 +1753,7 @@ export function buildsBody(facts1: BuildFacts): string {
 		const script = outputs.scriptFor(output, facts1.scripts.map((one) => one.name));
 		const files = artifacts.filter((artifact) => outputs.byKind(artifact.kind)?.value === output.value);
 		const newest = newestOf(files);
+		const folder = commonFolder(files.map((file) => file.path));
 		const state = script === undefined
 			? (output.madeBy ?? `Nothing here makes it: this folder has no ${output.scripts.join(' or ')} script`)
 			: `runs ${script} — ${files.length === 0 || newest === undefined ? 'nothing written yet' : `${n(files.length, 'file', 'files')} now, newest ${waitingSince(newest)}`}`;
@@ -1767,52 +1763,44 @@ export function buildsBody(facts1: BuildFacts): string {
 			desc: part ? output.purpose : 'Not part of this project — the create form did not tick it',
 			// What it would run, or why nothing would — an output the project does not build is not asked about.
 			note: part ? state : output.purpose,
-			actions: part && script !== undefined
-				? azButton(`Build the ${output.label}`, 'temcoDocs.buildOutput', { small: true, mark: 'play', args: [output.value] })
+			actions: part
+				? (script === undefined ? '' : azButton(`Build the ${output.label}`, 'temcoDocs.buildOutput', { small: true, mark: 'play', args: [output.value] }))
+					+ (folder === undefined ? '' : azButton('Open folder', 'temcoDocs.revealArtifactFolder', { small: true, mark: 'folder', args: [folder] }))
 				: undefined,
 			muted: !part
 		};
 	};
 
-	/** What this project was made to build, in the order the create form asked, and what each one would run here. */
-	const whereItWrites = `${section({
+	/** The ticks the project was created with, in the form's order, each with the script it would run here. */
+	const outputsSection = `${section({
 		title: 'What this project builds',
 		desc: 'The ticks the project was created with, in the order the form asked for them. A build runs that output’s own script as a task, then looks for the file it should have written — nothing is written by this page.'
 	})}${cards(outputs.all.map(outputCard), { dense: true })}
 <p class="az-note">${facts1.folder === undefined ? 'No folder is being read, so nothing can be built.' : `Scripts are read from <span class="cell-mono">${esc(facts1.folder)}</span>, never assumed.`} The deploying help build (<span class="cell-mono">build:help</span>) is never run from here: it copies the CHM into a product installation, and building is not shipping.</p>`;
 
-	// Nothing has run: the callout says what a build is, and the page still answers where it would write.
-	if (builds.length === 0) {
-		return `${heroBlock}${stateLine}<div class="mt-24">${azCallout({
+	const buildsSection = builds.length === 0
+		? `<div class="mt-24">${azCallout({
 			title: 'No build has run here yet',
 			desc: 'Building runs the folder’s own script (docs:site, build:help:dry) as a task and then looks for the file it should have written. The exit code is printed, never believed.',
 			mark: 'play',
 			actions: azButton('Build the Site', 'temcoDocs.buildSite', { mark: 'play' }) + azButton('Build the Offline Help', 'temcoDocs.buildHelp', { mark: 'package' })
-		})}</div>${whereItWrites}`;
-	}
+		})}</div>`
+		: `${section({
+			title: 'Builds',
+			desc: `Newest first, and a row is written before the script runs — a build that crashed the editor is still here, and ${succeeded} of ${builds.length} left a file. The files themselves are listed on Publish & Releases, one block per output.`,
+			actions: azButton('Publish & Releases', 'temcoDocs.releases', { small: true, mark: 'upload' })
+		})}${folded(builds.map(buildRow), 5, 'older builds', { log: true })}`;
 
 	return [
 		heroBlock,
-		stateLine,
-		section({
-			title: 'Builds',
-			desc: `Newest first. A row is written before the script runs, so a build that crashed the editor is still here — ${succeeded} of ${builds.length} left a file.`,
-			actions: azButton('Build the Site', 'temcoDocs.buildSite', { small: true, mark: 'play' })
-		}),
-		folded(builds.map(buildRow), 5, 'older builds'),
-		artifacts.length === 0
-			? section({
-					title: 'What they left',
-					desc: 'Nothing yet. A build is judged by the file it writes, so a build that wrote none is not counted as one that worked.'
-				}) + azEntries([azRow({ mark: 'info', title: 'No file has been written yet', meta: esc('Build the site, and the folder it fills appears here as rows.') })])
-			: section({
-					title: 'What they left',
-					desc: `Every file the builds have written, newest first — ${artifacts.length} in all. A file that is here is a file a reader can be given.`,
-					actions: azButton('Publish & Releases', 'temcoDocs.releases', { small: true, mark: 'upload' })
-				}) + folded(artifacts.map(artifactRow), 6, 'more files'),
-		whereItWrites,
+		strip,
+		outputsSection,
+		buildsSection,
+		running > 0 ? `<p class="az-note">${n(running, 'build is', 'builds are')} running now.</p>` : '',
 		`<p class="az-note">Recorded in the platform database · the files stay where the build wrote them.</p>`
-	].join('\n');
+	]
+		.filter((part) => part !== '')
+		.join('\n');
 }
 
 /** *Publish & Releases* — what a build left behind, and what a reader can be given. The files are the release. */
@@ -2011,14 +1999,14 @@ ${azEntries([
  * The summary says how many are behind it and turns into "Show less" once they are out: a `<details>` toggles both ways,
  * so the words have to say which way, or the second click looks like it did nothing.
  */
-function folded(rows: readonly string[], open: number, more: string): string {
+function folded(rows: readonly string[], open: number, more: string, options: { log?: boolean } = {}): string {
 	if (rows.length <= open) {
-		return azEntries(rows);
+		return azEntries(rows, options);
 	}
 	const hidden = rows.length - open;
-	return `${azEntries(rows.slice(0, open))}<details class="az-more"><summary><span class="az-more__closed">Show ${esc(
+	return `${azEntries(rows.slice(0, open), options)}<details class="az-more"><summary><span class="az-more__closed">Show ${esc(
 		`${hidden} ${more}`
-	)}</span><span class="az-more__open">Show less</span></summary>${azEntries(rows.slice(open))}</details>`;
+	)}</span><span class="az-more__open">Show less</span></summary>${azEntries(rows.slice(open), options)}</details>`;
 }
 
 
