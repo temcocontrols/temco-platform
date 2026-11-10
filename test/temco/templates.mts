@@ -48,6 +48,25 @@ const otherModule = new Proxy(
 	}
 ) as Record<string, unknown>;
 
+/**
+ * The store's own outputs list, as its extension publishes it.
+ *
+ * `projectFlow` reads it when it loads — the create form's ticks are the store's list, not a copy — so the fake store
+ * hands over the compiled module rather than a list of its own.
+ */
+const outputsModule = load(join(out('temco-store'), 'catalog', 'outputs.js')) as Record<string, unknown>;
+const storeExports = {
+	outputs: {
+		all: outputsModule.PROJECT_OUTPUTS,
+		defaults: outputsModule.DEFAULT_OUTPUTS,
+		byValue: outputsModule.outputByValue,
+		byKind: outputsModule.outputByKind,
+		chosen: outputsModule.chosenOutputs,
+		scriptFor: outputsModule.scriptFor
+	},
+	slugOf: (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+};
+
 const vscode = {
 	Uri: {
 		file: uriOf,
@@ -78,7 +97,12 @@ const vscode = {
 		}
 	},
 	extensions: {
-		getExtension: (id: string) => (id.startsWith('temcocontrols.') ? { isActive: true, exports: otherModule } : undefined)
+		getExtension: (id: string) =>
+			id === 'temcocontrols.temco-store'
+				? { isActive: true, exports: storeExports }
+				: id.startsWith('temcocontrols.')
+					? { isActive: true, exports: otherModule }
+					: undefined
 	},
 	window: {
 		showErrorMessage: async () => undefined,

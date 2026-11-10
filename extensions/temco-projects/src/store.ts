@@ -22,6 +22,7 @@ interface StoreApi {
 	readonly CatalogUnavailable: new (...args: never[]) => Error;
 	readonly selection: Selection;
 	slugOf(text: string): string;
+	readonly outputs: OutputsApi;
 }
 
 const extension = vscode.extensions.getExtension<StoreApi>(STORE_EXTENSION_ID);
@@ -44,6 +45,34 @@ export type Selection = SelectionShape;
 
 /** The slug a name gets, as the database keys it. */
 export const slugOf = store.slugOf;
+
+/**
+ * What a project can be built into: the create form's ticks, the build that runs per tick, and the release page's
+ * categories are the one list the store publishes, rather than three copies that drift.
+ */
+export const outputs = store.outputs;
+
+/** One output, as the store describes it — the copy of `extensions/temco-store/src/catalog/outputs.ts`. */
+export interface OutputsApi {
+	readonly all: readonly Output[];
+	readonly defaults: readonly string[];
+	byValue(value: string): Output | undefined;
+	byKind(kind: string): Output | undefined;
+	chosen(stored: readonly string[]): Output[];
+	/** The script a build would run for this output here, or undefined when this repository has none of them. */
+	scriptFor(output: Output, scripts: readonly string[]): string | undefined;
+}
+
+/** What one output is called, how it is recorded, and which scripts a repository needs to make it. */
+export interface Output {
+	value: string;
+	kind: string;
+	label: string;
+	mark: string;
+	purpose: string;
+	scripts: readonly string[];
+	madeBy?: string;
+}
 
 /** The one selection instance for this window, published by the store so every module shares it. */
 export const selection = store.selection;

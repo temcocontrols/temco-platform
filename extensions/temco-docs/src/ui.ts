@@ -93,6 +93,8 @@ interface UiApi {
 		mark?: string;
 		tone?: 'ok' | 'warn' | 'err' | 'info' | 'accent';
 		title: string;
+		/** Words beside the name: a state that belongs to the name rather than to the end of the row. */
+		status?: string;
 		meta?: readonly (string | undefined)[];
 		state?: string;
 		actions?: string;

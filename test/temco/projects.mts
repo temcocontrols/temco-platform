@@ -38,6 +38,17 @@ const uriOf = (fsPath: string): FakeUri => ({ fsPath });
 /** What the editor is told; `settings` is what a person's configuration would say. */
 let settings: Record<string, string | undefined> = {};
 
+/** The store's own outputs list, as the fake store publishes it — the compiled module, never a copy of it. */
+const outputsModule = load(join(out('temco-store'), 'catalog', 'outputs.js')) as Record<string, unknown>;
+const outputs = {
+	all: outputsModule.PROJECT_OUTPUTS,
+	defaults: outputsModule.DEFAULT_OUTPUTS,
+	byValue: outputsModule.outputByValue,
+	byKind: outputsModule.outputByKind,
+	chosen: outputsModule.chosenOutputs,
+	scriptFor: outputsModule.scriptFor
+};
+
 /**
  * A stand-in for the other modules' exports.
  *
@@ -86,7 +97,10 @@ const vscode = {
 						slugOf: (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
 						Catalog: { open: async () => Promise.reject(new Error('the catalog is not part of these rules')) },
 						CatalogUnavailable: Error,
-						selection: {}
+						selection: {},
+						// The store's own list, read from the compiled module: a fake that answered its own list would
+						// test a copy of the rules rather than the rules the application runs.
+						outputs
 					}
 				};
 			}
@@ -155,8 +169,8 @@ test('each ticked output runs one of the repository\'s own scripts, and the same
 	);
 	assert.deepEqual(
 		build.scriptsFor(['pdf', 'chm'], 'docfx', { 'build:help:dry': 'a', 'docs:pdf': 'b' }),
-		['build:help:dry'],
-		'two outputs that begin with the same script run it once'
+		['docs:pdf', 'build:help:dry'],
+		'a PDF does not run the help build: a CHM is not a PDF, and running it would record nothing'
 	);
 });
 
@@ -164,7 +178,7 @@ test('a ticked output the repository has no script for is reported by name, neve
 	assert.deepEqual(build.scriptsFor(['pdf'], undefined, { 'docs:site': 'x' }), [], 'nothing is run that is not declared');
 	assert.deepEqual(
 		build.namesFor(['pdf'], undefined),
-		['build:help:dry', 'docs:pdf'],
+		['docs:pdf', 'build:pdf'],
 		'the message names what the repository is missing'
 	);
 });

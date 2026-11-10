@@ -14,7 +14,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { DocsRoot } from './registry';
 import { OFFERED_SCRIPTS } from './repositories';
-import { Catalog, selection } from './store';
+import { Catalog, Output, outputs, selection } from './store';
 
 /** Folders never worth walking: build caches and clones, not artifacts. */
 const SKIP = new Set(['node_modules', '.git', '.vs', 'out', 'target', '.venv', 'dist_cache']);
@@ -37,6 +37,38 @@ export function registerBuildCommands(
         return;
       }
       await buildSiteFor(context, root, output, site);
+    }),
+
+    /**
+     * One of the outputs a project was made with, by the name its recipe stores.
+     *
+     * The create form ticks them and this runs the script of the one that was pressed. A target this repository cannot
+     * make says so instead of running something else: a PDF is not a CHM, and a build that leaves no PDF has not built
+     * one however calmly it exits.
+     */
+    vscode.commands.registerCommand('temcoDocs.buildOutput', async (value?: string) => {
+      const asked = typeof value === 'string' ? outputs.byValue(value) : undefined;
+      if (asked === undefined) {
+        void vscode.window.showWarningMessage('Temco Docs: that is not an output this platform knows.');
+        return;
+      }
+      const root = await pickRoot(roots(), `build ${asked.label.toLowerCase()} for`);
+      if (!root) {
+        return;
+      }
+      const script = outputs.scriptFor(asked, Object.keys(scriptsOf(root) ?? {}));
+      if (script === undefined) {
+        void vscode.window.showWarningMessage(
+          `Temco Docs: ${root.folder.name} has no ${asked.scripts.join(' or ')} script, so nothing was run.` +
+            (asked.madeBy === undefined ? '' : ` ${asked.madeBy}.`)
+        );
+        return;
+      }
+      if (asked.kind === 'site') {
+        await buildSiteFor(context, root, output, site);
+        return;
+      }
+      await build(context, root, output, recipeFor(asked, script, root));
     }),
 
     // Previewing is the site module's: the site is its own repository, and that module runs and shows it. What stays
@@ -78,6 +110,27 @@ export function registerBuildCommands(
       });
     })
   );
+}
+
+/**
+ * The recipe for an output other than the site, built from its own description.
+ *
+ * The roots and the pattern are what the artifact *is*: a PDF or a CHM can sit in the project or in a `HelpDocs` folder
+ * beside it, so both are looked at, and the file that appears is one file of that kind rather than a folder.
+ */
+function recipeFor(output: Output, script: string, root: DocsRoot): Recipe {
+  const project = root.folder.uri.fsPath;
+  const help = output.kind === 'chm';
+  return {
+    label: `the ${output.label.toLowerCase()} build`,
+    kind: output.kind,
+    scripts: [script],
+    missing: `This repository has no \`${script}\` script, so nothing was run.`,
+    roots: [project],
+    siblingHelpDocs: true,
+    pattern: help ? /\.chm$/i : /\.pdf$/i,
+    generate: undefined
+  };
 }
 
 /**

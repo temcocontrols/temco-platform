@@ -4261,6 +4261,23 @@ body {
 	cursor: pointer;
 }
 
+/* A card for something that exists but is not this project's: still legible, plainly not on offer. */
+.az-card--muted {
+	border-style: dashed;
+	background: transparent;
+}
+
+.az-card--muted .az-card__icon {
+	background: var(--surface-2);
+	color: var(--ink-3);
+}
+
+.az-card--muted .az-card__title,
+.az-card--muted .az-card__desc,
+.az-card--muted .az-card__note {
+	color: var(--ink-3);
+}
+
 .az-card--action:hover {
 	border-color: var(--az-blue-pale);
 	box-shadow: var(--el-1);

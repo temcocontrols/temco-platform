@@ -230,6 +230,11 @@ export interface FeatureCard {
 	note?: string;
 	/** How far the thing described has got, 0–1. Drawn only when a page can attest to it. */
 	progress?: number;
+	/**
+	 * Present but not this project's: drawn without its icon colour and with a plain border, so a card a person did not
+	 * ask for is readable as one they did not ask for — greyed, never hidden.
+	 */
+	muted?: boolean;
 }
 
 /** A row of cards that are ways in. A card without a command is drawn as a plain card, not as a dead button. */
@@ -243,7 +248,8 @@ export function cards(items: readonly FeatureCard[], options: { dense?: boolean 
 		const note = item.note === undefined ? '' : `<p class="az-card__note">${escapeHtml(item.note)}</p>`;
 		const share = item.progress === undefined ? 0 : Math.round(Math.min(1, Math.max(0, item.progress)) * 100);
 		const bar = item.progress === undefined ? '' : `<span class="az-card__bar"><span class="az-card__fill" style="width:${share}%"></span></span>`;
-		return `<div class="az-card${plain ? '' : ' az-card--action'}"${attr}>${head}<p class="az-card__desc">${escapeHtml(item.desc)}</p>${note}${bar}${plain ? '' : `<span class="az-card__go">${escapeHtml(item.go ?? 'Open')}${icon('chevron-right', 'icon--sm')}</span>`}</div>`;
+		const muted = item.muted === true ? ' az-card--muted' : '';
+		return `<div class="az-card${plain ? '' : ' az-card--action'}${muted}"${attr}>${head}<p class="az-card__desc">${escapeHtml(item.desc)}</p>${note}${bar}${plain ? '' : `<span class="az-card__go">${escapeHtml(item.go ?? 'Open')}${icon('chevron-right', 'icon--sm')}</span>`}</div>`;
 	}).join('')}</div>`;
 }
 

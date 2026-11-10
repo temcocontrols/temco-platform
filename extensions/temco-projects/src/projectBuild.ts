@@ -12,17 +12,19 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { Catalog, CatalogUnavailable, slugOf } from './store';
+import { Catalog, CatalogUnavailable, outputs, slugOf } from './store';
 
-/** The script names, per output. A rename in the product repository is reported, never guessed around. */
-const SCRIPTS: Record<string, readonly string[]> = {
-  chm: ['build:help:dry'],
-  help: ['build:help:dry'],
-  site: ['docs:site', 'docs:build'],
-  website: ['docs:site', 'docs:build'],
-  html: ['docs:site', 'docs:build'],
-  pdf: ['build:help:dry', 'docs:pdf'],
-};
+/** The script names, per output — the store's one list, so a build runs what the create form ticked under the same name. */
+const SCRIPTS: Record<string, readonly string[]> = (() => {
+  const map: Record<string, readonly string[]> = {};
+  for (const output of outputs.all) {
+    map[output.value] = output.scripts;
+    map[output.kind] = output.scripts;
+  }
+  // The three generations of recipe that have named a website.
+  map.html = outputs.byValue('website')?.scripts ?? [];
+  return map;
+})();
 
 /**
  * The generator, run first when the repository has one.
@@ -289,8 +291,8 @@ function runTask(cwd: string, script: string): Promise<number | undefined> {
  * `docs/_site`. All four are looked at, and the rule that decides is the same one `builds.ts` uses: newer than
  * this run started.
  */
-function findArtifacts(folder: string, outputs: readonly string[], since: number): string[] {
-  const patterns = patternsFor(outputs);
+function findArtifacts(folder: string, wanted: readonly string[], since: number): string[] {
+  const patterns = patternsFor(wanted);
   const roots = [
     folder,
     path.join(folder, 'dist', 'docs'),
@@ -313,11 +315,7 @@ function findArtifacts(folder: string, outputs: readonly string[], since: number
  * and `html` are the same target under the names three generations of the recipe have used.
  */
 function kindOf(output: string): string {
-  const name = output.toLowerCase();
-  if (name === 'website' || name === 'site' || name === 'html' || name === '') {
-    return 'site';
-  }
-  return name === 'help' ? 'chm' : name;
+  return outputs.byValue(output)?.kind ?? output.toLowerCase();
 }
 
 /**
@@ -328,14 +326,19 @@ function kindOf(output: string): string {
  * and only the folders the target writes are walked. Files this run did not touch are part of it too.
  */
 function outputSet(folder: string, output: string): string[] {
-  const name = output.toLowerCase();
+  const kind = kindOf(output);
+  // The indexes are made from the site by another module and are not this build's files: walking the site folder for
+  // them would file every page a second time under a name nothing here wrote.
+  if (kind === 'search' || kind === 'ai') {
+    return [];
+  }
   const found: string[] = [];
   const roots = [
-    ...(name === 'chm' || name === 'help' || name === 'pdf'
+    ...(kind === 'chm' || kind === 'pdf'
       ? [folder, ...siblingHelpDocs(folder)]
       : [path.join(folder, 'dist', 'docs'), path.join(folder, 'dist', 'site'), path.join(folder, 'docs', '_site')]),
   ];
-  const pattern = name === 'chm' || name === 'help' ? /\.chm$/i : name === 'pdf' ? /\.pdf$/i : undefined;
+  const pattern = kind === 'chm' ? /\.chm$/i : kind === 'pdf' ? /\.pdf$/i : undefined;
   for (const root of roots) {
     collect(root, pattern, found, pattern === undefined ? 10 : 6);
   }
@@ -375,18 +378,20 @@ function modifiedIso(file: string): string | undefined {
   }
 }
 
-function patternsFor(outputs: readonly string[]): RegExp[] {
+function patternsFor(wanted: readonly string[]): RegExp[] {
   const patterns: RegExp[] = [];
-  for (const output of outputs) {
-    if (output.toLowerCase() === 'chm') {
+  for (const output of wanted) {
+    const kind = kindOf(output);
+    if (kind === 'chm') {
       patterns.push(/\.chm$/i);
-    } else if (output.toLowerCase() === 'pdf') {
+    } else if (kind === 'pdf') {
       patterns.push(/\.pdf$/i);
-    } else {
-      patterns.push(/\.html$/i);
+    } else if (kind === 'site') {
+      // A published site is Markdown and the pictures beside it as much as any page of HTML.
+      patterns.push(/\.(md|html|json|png|jpe?g|gif|svg|webp|css|js)$/i);
     }
   }
-  return patterns.length > 0 ? patterns : [/\.(html|chm|pdf)$/i];
+  return patterns.length > 0 ? patterns : [/\.(md|html|chm|pdf)$/i];
 }
 
 function walk(directory: string, since: number, pattern: RegExp, found: string[], depth: number): void {

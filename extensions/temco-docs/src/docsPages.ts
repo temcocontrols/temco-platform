@@ -12,8 +12,8 @@ import * as vscode from 'vscode';
 import { DocsRoot, PageEntry, collectPages } from './registry';
 import { pagesTarget } from './pages';
 import { firstVersionReport } from './versionReport';
-import { ArtifactFact, artifactLabel, commonFolder, composition, folderOf, markOf, megabytes, rankOf } from './releaseFacts';
-import { BuildRow, Catalog, DraftRow, ReleaseRow, ScanRow, selection, slugOf } from './store';
+import { ArtifactFact, artifactLabel, commonFolder, composition, folderOf, markOf, megabytes } from './releaseFacts';
+import { BuildRow, Catalog, DraftRow, Output, ReleaseRow, ScanRow, outputs, selection, slugOf } from './store';
 import { button as kitButton, callout as azCallout, cards, commandScript, entries, entry, entryRow, escapeHtml as esc, figures, head, hero, icon, n, notice, numbers, page, pageColumn, part, remember, runCommand, section, toneMark } from './ui';
 
 /** The view types, one per surface. `pagePanel` is a panel this dashboard opens, not the editor's `temcoEditor.markdown`. */
@@ -163,6 +163,13 @@ export interface BuildFacts {
 	builds: BuildRow[];
 	artifacts: ArtifactFact[];
 	releases: ReleaseRow[];
+	/**
+	 * What this project was made to build: the ticks the create form asked for, in the canonical order.
+	 *
+	 * A project recorded before the ticks were stored has none, and builds the four a new project starts with — which
+	 * is what its own recipe has always meant, so the pages say that rather than showing an empty set.
+	 */
+	outputs: readonly string[];
 	/** Where the site would publish, when the folder has a GitHub remote: the only thing Deploy needs to know. */
 	publish?: { owner: string; repo: string; base: string; branch: string };
 	/** The folder a build runs in — the set the window reads first, which is the one its acts have always used. */
@@ -642,6 +649,7 @@ ${roots.length === 0
 		let builds: BuildRow[] = [];
 		let artifacts: ArtifactFact[] = [];
 		let releases: ReleaseRow[] = [];
+		let made: string[] = [];
 		let publish: BuildFacts['publish'];
 		let catalog: Catalog | undefined;
 		try {
@@ -652,6 +660,8 @@ ${roots.length === 0
 				builds = catalog.builds(project);
 				artifacts = catalog.documentArtifacts(project);
 				releases = catalog.releases(project);
+				// The ticks the project was created with: the same list the create form offered, read back.
+				made = catalog.document(project)?.outputs ?? [];
 			}
 		} catch {
 			// A catalog that cannot be read shows an empty build page, which is honest: nothing is known to exist.
@@ -674,6 +684,7 @@ ${roots.length === 0
 			builds,
 			artifacts,
 			releases,
+			outputs: made.length > 0 ? made : [...outputs.defaults],
 			publish,
 			folder: folder?.fsPath,
 			scripts: folder === undefined ? [] : docScripts(folder.fsPath)
@@ -1734,62 +1745,43 @@ export function buildsBody(facts1: BuildFacts): string {
 	const newestOf = (files: readonly ArtifactFact[]): string | undefined =>
 		files.map((file) => file.builtAt).sort((one, other) => other.localeCompare(one))[0];
 
-	const siteFiles = artifacts.filter((artifact) => artifact.kind === 'site');
-	const helpFiles = artifacts.filter((artifact) => artifact.kind === 'chm');
-	const siteScript = facts1.scripts.find((script) => script.name === 'docs:site' || script.name === 'docs:build');
-	const helpScript = facts1.scripts.find((script) => script.name === 'build:help:dry');
-
 	/**
-	 * One target of a build: the script that would be run, the folders the file is looked for in, and what is in them.
+	 * One output of this project, as a row: what it is for, the script that would be run here, and what is in it now.
 	 *
-	 * The script is read from the folder being built, never assumed — and the two targets differ when it is absent,
-	 * which is why each says what actually happens instead of sharing a sentence.
+	 * The script is read from the folder being built, never assumed — so an output this repository cannot make says what
+	 * it would need instead of offering a button that runs something else. The ticks are the project's own, which is why
+	 * the row also says when an output is not one of them.
 	 */
-	const targetTile = (options: {
-		mark: string;
-		title: string;
-		script?: RepositoryScript;
-		absent: string;
-		writes: string;
-		files: readonly ArtifactFact[];
-	}): string => {
-		const newest = newestOf(options.files);
+	const made = outputs.chosen(facts1.outputs);
+	const outputRow = (output: Output): string => {
+		const part = made.some((chosen) => chosen.value === output.value);
+		const script = outputs.scriptFor(output, facts1.scripts.map((one) => one.name));
+		const files = artifacts.filter((artifact) => outputs.byKind(artifact.kind)?.value === output.value);
+		const newest = newestOf(files);
 		return entry({
-			mark: options.mark,
-			tone: options.script === undefined ? 'warn' : 'ok',
-			title: options.title,
+			mark: output.mark,
+			tone: script === undefined && output.madeBy === undefined ? 'warn' : 'ok',
+			title: output.label,
+			status: part ? undefined : 'not part of this project',
 			meta: [
-				options.script === undefined ? options.absent : `runs ${options.script.name}`,
-				options.writes,
-				options.files.length === 0 || newest === undefined
-					? 'nothing written yet'
-					: `${n(options.files.length, 'file', 'files')} now, newest ${waitingSince(newest)}`
+				part ? output.purpose : 'The create form did not tick this one, so the project does not build it.',
+				script === undefined ? (output.madeBy ?? `this folder has no ${output.scripts.join(' or ')} script, so nothing would run`) : `runs ${script}`,
+				files.length === 0 || newest === undefined ? 'nothing written yet' : `${n(files.length, 'file', 'files')} now, newest ${waitingSince(newest)}`
 			],
-			state: options.script === undefined ? 'no script' : 'script found'
+			actions:
+				part && script !== undefined
+					? azButton(`Build the ${output.label}`, 'temcoDocs.buildOutput', { small: true, mark: 'play', args: [output.value] })
+					: undefined,
+			// The button already says the script was found; the words are kept for the case that needs explaining.
+			state: script === undefined ? 'no script' : undefined
 		});
 	};
 
+	/** What this project was made to build, in the order the create form asked, and what each one would run here. */
 	const whereItWrites = `${section({
-		title: 'Where a build writes',
-		desc: 'A build runs one of these scripts as a task, then looks for the file it should have written in the folders named under it. Nothing is written by this page.'
-	})}<div class="az-entries az-entries--row az-entries--plain">
-${targetTile({
-		mark: 'globe',
-		title: 'The Site',
-		script: siteScript,
-		absent: 'no docs:site — this application writes the site itself',
-		writes: 'into dist/site, or dist/docs',
-		files: siteFiles
-	})}
-${targetTile({
-		mark: 'package',
-		title: 'The Offline Help',
-		script: helpScript,
-		absent: 'no build:help:dry — nothing would be run',
-		writes: 'one .chm in the project, or in HelpDocs beside it',
-		files: helpFiles
-	})}
-</div><p class="az-note">${facts1.folder === undefined ? 'No folder is being read, so nothing can be built.' : `Both run in <span class="cell-mono">${esc(facts1.folder)}</span>.`} The deploying help build (<span class="cell-mono">build:help</span>) is never run from here: it copies the CHM into a product installation, and building is not shipping.</p>`;
+		title: 'What this project builds',
+		desc: 'The ticks the project was created with, in the order the form asked for them. A build runs that output’s own script as a task, then looks for the file it should have written — nothing is written by this page.'
+	})}${azEntries(outputs.all.map(outputRow))}<p class="az-note">${facts1.folder === undefined ? 'No folder is being read, so nothing can be built.' : `Scripts are read from <span class="cell-mono">${esc(facts1.folder)}</span>, never assumed.`} The deploying help build (<span class="cell-mono">build:help</span>) is never run from here: it copies the CHM into a product installation, and building is not shipping.</p>`;
 
 	// Nothing has run: the callout says what a build is, and the page still answers where it would write.
 	if (builds.length === 0) {
@@ -1828,8 +1820,6 @@ ${targetTile({
 /** *Publish & Releases* — what a build left behind, and what a reader can be given. The files are the release. */
 export function releasesBody(facts1: BuildFacts): string {
 	const { artifacts, releases, publish } = facts1;
-	// The targets in the order a reader meets them: the website first, then what is printed, then the help file.
-	const kinds = [...new Set(artifacts.map((artifact) => artifact.kind))].sort((one, other) => rankOf(one) - rankOf(other) || one.localeCompare(other));
 
 	const releaseRow = (release: ReleaseRow): string =>
 		azRow({
@@ -1854,24 +1844,24 @@ export function releasesBody(facts1: BuildFacts): string {
 		});
 
 	/**
-	 * One target, as the first level: the website, the PDFs, the offline help.
+	 * One output, as the first level: the website, the PDFs, the offline help, the indexes.
 	 *
-	 * What a person publishes is a target, not a file, so the row says how many files it holds and what they are
+	 * What a person publishes is an output, not a file, so the row says how many files it holds and what they are
 	 * ("129 Markdown · 386 pictures · 2 JSON") — the types are a sentence here rather than a level, because a reader who
 	 * wants the website does not first want to choose between its pages and its pictures. The files are behind one
 	 * "Show all", which closes again the same way.
 	 */
-	const targetBlock = (kind: string): string => {
-		const files = artifacts.filter((artifact) => artifact.kind === kind).sort((one, other) => (one.builtAt < other.builtAt ? 1 : -1));
+	const outputBlock = (output: Output, files: readonly ArtifactFact[]): string => {
 		const size = files.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
 		const newest = files.reduce((last, file) => (file.builtAt > last ? file.builtAt : last), '');
 		const folder = commonFolder(files.map((file) => file.path));
 		return `${section({
-			title: artifactLabel(kind),
+			title: output.label,
 			desc: [
 				`${n(files.length, 'file', 'files')}${size === 0 ? '' : `, ${megabytes(size)}`}`,
 				composition(files),
-				newest === '' ? '' : `newest ${waitingSince(newest)}`
+				newest === '' ? '' : `newest ${waitingSince(newest)}`,
+				output.purpose
 			]
 				.filter((part) => part !== '')
 				.join(' · '),
@@ -1881,6 +1871,80 @@ ${folded(files.map(fileRow), 6, 'more files')}`;
 	};
 
 	const fact = (mark: string, title: string, note: string): string => azRow({ mark, title, meta: note });
+
+	// The outputs this project was made with, read back from its own recipe — the same ticks the create form asked for,
+	// in the same order, so what a person chose is what they are shown here.
+	const made = outputs.chosen(facts1.outputs);
+	const isMade = (output: Output): boolean => made.some((chosen) => chosen.value === output.value);
+	const filesOf = (output: Output): ArtifactFact[] =>
+		artifacts
+			.filter((artifact) => outputs.byKind(artifact.kind)?.value === output.value)
+			.sort((one, other) => (one.builtAt < other.builtAt ? 1 : -1));
+	const scriptOf = (output: Output): string | undefined => outputs.scriptFor(output, facts1.scripts.map((script) => script.name));
+
+	/** What this output is, in one sentence: built, nothing here makes it, or it is made somewhere other than a build. */
+	const stateOf = (output: Output): string => {
+		const files = filesOf(output);
+		if (files.length > 0) {
+			return `Built — newest ${waitingSince(files.reduce((last, file) => (file.builtAt > last ? file.builtAt : last), ''))}`;
+		}
+		if (output.madeBy !== undefined) {
+			return output.madeBy;
+		}
+		const script = scriptOf(output);
+		return script === undefined
+			? `Nothing here makes it: this folder has no ${output.scripts.join(' or ')} script`
+			: `Not built yet — a build would run ${script}`;
+	};
+
+	/**
+	 * The categories, at the top, as cards — one per output, the ticks of the create form in its own order.
+	 *
+	 * An output the project was not made with is greyed rather than hidden: five exist, four were chosen, and a page that
+	 * showed four would leave a person wondering whether the fifth had been lost.
+	 */
+	const outputCards = (): string =>
+		cards(
+			outputs.all.map((output) => {
+				const files = filesOf(output);
+				const size = files.reduce((sum, file) => sum + (file.bytes ?? 0), 0);
+				const part = isMade(output);
+				return {
+					mark: output.mark,
+					title: output.label,
+					desc: part ? stateOf(output) : 'Not part of this project — the create form did not tick it',
+					note: part && files.length > 0 ? `${n(files.length, 'file', 'files')} · ${megabytes(size)}` : undefined,
+					muted: !part
+				};
+			}),
+			{ dense: true }
+		);
+
+	/** An output with no file of its own: the reason, and what would change it — never an empty list. */
+	const emptyOutput = (output: Output): string =>
+		azCallout({
+			title: `${output.label}: nothing to list yet`,
+			desc:
+				output.madeBy !== undefined
+					? `${output.madeBy}. It is not a file this project's build writes, so it never appears as one.`
+					: `${stateOf(output)}. Add one to the repository and the build will have something to run.`,
+			mark: output.mark,
+			actions: azButton('Build Center', 'temcoDocs.builds', { small: true, mark: 'list' })
+		});
+
+	const outputsSection = (): string => `${section({
+		title: 'The files a reader can be given',
+		desc: 'One card per output the project was made with, in the order the create form asked for, and under them what each one holds. A downloadable file is the release; the site is the only one that has to be published.'
+	})}
+${outputCards()}
+${made.length === 0
+			? azCallout({
+				title: 'This project has no outputs recorded',
+				desc: 'Nothing was ticked when it was made, so there is nothing to build or publish. Choose outputs in the project’s own page.',
+				mark: 'info',
+				actions: azButton('Edit the project', 'temcoProjects.editProject', { small: true, mark: 'gear' })
+			})
+			: made.map((output) => (filesOf(output).length === 0 ? emptyOutput(output) : outputBlock(output, filesOf(output)))).join('')}`;
 
 	return `${hero({
 		eyebrow: 'Documentation',
@@ -1934,13 +1998,7 @@ ${azEntries(publish === undefined
 <p class="az-note">A downloadable CHM or PDF needs no publishing at all — it is a file the build wrote. Publishing is for the site: the same pages in one folder with an entry point.</p>
 </div>
 </div>
-${artifacts.length === 0
-			? ''
-			: `${section({
-				title: 'The files a reader can be given',
-				desc: 'One block per target — the website, the PDFs, the offline help — with what each one holds and a way into its folder. A downloadable file is the release; the site is the only one that has to be published.'
-			})}
-${kinds.map(targetBlock).join('')}`}
+${outputsSection()}
 ${section({ title: 'What publishing does', desc: 'Three facts, in the order they happen.' })}
 ${azEntries([
 				fact('upload', 'Copies the site', 'the files a build wrote, into a folder the platform owns — nothing is uploaded anywhere'),

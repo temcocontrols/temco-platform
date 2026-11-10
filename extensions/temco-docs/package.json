@@ -356,6 +356,11 @@
         "icon": "$(globe)"
       },
       {
+        "command": "temcoDocs.buildOutput",
+        "title": "Build an Output",
+        "icon": "$(play)"
+      },
+      {
         "command": "temcoDocs.previewSite",
         "title": "Preview the Site",
         "icon": "$(eye)"
@@ -772,6 +777,10 @@
       "commandPalette": [
         {
           "command": "temcoDocs.readSourceOfFile",
+          "when": "false"
+        },
+        {
+          "command": "temcoDocs.buildOutput",
           "when": "false"
         },
         {

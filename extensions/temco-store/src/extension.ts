@@ -12,7 +12,7 @@ import { registerStoreCommands } from './commands';
 import { CATALOG_FILE, Catalog, CatalogUnavailable, sqliteAvailable } from './catalog/store';
 import { slugOf } from './names';
 import { Selection } from './selection';
-import { TemcoStoreApi } from './api';
+import { TemcoStoreApi, projectOutputs } from './api';
 
 export function activate(context: vscode.ExtensionContext): TemcoStoreApi {
 	const selection = new Selection(context);
@@ -35,6 +35,8 @@ export function activate(context: vscode.ExtensionContext): TemcoStoreApi {
 		selection,
 
 		slugOf,
+
+		outputs: projectOutputs
 	};
 }
 

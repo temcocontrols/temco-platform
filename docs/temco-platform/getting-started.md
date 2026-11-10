@@ -748,6 +748,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | Button | On the page | Command |
 |---|---|---|
 | **Build Site** | Build Center, Releases | `temcoDocs.buildSite` |
+| **Build the Website / PDF / …** (one row per output) | Build Center | `temcoDocs.buildOutput` |
 | **Build Offline Help** | Build Center, Releases | `temcoDocs.buildHelp` |
 | **Refresh** | Build Center | `temcoDocs.builds` |
 | **Open** (an artifact) | Build Center → Artifacts | `temcoDocs.openArtifact` |

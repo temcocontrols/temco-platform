@@ -19,7 +19,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { draftProjectPage } from './aiModule';
 import { RepositoryFile, RepositorySource, repositoryFiles, repositoryMaterial } from './repositories';
-import { Catalog, CatalogUnavailable, Selection, slugOf, SourceRow } from './store';
+import { Catalog, CatalogUnavailable, Selection, slugOf, SourceRow, outputs } from './store';
 import { actionBar, callout, checkCards, choiceCards, escapeHtml as esc, formFields, hero, icon, page, pageColumn, remember, section } from './ui';
 import { versionAddress, versionName } from './versionName';
 
@@ -62,16 +62,21 @@ export function defaultFolder(): string {
 }
 
 /** What a project can build. One build produces every one of them, so they are ticks, not a choice. */
-export const TARGETS = [
-	{ value: 'website', label: 'Website', sub: 'Static pages for Temco Learn', mark: 'globe' },
-	{ value: 'pdf', label: 'PDF', sub: 'One document, printed layout', mark: 'document' },
-	{ value: 'help', label: 'Offline help', sub: 'CHM · needs the help compiler', mark: 'book' },
-	{ value: 'search', label: 'Search index', sub: 'lunr index for the site', mark: 'search' },
-	{ value: 'ai', label: 'AI index', sub: 'Embeddings, kept on this machine only', mark: 'sparkle' }
-];
+/**
+ * The outputs the create form offers, read from the store's one list.
+ *
+ * The same list names the categories on Publish & Releases and the scripts Build Center runs, so a target renamed here
+ * is renamed on all three screens at once instead of drifting apart one screen at a time.
+ */
+export const TARGETS = outputs.all.map((output) => ({
+	value: output.value,
+	label: output.label,
+	sub: output.purpose,
+	mark: output.mark
+}));
 
 /** The outputs ticked when the page opens. */
-const DEFAULT_TARGETS = ['website', 'pdf', 'help', 'search'];
+const DEFAULT_TARGETS = outputs.defaults;
 
 /** How a project begins. `available: false` is shown, disabled, with the reason — never hidden. */
 export interface Origin {
