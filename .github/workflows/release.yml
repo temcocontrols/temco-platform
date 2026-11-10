@@ -92,6 +92,9 @@ jobs:
     needs: guard
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    # `optional` marks a platform whose package is a bonus rather than a requirement: a queue that will not hand out
+    # its runner stops that job, not the release.
+    continue-on-error: ${{ matrix.optional == true }}
     timeout-minutes: 150
     env:
       # Packaging downloads the built-in extensions from **GitHub Releases** (`bundle-marketplace-extensions-build`), and
@@ -118,17 +121,19 @@ jobs:
             label: Linux x64
             platform: linux
             arch: x64
-          # `macos-14` (and every `-large` or `-xlarge` variant) is refused before a runner is assigned — "The
-          # configuration 'macos-14-arm64-us-default' is not supported". `macos-15` starts and reports `uname -m` as
-          # `arm64` on an M1, but three release runs in a row (1.144.0 twice, 1.144.1 once) sat for fifteen minutes and
-          # were then cancelled with "The job was not acquired by Runner of type hosted" and no runner at all, while
-          # Windows and Linux built. `macos-26` is the other arm64 image this repository can start, so it is tried
-          # first here: a queue that will not hand out one image may still hand out the other, and either one builds
-          # the same arm64 packages.
-          - os: macos-26
+          # `macos-15` is the Apple silicon image this repository can get: `macos-14` (and every `-large` or `-xlarge`
+          # variant) is refused before a runner is assigned — "The configuration 'macos-14-arm64-us-default' is not
+          # supported" — and `macos-26` queues exactly like `macos-15`, so the newer image buys nothing.
+          #
+          # `optional` is why this entry differs from the other two: five macOS attempts in a row (macos-15 four
+          # times, macos-26 once) were cancelled at the fifteen-minute mark with "The job was not acquired by Runner of
+          # type hosted" and no runner at all, while Windows and Linux built every time. A missing arm64 package is
+          # worth a line in the release notes; it is not worth blocking the release.
+          - os: macos-15
             label: macOS arm64
             platform: darwin
             arch: arm64
+            optional: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -328,6 +333,21 @@ jobs:
           path: release
           merge-multiple: true
 
+      # The notes say what is actually in the draft, rather than what the plan was: an optional platform that never got
+      # a runner would otherwise leave a release that silently lacks its arm64 package.
+      - name: Note which platforms are in this build
+        run: |
+          set -euo pipefail
+          if ls release/TemcoPlatform-darwin-arm64-*.zip >/dev/null 2>&1; then
+            echo "" > release/PLATFORMS.md
+            echo "macOS arm64 is included." >> release/PLATFORMS.md
+          else
+            echo "" > release/PLATFORMS.md
+            echo "**macOS arm64 is not in this build.** Its job was still waiting for a GitHub runner when the other" >> release/PLATFORMS.md
+            echo "platforms finished. Re-run the failed macOS job, then this job, and the zip is added here." >> release/PLATFORMS.md
+          fi
+          cat release/PLATFORMS.md
+
       - name: Write the release notes
         run: |
           cat > release/NOTES.md <<'EOF'
@@ -344,6 +364,7 @@ jobs:
 
           Nothing here updates itself: a new version is a new download.
           EOF
+          cat release/PLATFORMS.md >> release/NOTES.md
 
       # A draft, so the files can be checked before anyone is pointed at them.
       - uses: softprops/action-gh-release@v2
