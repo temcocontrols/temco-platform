@@ -37,11 +37,7 @@ a page          →      builds and publishes  →     one commit on main   → 
 | [Part 4 — Beyond the flow](#part-4--beyond-the-flow-and-when-it-goes-wrong) | What else can a project do, and what do I do when a step fails? |
 | [Appendix](#appendix--every-control-and-its-command) | Which button runs which command? |
 
-Three things hold throughout:
-
-- **Steps 1 to 8 run in order, once.** Each step reads what the one before it wrote. After the first pass, [Running it again](#running-it-again) is the short version.
-- **Every step ends with a check.** *You should see* names a file or a screen, and *If not* names the usual cause. When the file is missing, that step failed, and nothing after it is worth testing.
-- **`~` is your home folder.** A command id in brackets (`temcoDocs.buildSite`) is what the Command Palette (`Ctrl+Shift+P`) runs when the button it belongs to is greyed out.
+A command id in brackets (`temcoDocs.buildSite`) is what the Command Palette (`Ctrl+Shift+P`) runs when the button it belongs to is greyed out, and `~` is your home folder.
 
 ## Part 1 — Temco Platform, the application
 
@@ -311,7 +307,7 @@ A few words mean something narrower here than elsewhere:
 
 ### Step by step
 
-Each step does one thing and leaves something to check: the first four write and build the project, the next three take that build to the site and give it its downloads, and the last one publishes. Take them in order — each step reads what the one before it wrote, so a step that fails stops the rest.
+Each step does one thing and leaves something to check: **You should see** names a file or a screen, and **If not** names the usual cause, so a step that fails says so rather than showing up three steps later. The first four write and build the project, the next three take that build to the site and give it its downloads, and the last one publishes. Take them in order — each step reads what the one before it wrote. When the first publish is done, [Running it again](#running-it-again) is the short version.
 
 ### Step 1 — create a project
 
