@@ -1,19 +1,17 @@
 # Platform introduction
 
-**Temco Platform is where product documentation is written and published.** It is a desktop application, built on VS Code. In it you write pages and group them into a **project**. You then build that project into a website, with a printable PDF and a Windows help file, and publish the result to **Temco Learn**: the documentation site readers actually open, at `https://temcocontrols.github.io/temco-learn/`.
+**Temco Platform is the application Temco Controls writes its product documentation in.** Each product's pages live in a **project** — one folder on your own disk — and the application builds that folder into a website, a printable PDF and a Windows help file. Publishing puts the website on **Temco Learn**, the site readers open at `https://temcocontrols.github.io/temco-learn/`.
 
-Two windows, one loop: every step below happens between them.
+![Temco Platform, the application you write in: a project's pages listed on the left, the page you picked open in the middle.](media/publishing/00-temco-platform.png)
 
-![The welcome page, with the Documentation panel down the left showing one project's pages.](media/publishing/00-temco-platform.png)
-
-**Temco Platform** is where the writing happens: create a project, write and review pages, build them into a website, a PDF and a Windows help file, and publish the result to Temco Learn.
+**Temco Platform** creates the project, writes and reviews the pages, runs the build, and publishes the result to Temco Learn.
 
 > **Screenshot — Temco Learn in a browser, on a product's documentation page: the reading menu beside the page, and the version selector with its download menu at the top.**
 > `media/publishing/01-temco-learn.png`
 
-**Temco Learn is the window a reader opens, and it only exists because a build was published.** The same pages as a website, with search, a version selector, and the PDF and Windows help file the build left behind.
+**Temco Learn** is the site a reader opens. Everything on it — the pages, the search, the PDF, the help file — came from a build that was published.
 
-This guide walks that whole journey once, from an empty folder to a live page. It assumes you have never opened the application before, and it assumes no background in VS Code, in Git, or in the site's own code. Where one of those cannot be avoided — a commit, a catalog — it is explained at the step where you meet it.
+This guide follows one product through that loop once, from an empty folder to a live page. It assumes you have never opened the application before, and it assumes no background in VS Code, in Git, or in the site's own code. Where one of those cannot be avoided — a commit, a catalog — it is explained at the step where you meet it.
 
 ## The 30-second version
 
