@@ -240,7 +240,9 @@ const inspect = (file: string, lines: string[]): string[] => {
 	}
 
 	// 6. a screenshot slot is numbered once, in order — whether it is written as a planned slot in backticks or pasted as
-	// a picture. A guide with `00`, `01`, `03` has lost one, and a missing number is a missing screenshot.
+	// a picture. A guide with `00`, `01`, `03` has lost one, and a missing number is a missing screenshot. One step may
+	// show as many pictures as it needs (`07-add-build-01`, `07-add-build-02`), so the numbers are counted once each:
+	// what must run 00, 01, 02 … is the set, not every file.
 	const slots: { slot: number; line: number }[] = [];
 	lines.forEach((line, index) => {
 		if (fenced.has(index + 1)) {
@@ -250,13 +252,13 @@ const inspect = (file: string, lines: string[]): string[] => {
 			slots.push({ slot: Number(match[1]), line: index + 1 });
 		}
 	});
-	[...slots]
-		.sort((one, other) => one.slot - other.slot)
-		.forEach(({ slot, line }, index) => {
-			if (slot !== index) {
-				say(line, `screenshot slots are not numbered 00, 01, 02 …: found ${slots.map(entry => entry.slot).sort().join(', ')}`);
-			}
-		});
+	const numbers = [...new Set(slots.map(entry => entry.slot))].sort((one, other) => one - other);
+	numbers.forEach((slot, index) => {
+		if (slot !== index) {
+			const line = slots.find(entry => entry.slot === slot)?.line ?? lines.length;
+			say(line, `screenshot slots are not numbered 00, 01, 02 …: found ${numbers.join(', ')}`);
+		}
+	});
 
 	// 7. steps are sequential
 	const steps: { step: number; line: number }[] = [];
@@ -324,6 +326,22 @@ group.test('a picture is numbered like a slot, and a pattern in backticks is not
 	assert.ok(
 		!found.some((text) => text.includes('media/diagram')),
 		'a diagram inside a fence was read as a picture'
+	);
+});
+
+group.test('one step may show several pictures under one number, and a gap still fails', () => {
+	const twoForOneStep = inspect(guide, [
+		'`media/publishing/00-before.png`',
+		'`media/publishing/00-before-again.png`',
+		'`media/publishing/01-after.png`'
+	]);
+	assert.deepEqual(twoForOneStep, [], `two pictures under 00 were read as a broken sequence: ${twoForOneStep.join(' | ')}`);
+
+	// The teeth are unchanged: a number that is missing is still a screenshot that is missing.
+	const gap = inspect(guide, ['`media/publishing/00-one.png`', '`media/publishing/00-one-again.png`', '`media/publishing/02-three.png`']);
+	assert.ok(
+		gap.some((text) => text.includes('screenshot slots are not numbered')),
+		'a gap went unnoticed because a number was repeated elsewhere'
 	);
 });
 

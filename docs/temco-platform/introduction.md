@@ -130,8 +130,7 @@ Each step does one thing and leaves something to check: the first four write and
 
 **Create a Project** (`temcoProjects.newProject`). Give it the name `T3000` and the version `1.0`, and leave the outputs ticked: *Website*, *PDF*, *Offline help* and *Search index*.
 
-> **Screenshot — the create-project form, with the output ticks visible and a name typed in.**
-> `media/publishing/03-create-project.png`
+![The create-project form, with the output ticks visible and a name typed in.](media/publishing/03-create-project.png)
 
 **Where the pages come from** is the choice that decides what exists once the form closes:
 
@@ -156,8 +155,7 @@ The folder is added to the window so that its `docs/` shows in Explorer. That is
 
 **New Page** (`temcoDocs.newPage`) with T3000 selected. It opens a **form** rather than a prompt: the place is already chosen from the row you were on, and the form shows the kind of page, the file it will write, and the body it starts from. The palette offers the kinds alongside it (*New Article*, *New Task*, *New Reference*, *New Troubleshooting*, *New Release Note*), and they differ only in their starter headings.
 
-> **Screenshot — the Pages view and the New Page form side by side, with the kind, the target file and the starter body visible.**
-> `media/publishing/04-pages.png`
+![The Pages view and the New Page form side by side, with the kind, the target file and the starter body visible.](media/publishing/04-pages.png)
 
 | In the form | Decides |
 |---|---|
@@ -189,8 +187,7 @@ Come back to this step whenever you have more to write. Nothing downstream notic
 
 **Build the Site** (`temcoDocs.buildSite`), or *Build the Site* on the project page. It builds the project that is **selected**, reading the folders that project cites, so the folder does not have to be open in the window.
 
-> **Screenshot — the Build Center after a build: the four counts, one card per output this project builds, and the newest run at the head of the log.**
-> `media/publishing/05-build.png`
+![The Build Center after a build: the four counts, one card per output this project builds, and the newest run at the head of the log.](media/publishing/05-build.png)
 
 Two things can produce the site, and what is in the folder decides which one runs:
 
@@ -212,8 +209,7 @@ The exit code is never the verdict. What counts is a file that did not exist bef
 
 Skip it unless T3000 cites a real repository clone under `~/temco/source/`. **Temco Projects: Build** (`temcoProjects.buildProject`) takes the outputs you ticked and runs the repository's own script for each one, **once each**:
 
-> **Screenshot — the terminal during a project build: `docs:registry`, then one script per ticked output, then the list of files it left behind.**
-> `media/publishing/06-project-outputs.png`
+![The terminal during a project build: `docs:registry`, then one script per ticked output, then the list of files it left behind.](media/publishing/06-project-outputs.png)
 
 | Ticked output | Script it looks for, in the repository |
 |---|---|
@@ -235,8 +231,10 @@ This is the step that produces a PDF or a `.chm` **for the docs module**: the co
 
 **Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the Publishing page; **Add a Build to the Site** (`temcoLearn.addBuilds`) lists every build on disk.
 
-> **Screenshot — the version box, showing “project t3000” and the version field.**
-> `media/publishing/07-add-build.png`
+![The version box: the title naming the project, `project t3000` in the prompt, and the version field with `1.0` in it.](media/publishing/07-add-build-01.png)
+
+> **Screenshot — what follows the box: the site page opened on `t3000` version `1.0`, with that version selected.**
+> `media/publishing/07-add-build-02.png`
 
 It finds every `dist/site` and `dist/docs` two folders below the window's folders, the projects folder and the working folder, and offers the ones that contain an `index.html` or, for a documentation project, an `index.md`. A Markdown build is added as content, so its pages become editable pages of the site; an HTML build is copied beside the catalog as it came. The box then names the project it will land in (`project t3000`) and asks one question: which version. Type `1.0`.
 
