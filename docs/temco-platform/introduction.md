@@ -45,7 +45,20 @@ Three habits make the rest easy:
 
 ## Part 1 — Temco Platform, the application
 
-**Temco Platform has eight features, and they are the eight you see down the activity bar on the left.** Four of them carry this walk; the other four are here so that nothing surprises you when you go looking.
+Temco Platform has eight features, the eight you see down the activity bar on the left.
+
+| # | Feature | In a word |
+|---|---|---|
+| [#1](#1-home) | **Home** | the library, and what needs doing |
+| [#2](#2-documentation) | **Documentation** | pages, the editor, the build |
+| [#3](#3-repositories) | **Repositories** | where the pages come from |
+| [#4](#4-temco-learn) | **Temco Learn** | the site, from this side |
+| [#5](#5-ai) | **AI** | a draft beside the page |
+| [#6](#6-forum) | **Forum** | the community site |
+| [#7](#7-tools) | **Tools** | the platform's own database |
+| [#8](#8-settings) | **Settings** | the six settings pages |
+
+Four of them carry the walk — **#3** sets the folders, **#1** makes the project, **#2** writes and builds the pages, and **#4** takes the build to the site. Each gets its own section below.
 
 ### #1 Home
 
