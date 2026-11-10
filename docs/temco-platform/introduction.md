@@ -536,7 +536,7 @@ If you already have a `docs/` folder, create the project with **From existing fi
 
 ### Exporting
 
-**Export…** (`temcoDocs.export`) opens the Exports page, which tells you what you get before you get it. Every export writes into the project's `dist/`, and the notification offers *Show in Folder*.
+**Export…** on **Publish & Releases**, or **Exports** in the Command Palette (`temcoDocs.export` — it has no button of its own in the activity bar), opens the Exports page, which tells you what you get before you get it. Every export writes into the project's `dist/`, and the notification offers *Show in Folder*.
 
 > **Screenshot — the Exports page: the four shapes, each saying what is inside it and where it lands.**
 > `media/publishing/15-exports.png`
