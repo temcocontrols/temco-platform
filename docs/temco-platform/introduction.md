@@ -27,49 +27,42 @@ a page          →      builds and publishes  →     one commit on main   → 
 
 You only need the left-hand side to finish this guide. The right-hand side is why the work has a point — and the reason one step makes a PDF by hand, since the site cannot make one for you.
 
-## How to use this guide
-
-- **Read steps 1–9 in order, once.** After that, go straight to [Running it again](#running-it-again); that is what everyday work looks like.
-- **Every step has the same three parts:** what you do, **You should see** (a file or a screen to check), and **If not** (the usual cause). If the file a step promises is not there, that is the step that failed, and nothing after it is worth testing yet.
-- **Buttons are named as they appear**, with the command id in backticks beside them, like `temcoDocs.buildSite`. If a button is hidden or unavailable, type that id into the Command Palette (`Ctrl+Shift+P`) and it will run the same action.
-- **A `~` in a path means your home folder.** Windows paths are written with backslashes; on macOS and Linux the same path uses `/`. The only genuinely Windows-only piece is the `.chm`, which needs the help compiler.
-- **Keep this guide open in a second window** while you work through it. It is meant to be read next to the application, not memorised.
-
 ## What you need before you start
 
-| Need | Why |
+| You need | Why |
 |---|---|
-| the application installed and running | this guide is about using it, not installing it |
-| write access to the `temcocontrols/temco-learn` repository, or someone who has it | the last step pushes a commit there. Without access, everything before it still works and simply stops at *publish* |
-| git configured with your GitHub account | a publish is a `git add`, a `commit` and a `push`, all under your name |
+| the application, installed and running | this guide is about using it, not installing it |
+| Node 22 on the same machine | the site's own build and its catalog run on it |
+| write access to `temcocontrols/temco-learn`, or a colleague who has it | the last step pushes a commit there. Without it, everything up to *publish* still works and simply stops |
+| git configured with your GitHub account | a publish is a `git add`, a `commit` and a `push`, in your name |
 | the site clone on this machine | `~/temco/temco-learn` unless you choose otherwise. The Site page clones it for you |
-| an hour for the first run | steps 2 and 7 account for most of it |
-| rather less every time after | a repeat publish is four commands and about two minutes |
+
+Budget an hour for the first run — steps 2 and 7 take most of it — and about two minutes for every publish after that.
 
 You do not have to be the person who set the machine up. If somebody else did, [Before the first time](#before-the-first-time) shows you how to check that the three settings and the site clone are right before you begin.
 
-## In this guide
+## How to use this guide
 
-| Section | Answers |
+- **Steps 1 to 9, in order, once.** They are the whole flow; after that, day-to-day work is [Running it again](#running-it-again).
+- **Every step has the same three parts:** what you do, **You should see** (a file or a screen to check), and **If not** (the usual cause). When the file a step promises is missing, that step failed, and nothing after it is worth testing.
+- **Buttons are named as they appear on screen**, with the command id beside them, like `temcoDocs.buildSite`. If a button is greyed out, type that id into the Command Palette (`Ctrl+Shift+P`) and it does the same thing.
+- **`~` means your home folder.** Paths are written for Windows; on macOS and Linux the same path uses `/`. The `.chm` is the only Windows-only piece, because it needs the help compiler.
+- **Read it next to the application**, in a second window. It is a companion, not something to memorise.
+
+## Where to find things
+
+| If you want to… | Read |
 |---|---|
-| [The application and the site](#the-application-and-the-site) | the loop between them, the four areas of the app you use, and the five levels a reader walks |
-| [What you are making](#what-you-are-making) | what a project, a build and the site are, and where each one lives |
-| [The general flow](#the-general-flow) | the five acts, what each writes, and what a reader notices |
-| [Words this guide uses](#words-this-guide-uses) | page id, area, chapter, version, section, catalog, guard, downloads |
-| [What you will have when you are done](#what-you-will-have-when-you-are-done) | the result, in five bullets |
-| [Before the first time](#before-the-first-time) | the setup that happens once per machine |
-| [Where things go](#where-things-go) | the three settings that decide every path |
-| [Steps 1–9](#step-1--check-the-folders) | the flow, in order, each with what you should see |
-| [The editor](#the-editor) | the ribbon, pictures, the outline and draft panel, preview, diff, and every shortcut |
-| [Running it again](#running-it-again) | the four commands for the second, third and hundredth publish |
-| [The same flow, as files](#the-same-flow-as-files-t3000) | every file, and the step that wrote it |
-| [What the files look like](#what-the-files-look-like) | real snippets of the JSON you will meet |
-| [Reference: the outputs](#reference-what-the-outputs-mean) | the ticks, and which script each one runs |
-| [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) | the tests that prove the guards really refuse |
-| [When a step goes wrong](#when-a-step-goes-wrong) | symptom → cause → where to look |
-| [When something else goes wrong](#when-something-else-goes-wrong) | the failures that are not about publishing |
-| [Beyond the flow](#beyond-the-flow) | sources, the editor, validate, release, export, translate |
-| [Appendix](#appendix--every-button-one-page) | every button, and the command id behind it |
+| understand the pieces before you start | [The application and the site](#the-application-and-the-site) · [What you are making](#what-you-are-making) · [The general flow](#the-general-flow) |
+| know what the result looks like | [What you will have when you are done](#what-you-will-have-when-you-are-done) |
+| do the whole thing, once | [Steps 1–9](#step-1--check-the-folders) |
+| set up a machine | [Before the first time](#before-the-first-time) · [Where things go](#where-things-go) |
+| publish again next week | [Running it again](#running-it-again) · [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) |
+| work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
+| see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
+| know what an output tick means | [Reference: the outputs](#reference-what-the-outputs-mean) |
+| fix something | [When a step goes wrong](#when-a-step-goes-wrong) · [When something else goes wrong](#when-something-else-goes-wrong) |
+| look up a word, a button, a command id | [Words this guide uses](#words-this-guide-uses) · [Appendix](#appendix--every-button-one-page) |
 
 ## What you are making
 
