@@ -37,11 +37,11 @@ a page          →      builds and publishes  →     one commit on main   → 
 | [Part 4 — Beyond the flow](#part-4--beyond-the-flow-and-when-it-goes-wrong) | What else can a project do, and what do I do when a step fails? |
 | [Appendix](#appendix--every-control-and-its-command) | Which button runs which command? |
 
-Three habits make the rest easy:
+Three things hold throughout:
 
-- **Steps 1 to 8 in order, once.** After that, [Running it again](#running-it-again) is the day-to-day version.
-- **Every step has three parts:** what you do, **You should see** (a file or a screen to check), and **If not** (the usual cause). When the file a step promises is missing, that step failed, and nothing after it is worth testing.
-- **`~` is your home folder**, and the command id beside a button (`temcoDocs.buildSite`) is what the Command Palette (`Ctrl+Shift+P`) runs when the button is greyed out.
+- **Steps 1 to 8 run in order, once.** Each step reads what the one before it wrote. After the first pass, [Running it again](#running-it-again) is the short version.
+- **Every step ends with a check.** *You should see* names a file or a screen, and *If not* names the usual cause. When the file is missing, that step failed, and nothing after it is worth testing.
+- **`~` is your home folder.** A command id in brackets (`temcoDocs.buildSite`) is what the Command Palette (`Ctrl+Shift+P`) runs when the button it belongs to is greyed out.
 
 ## Part 1 — Temco Platform, the application
 
