@@ -45,16 +45,18 @@ Three habits make the rest easy:
 
 ## Part 1 — Temco Platform, the application
 
-### The eight areas, and what each can do
+The activity bar down the left of the window holds eight areas. Four of them carry the walk, and each gets a paragraph of its own here, so that nothing surprises you later.
 
-The activity bar down the left of the window holds eight areas. Four of them carry the walk. Each gets a short paragraph here, so that nothing surprises you later.
+### Area 1 — Home
 
-**Home** is the library at a glance: every project you have made, what needs doing across them, and the pages that have no file yet.
+The library at a glance: every project you have made, what needs doing across them, and the pages that have no file yet.
 
 > **Screenshot — the Home page: the projects, and what needs doing across them.**
 > `media/publishing/16-home-overview.png`
 
-**Documentation** holds a project's three views. **Project** shows one project's state — its pages, the outputs it produces, and the button that builds it. **Pages** is the tree of areas, chapters and pages, with the row actions that rename, move, retire a page, or create the file a `missing` row is waiting for. **Publish** is where a build becomes something a reader can be given: the Review Center, the Build Center, and Publish & Releases.
+### Area 2 — Documentation
+
+A project's three views. **Project** shows one project's state — its pages, the outputs it produces, and the button that builds it. **Pages** is the tree of areas, chapters and pages, with the row actions that rename, move, retire a page, or create the file a `missing` row is waiting for. **Publish** is where a build becomes something a reader can be given: the Review Center, the Build Center, and Publish & Releases.
 
 > **Screenshot — Documentation ▸ Project: one project's pages, its outputs, and its counts.**
 > `media/publishing/17-project-page.png`
@@ -62,19 +64,27 @@ The activity bar down the left of the window holds eight areas. Four of them car
 > **Screenshot — the Review Center: drafts waiting, each shown on its own page with Accept and Discard.**
 > `media/publishing/18-review-center.png`
 
-**Repositories** is where pages are written from: a repository, a folder on this machine, or a document. One source can be cited by several projects, and nothing is ever written back into it. Its own page is the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it, because you set it before anything else.
+### Area 3 — Repositories
 
-**Temco Learn** is the site from this side: **Overview** (its projects, versions and pages), **Site** (the builds waiting to be added, the versions already on the site, and the serve/stop controls), and **Artifacts** (the files the site actually serves).
+Where pages are written from: a repository, a folder on this machine, or a document. One source can be cited by several projects, and nothing is ever written back into it. Its own page is the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it, because you set it before anything else.
+
+### Area 4 — Temco Learn
+
+The site from this side: **Overview** (its projects, versions and pages), **Site** (the builds waiting to be added, the versions already on the site, and the serve/stop controls), and **Artifacts** (the files the site actually serves).
 
 > **Screenshot — Temco Learn ▸ Site: builds waiting to be added, and the versions already on the site.**
 > `media/publishing/19-learn-site.png`
 
-**AI** writes a draft beside your text and applies it only when you accept it. Its server runs on your own machine, and the tools it may use are the ones the application itself has.
+### Area 5 — AI
+
+A draft written beside your text, applied only when you accept it. Its server runs on your own machine, and the tools it may use are the ones the application itself has.
 
 > **Screenshot — AI ▸ Draft: a draft written beside the page, with Accept and Discard.**
 > `media/publishing/20-ai-draft.png`
 
-**Forum** brings the community site, `forums.temcocontrols.com`, into the window, and its point is one question: **what should the documentation do about this thread?** The panel lists the forum's categories with how many topics each holds, a category opens as a table of topics, and a topic opens as a tab with the conversation and the page whose title the thread uses.
+### Area 6 — Forum
+
+The community site, `forums.temcocontrols.com`, brought into the window, and its point is one question: **what should the documentation do about this thread?** The panel lists the forum's categories with how many topics each holds, a category opens as a table of topics, and a topic opens as a tab with the conversation and the page whose title the thread uses.
 
 On that tab, **Suggest with the AI** (`temcoDocs.forumSuggest`) answers the question — twice. First comes what the project can say on its own: the thread's words, the page it names, whether that page has been reviewed, and how long the thread has waited. It is badged **from the registry**, and it arrives even with no model on the machine. Then the AI panel opens on the same thread, the model's answer streams there, becomes the suggestion, is badged **AI**, and is saved on the topic — so the next person reads it without asking again.
 
@@ -86,12 +96,16 @@ A suggestion is advice, not a decision: nothing is written to a page, and nothin
 > **Screenshot — the AI panel answering that thread: the question above the streamed answer.**
 > `media/publishing/23-forum-02.png`
 
-**Tools** looks at the platform rather than at a page, one studio per subject. One studio is there today: **SQL**, the platform's own database, in two jobs — *Tables & queries* (the query editor, the rows, a table's structure, the history and the query library) and *The file* (where it lives, its integrity, a backup, a reset). A query runs **read-only** unless you reach for the writing command. The other studios — Devices, I/O, BACnet and Network — are not built yet, and the panel is a table so each one arrives as a row of its own.
+### Area 7 — Tools
+
+Looks at the platform rather than at a page, one studio per subject. One studio is there today: **SQL**, the platform's own database, in two jobs — *Tables & queries* (the query editor, the rows, a table's structure, the history and the query library) and *The file* (where it lives, its integrity, a backup, a reset). A query runs **read-only** unless you reach for the writing command. The other studios — Devices, I/O, BACnet and Network — are not built yet, and the panel is a table, so each one arrives as a row of its own.
 
 > **Screenshot — Tools ▸ Studios: the SQL studio, its two jobs, and the pages under each.**
 > `media/publishing/24-tools.png`
 
-**Settings** holds the six pages the application is configured from. Each is a row in the panel, and each opens a page of its own:
+### Area 8 — Settings
+
+The six pages the application is configured from. Each is a row in the panel, and each opens a page of its own:
 
 | Page | Configures |
 |---|---|
@@ -203,23 +217,35 @@ Three settings decide every path. Set them once; every page reads them back, so 
 
 ## Part 2 — Temco Learn, the site
 
-### What a reader meets
-
 A reader opens the address and moves down five levels. Every level is written by the same catalog, so a page you publish appears at all five at once.
 
-| The reader opens | And gets |
-|---|---|
-| the home page | the site's sections as tiles; Documentation is where a product appears |
-| a section | the projects filed under it, each with its title, its summary and its newest version |
-| a project | every version you have added, newest first |
-| a version | that version's pages, in the order the registry gives them |
-| a page | the page, its "in this page" list, and the previous and next links |
+### Level 1 — the home page
+
+The site's sections as tiles, with Documentation where a product appears.
 
 > **Screenshot — the site's home page at localhost:1025: the sections as tiles, Documentation first.**
 > `media/publishing/21-learn-home.png`
 
+### Level 2 — a section
+
+The projects filed under it, each with its title, its summary and its newest version.
+
+### Level 3 — a project
+
+Every version you have added, newest first.
+
 > **Screenshot — the version selector open on a product page, listing every version added.**
 > `media/publishing/22-learn-versions.png`
+
+### Level 4 — a version
+
+That version's pages, in the order the registry gives them.
+
+### Level 5 — a page
+
+The page, its "in this page" list, and the previous and next links.
+
+### Past the five levels
 
 Four things a reader meets that are not a level:
 
