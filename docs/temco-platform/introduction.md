@@ -27,7 +27,9 @@ a page          →      builds and publishes  →     one commit on main   → 
 
 You only need the left-hand side to finish this guide. The right-hand side is why the work has a point — and the reason one step makes a PDF by hand, since the site cannot make one for you.
 
-## What you need before you start
+## Before you start
+
+**On your side**, five things:
 
 | You need | Why |
 |---|---|
@@ -39,34 +41,31 @@ You only need the left-hand side to finish this guide. The right-hand side is wh
 
 Budget an hour for the first run — steps 2 and 7 take most of it — and about two minutes for every publish after that.
 
-You do not have to be the person who set the machine up. If somebody else did, [Before the first time](#before-the-first-time) shows you how to check that the three settings and the site clone are right before you begin.
+**On the machine**, these happen once. If somebody else set the machine up, work down the list and confirm each line rather than assuming:
 
-## How to use this guide
-
-- **Steps 1 to 9, in order, once.** They are the whole flow; after that, day-to-day work is [Running it again](#running-it-again).
-- **Every step has the same three parts:** what you do, **You should see** (a file or a screen to check), and **If not** (the usual cause). When the file a step promises is missing, that step failed, and nothing after it is worth testing.
-- **Buttons are named as they appear on screen**, with the command id beside them, like `temcoDocs.buildSite`. If a button is greyed out, type that id into the Command Palette (`Ctrl+Shift+P`) and it does the same thing.
-- **`~` means your home folder.** Paths are written for Windows; on macOS and Linux the same path uses `/`. The `.chm` is the only Windows-only piece, because it needs the help compiler.
-- **Read it next to the application**, in a second window. It is a companion, not something to memorise.
-
-## Where to find things
-
-| If you want to… | Read |
+| Do this once | Why |
 |---|---|
-| understand the pieces before you start | [The application and the site](#the-application-and-the-site) · [What you are making](#what-you-are-making) · [The general flow](#the-general-flow) |
-| know what the result looks like | [What you will have when you are done](#what-you-will-have-when-you-are-done) |
-| do the whole thing, once | [Steps 1–9](#step-1--check-the-folders) |
-| set up a machine | [Before the first time](#before-the-first-time) · [Where things go](#where-things-go) |
-| publish again next week | [Running it again](#running-it-again) · [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) |
-| work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
-| see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
-| know what an output tick means | [Reference: the outputs](#reference-what-the-outputs-mean) |
-| fix something | [When a step goes wrong](#when-a-step-goes-wrong) · [When something else goes wrong](#when-something-else-goes-wrong) |
-| look up a word, a button, a command id | [Words this guide uses](#words-this-guide-uses) · [Appendix](#appendix--every-button-one-page) |
+| Node 22 or newer on your path (`node --version`) | the site's own scripts run with `--experimental-strip-types` |
+| have the site clone — the Site page clones `temcocontrols/temco-learn` for you | the site is its own repository, and this application is a client of it |
+| `cd ~/temco/temco-learn && npm ci` | the site's dependencies, once per clone |
+| `npx playwright install chromium` | the PDFs are printed by a browser. Without it, *Make the Downloads* tells you so |
+| optionally, HTML Help Workshop | a `.chm` needs `hhc.exe`. Without it the site simply has no help file |
+
+Node and `npm ci` are the two that are not optional: without them the site's catalog cannot run, and step 6 stops there. A site without PDFs still builds and previews, and a site without a help file is still a site.
+
+**Three settings decide every path** in this guide. Set them once. Every page reads them back, so you check the answer rather than the field:
+
+| Setting | Where | Meaning |
+|---|---|---|
+| `temcoRepositories.workspaceFolder` | Settings ▸ Repositories ▸ Working folder | the working area. Clones go to `<it>/source/<repository>` |
+| `temcoRepositories.projectsFolder` | Settings ▸ Repositories ▸ Projects folder | a project's own folder is made at `<it>/<slug>` |
+| `temcoLearn.siteRepo` | the Site page ▸ **Choose the Site Folder**, or the setting | the site clone: `~/temco/temco-learn` unless you say otherwise |
+
+`temcoWorkbench.publishing.site` is not one of these. It is an address shown on the Publishing page, not a folder.
 
 ## What you are making
 
-Five things take part. Knowing which is which is most of understanding the flow.
+Six things take part, and knowing which is which is most of understanding the flow:
 
 | Thing | Is | Lives in |
 |---|---|---|
@@ -77,11 +76,9 @@ Five things take part. Knowing which is which is most of understanding the flow.
 | **The site** | the Temco Learn repository: a React app that reads a catalog of projects | `temcoLearn.siteRepo`, by default `~/temco/temco-learn` |
 | **The published page** | what a reader opens on the internet | GitHub Pages, served from the site's `main` branch |
 
-The first three are yours and stay yours. The site is its own repository, and the last one belongs to GitHub. That split is why the flow has separate steps instead of one button, and why each step can fail in its own way.
+The first three are yours and stay yours. The site is its own repository, and the published page belongs to GitHub. That split is why the flow has separate steps instead of one button — and why each step can fail in its own way.
 
-## The general flow
-
-There are four acts and three places. You write and build inside **your project**. The site clone takes one version, plus its downloads. A publish puts that on **GitHub**, and the site's own CI serves it to readers.
+**The flow is five acts in three places.** You write and build inside your project; the site clone takes one version, plus its downloads; a publish puts that on GitHub, and the site's own CI serves it to readers.
 
 ```text
 YOUR PROJECT              ──▶ THE SITE CLONE             ──▶ GITHUB, THEN READERS
@@ -97,13 +94,11 @@ write, then build             add, then the downloads        publish, then CI de
 | make the downloads | `temcoLearn.site.downloads` | `public/pdf/…`, `public/chm/…`, the download manifest | nothing yet, but the deploy would refuse without them |
 | publish | `temcoLearn.publish`, then *Publish* | one commit, one push | a minute later, the page is live |
 
-The nine steps below are this table with the details filled in.
+Steps 1 to 9 are this table with the details filled in. The flow can stop in four places — a build with no `index.html` to add, a site clone that is not where the setting says, a catalog that could not run, and a version whose PDF is missing — and each is named at the step it belongs to. The last is the one people meet most often, which is why it has a step and a test of its own.
 
-So the flow can stop in four places. Each is named at the step it belongs to: a build with no `index.html` to add, a site clone that is not where the setting says, a catalog that could not run, and a version whose PDF is missing. The last is the one people run into most often, which is why it has a step and a test of its own.
+**When you are done**, T3000 has a card under **Documentation** with its own icon and description, every version you added is selectable, each version has a **Downloads** menu holding its whole-guide PDF and its help file, your pages answer searches on the site — and there is one commit on `main` that a green Actions run deployed.
 
-## Words this guide uses
-
-The platform uses a few words that mean something more specific than they do elsewhere. One pass over this table saves a lot of guessing later.
+**The words this guide uses** mean something narrower here than elsewhere. One pass over this table saves a lot of guessing:
 
 | Word | Means |
 |---|---|
@@ -118,39 +113,27 @@ The platform uses a few words that mean something more specific than they do els
 | **downloads** | the PDFs and help files the site serves. The deploy cannot build them, so they are made on your machine and committed |
 | **guard** | the site's own check that every catalogued version has its downloads. CI runs it, and so does a publish before it commits |
 
-## What you will have when you are done
+## How to read this guide
 
-- T3000 listed under **Documentation** on the site, with its own card, icon and description.
-- Every version you added, each one selectable (`1.0`, `1.1`, `2.0`) with its own pages.
-- A **Downloads** menu for each version: the whole-guide PDF, and a Windows help file when one could be compiled.
-- Your pages in the site's search index.
-- One commit on `main` in the site repository, and a green GitHub Actions run that deployed it.
+- **Steps 1 to 9, in order, once.** They are the whole flow; after that, day-to-day work is [Running it again](#running-it-again).
+- **Every step has the same three parts:** what you do, **You should see** (a file or a screen to check), and **If not** (the usual cause). When the file a step promises is missing, that step failed, and nothing after it is worth testing.
+- **Buttons are named as they appear on screen**, with the command id beside them, like `temcoDocs.buildSite`. If a button is greyed out, type that id into the Command Palette (`Ctrl+Shift+P`) and it does the same thing.
+- **`~` means your home folder.** Paths are written for Windows; on macOS and Linux the same path uses `/`. The `.chm` is the only Windows-only piece, because it needs the help compiler.
+- **Read it next to the application**, in a second window. It is a companion, not something to memorise.
 
-## Before the first time
+When you need to jump:
 
-The table above is about *you*: the application, access, an hour. This one is about the **machine**, and it happens once. If somebody else set the machine up, work down the list and confirm each line rather than assuming.
-
-| Do this once | Why |
+| If you want to… | Read |
 |---|---|
-| Node 22 or newer on your path (`node --version`) | the site's own scripts run with `--experimental-strip-types` |
-| Have the site clone. The Site page (**Open the Site Page**) clones `temcocontrols/temco-learn` for you | the site is its own repository, and this application is a client of it |
-| `cd ~/temco/temco-learn && npm ci` | the site's dependencies, once per clone |
-| `npx playwright install chromium` | the PDFs are printed by a browser. Without it, *Make the Downloads* tells you so |
-| Optionally, HTML Help Workshop | a `.chm` needs `hhc.exe`. Without it, the site simply has no help file |
-
-Three of those five are optional in practice: a site without PDFs still builds and previews, and a site without a help file is still a site. Node and `npm ci` are not optional. Without them the site's `catalog` cannot run, and step 6 will stop there.
-
-## Where things go
-
-Three settings decide every path in this guide. Set them once. Every page reads them back, so you can check the answer rather than the field.
-
-| Setting | Where | Meaning |
-|---|---|---|
-| `temcoRepositories.workspaceFolder` | Settings ▸ Repositories ▸ Working folder | the working area. Clones go to `<it>/source/<repository>` |
-| `temcoRepositories.projectsFolder` | Settings ▸ Repositories ▸ Projects folder | a project's own folder is made at `<it>/<slug>` |
-| `temcoLearn.siteRepo` | the Site page ▸ **Choose the Site Folder**, or the setting | the site clone: `~/temco/temco-learn` unless you say otherwise |
-
-`temcoWorkbench.publishing.site` is not one of these. It is an address shown on the Publishing page, not a folder.
+| to understand the pieces and the flow | [What you are making](#what-you-are-making) · [The application and the site](#the-application-and-the-site) |
+| to set up a machine | [Before you start](#before-you-start) |
+| to do the whole thing, once | [Steps 1–9](#step-1--check-the-folders) |
+| to publish again next week | [Running it again](#running-it-again) · [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) |
+| to work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
+| to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
+| to know what an output tick means | [Reference: the outputs](#reference-what-the-outputs-mean) |
+| to fix something | [When a step goes wrong](#when-a-step-goes-wrong) · [When something else goes wrong](#when-something-else-goes-wrong) |
+| to look up a button or a command id | [Appendix](#appendix--every-button-one-page) |
 
 ## Step 1 — check the folders
 
