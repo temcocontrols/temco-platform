@@ -25,7 +25,7 @@ When you need to jump:
 |---|---|
 | to understand the pieces and the flow | [What you are making](#what-you-are-making) · [The application and the site](#the-application-and-the-site) |
 | to set up a machine | [Before you start](#before-you-start) |
-| to do the whole thing, once | [The nine steps](#the-nine-steps) |
+| to do the whole thing, once | [Step by step](#step-by-step) |
 | to publish again next week | [Running it again](#running-it-again) · [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) |
 | to work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
 | to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
@@ -115,9 +115,9 @@ A few words mean something narrower here than elsewhere:
 | **downloads** | the PDFs and help files the site serves. The deploy cannot build them, so they are made on your machine and committed |
 | **guard** | the site's check that every catalogued version has its downloads. CI runs it, and so does a publish before it commits |
 
-## The nine steps
+## Step by step
 
-The rest of this guide is one product's whole journey: check the folders, create a project, write its pages, build it, add the build to the site, make the downloads, look at the result, publish. Each step ends with **You should see** — a file or a screen to check — and each reads what the one before it wrote, so a step that fails stops the ones after it.
+Nine steps take an empty folder to a live page. Four of them set up, write and build the project; four — one of them optional — put that build on the site, give it its downloads and check it; the last one publishes. Each step ends with **You should see**, a file or a screen to check, and each reads what the one before it wrote, so a step that fails stops the ones after it.
 
 ## Step 1 — check the folders
 
