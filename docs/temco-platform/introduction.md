@@ -6,8 +6,7 @@
 
 **Temco Platform** creates the project, writes and reviews the pages, runs the build, and publishes the result to Temco Learn.
 
-> **Screenshot — Temco Learn in a browser, on a product's documentation page: the reading menu beside the page, and the version selector with its download menu at the top.**
-> `media/publishing/01-temco-learn.png`
+![Temco Learn in a browser, on a product's documentation page: the reading menu beside the page, and the version selector with its download menu at the top.](media/publishing/01-temco-learn.png)
 
 **Temco Learn** is the site a reader opens. Everything on it — the pages, the search, the PDF, the help file — came from a build that was published.
 
