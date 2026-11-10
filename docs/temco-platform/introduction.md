@@ -96,11 +96,10 @@ A few words mean something narrower here than elsewhere:
 
 ## How to read this guide
 
-- **Steps 1 to 9, in order, once.** They are the whole flow; after that, day-to-day work is [Running it again](#running-it-again).
-- **Every step has the same three parts:** what you do, **You should see** (a file or a screen to check), and **If not** (the usual cause). When the file a step promises is missing, that step failed, and nothing after it is worth testing.
-- **Buttons are named as they appear on screen**, with the command id beside them, like `temcoDocs.buildSite`. If a button is greyed out, type that id into the Command Palette (`Ctrl+Shift+P`) and it does the same thing.
-- **`~` means your home folder.** Paths are written for Windows; on macOS and Linux the same path uses `/`. The `.chm` is the only Windows-only piece, because it needs the help compiler.
-- **Read it next to the application**, in a second window. It is a companion, not something to memorise.
+- **Steps 1 to 9 in order, once.** They are the whole flow; after that, [Running it again](#running-it-again) is the day-to-day version.
+- **Every step has three parts:** what you do, **You should see** (a file or screen to check), and **If not** (the usual cause). If the file a step promises is missing, that step failed — nothing after it is worth testing.
+- **Buttons are named as they appear on screen**, with the command id beside them, like `temcoDocs.buildSite`. A greyed-out button still runs from the Command Palette (`Ctrl+Shift+P`).
+- **`~` is your home folder.** Paths are written for Windows; on macOS and Linux the same path uses `/`. The `.chm` is the only Windows-only piece, because it needs the help compiler.
 
 When you need to jump:
 
