@@ -171,7 +171,7 @@ The platform uses a few words that mean something more specific than they do els
 | **chapter** | the folder a page sits in, inside an area |
 | **page id** | the page's path under `docs/` without the `.md`: the id `t3000/commissioning/ports` is the file `docs/t3000/commissioning/ports.md` |
 | **build** | the rendered site produced from the pages, in `<project>/dist/site` |
-| **version** | one fixed entry of a project on the site, such as `1.0` or `1.1`. A rebuild becomes a new version rather than overwriting an old one |
+| **version** | one fixed entry of a project on the site, such as `1.0` or `1.1`. A rebuild becomes a new version rather than overwriting an old one. It becomes a folder and an address (`/t3000/1.0/`), so it is typed in digits — `1.0`, `17.4`, or a dated edition `2026.01` — never `v1.0` |
 | **section** | the category a project appears under on the site: `documentation`, `training`, `tests`, `products`, `qa` or `topics` |
 | **catalog** | `public/catalog.json` in the site, the one file the site's app reads to know what exists |
 | **downloads** | the PDFs and help files the site serves. The deploy cannot build them, so they are made on your machine and committed |

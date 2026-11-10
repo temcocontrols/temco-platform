@@ -127,8 +127,14 @@ interface Flow {
 	resolveFolder(text: string, name: string, under: boolean): FakeUri;
 }
 
+interface Versions {
+	versionName(text: string): { ok: boolean; value?: string; changed?: boolean; why?: string };
+	versionAddress(slug: string, version: string): string;
+}
+
 const build = load(join(out('temco-projects'), 'projectBuild.js')) as Build;
 const flow = load(join(out('temco-projects'), 'projectFlow.js')) as Flow;
+const versions = load(join(out('temco-projects'), 'versionName.js')) as Versions;
 
 const group = suite();
 const test = (name: string, run: () => Promise<void> | void): void => group.test(name, run);
@@ -204,6 +210,53 @@ test('~ in a path field is the home folder', () => {
 	assert.equal(flow.resolveFolder('~', 'T3000', false).fsPath, homedir());
 });
 
+// ---------- what a project's version may be called ----------
+
+test('a version is a folder and an address, so the rules that name it live in one place', () => {
+	const said = [
+		'1.0',
+		'17.4',
+		'1.0.4',
+		'v1.0',
+		' V2.3 ',
+		'01.0',
+		'2026.01',
+		'2026.1',
+		'2026.13',
+		'1',
+		'1.0 beta',
+		'a/b',
+		'1.2.3.4',
+		'',
+		'x'.repeat(30)
+	].map((typed) => [typed, versions.versionName(typed)]);
+	assert.deepEqual(said, [
+		['1.0', { ok: true, value: '1.0', changed: false }],
+		['17.4', { ok: true, value: '17.4', changed: false }],
+		['1.0.4', { ok: true, value: '1.0.4', changed: false }],
+		// A `v` is how a version is said, never how it is named: the folder would be `v1.0`.
+		['v1.0', { ok: true, value: '1.0', changed: true }],
+		[' V2.3 ', { ok: true, value: '2.3', changed: true }],
+		// `01.0` and `1.0` would be two folders for one version.
+		['01.0', { ok: true, value: '1.0', changed: true }],
+		['2026.01', { ok: true, value: '2026.01', changed: false }],
+		// A dated version pads its month, because the site compares `2026.1` and `2026.01` as the same version.
+		['2026.1', { ok: true, value: '2026.01', changed: true }],
+		['2026.13', { ok: false, why: 'A dated version is 2026.01 to 2026.12, not 2026.13.' }],
+		['1', { ok: false, why: 'A version is at least major.minor: 1.0, not 1.' }],
+		['1.0 beta', { ok: false, why: 'A version becomes a folder name, so digits and dots only: 1.0, 17.4, or 2026.01.' }],
+		['a/b', { ok: false, why: 'A version becomes a folder name, so digits and dots only: 1.0, 17.4, or 2026.01.' }],
+		['1.2.3.4', { ok: false, why: 'A version has at most three parts: 1.0.4, not 1.2.3.4.' }],
+		['', { ok: false, why: 'A version is needed: 1.0, 17.4, or 2026.01.' }],
+		['x'.repeat(30), { ok: false, why: 'A version is at most 20 characters.' }]
+	]);
+});
+
+test('the address a version gives a project is the one the form shows while it is typed', () => {
+	assert.equal(versions.versionAddress('t3000-platform', '1.0'), '/t3000-platform/1.0/');
+	assert.equal(versions.versionAddress('t3000', '2026.01'), '/t3000/2026.01/');
+});
+
 // ---------- the cases ----------
 
-await standalone(import.meta.url, group.cases, 'the create form\'s folder rules, and the scripts a build runs');
+await standalone(import.meta.url, group.cases, 'the version\'s name, the create form\'s folder rules, and the scripts a build runs');

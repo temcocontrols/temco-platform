@@ -21,6 +21,7 @@ import { draftProjectPage } from './aiModule';
 import { RepositoryFile, RepositorySource, repositoryFiles, repositoryMaterial } from './repositories';
 import { Catalog, CatalogUnavailable, Selection, slugOf, SourceRow } from './store';
 import { actionBar, callout, checkCards, choiceCards, escapeHtml as esc, formFields, hero, icon, page, pageColumn, remember, section } from './ui';
+import { versionAddress, versionName } from './versionName';
 
 export const NEW_PROJECT_VIEW_TYPE = 'temcoProjects.newProject';
 
@@ -145,7 +146,7 @@ export class ProjectFlowPage {
 			localResourceRoots: []
 		});
 		this.panel.webview.options = { enableScripts: true, localResourceRoots: [] };
-		this.panel.webview.onDidReceiveMessage((message: { type?: string; command?: string; values?: Values; picked?: string[]; files?: string[] }) => void this.receive(message));
+		this.panel.webview.onDidReceiveMessage((message: { type?: string; command?: string; values?: Values; picked?: string[]; files?: string[]; value?: string; name?: string }) => void this.receive(message));
 		this.panel.webview.html = page(body, { title: 'New Project', script: WIZARD_SCRIPT, extraCss: FLOW_CSS });
 		this.panel.onDidDispose(() => {
 			this.panel = undefined;
@@ -278,7 +279,7 @@ export class ProjectFlowPage {
 		await this.panel?.webview.postMessage({ type: 'picked', ...(await describeMaterial(uri)) });
 	}
 
-	private async receive(message: { type?: string; command?: string; values?: Values; picked?: string[]; files?: string[] }): Promise<void> {
+	private async receive(message: { type?: string; command?: string; values?: Values; picked?: string[]; files?: string[]; value?: string; name?: string }): Promise<void> {
 		if (message.type === 'cancel') {
 			this.panel?.dispose();
 			return;
@@ -300,6 +301,10 @@ export class ProjectFlowPage {
 			}
 			return;
 		}
+		if (message.type === 'version') {
+			this.previewVersion(message.value ?? '', message.name ?? '');
+			return;
+		}
 		if (message.type === 'draft') {
 			await this.draft(message.files ?? []);
 			return;
@@ -311,6 +316,22 @@ export class ProjectFlowPage {
 		if (message.type === 'create' && message.values) {
 			await this.create(message.values);
 		}
+	}
+
+	/**
+	 * What the typed version will be called, answered as it is typed.
+	 *
+	 * A version is a folder and an address, and neither is obvious from the field alone — so the form shows the address
+	 * this version gives the project, or the reason it cannot be one, without waiting for the project to be created.
+	 */
+	private previewVersion(text: string, name: string): void {
+		const outcome = versionName(text);
+		const slug = name.trim().length > 0 ? slugOf(name.trim()) : '';
+		void this.panel?.webview.postMessage({
+			type: 'version',
+			ok: outcome.ok,
+			note: outcome.ok ? `Address: ${versionAddress(slug.length > 0 ? slug : slugOf(DEFAULTS.name), outcome.value)}` : outcome.why
+		});
 	}
 
 	/** The pinned repository as a source, as the repositories module reads one. */
@@ -398,6 +419,13 @@ export class ProjectFlowPage {
 		if (name.length === 0) {
 			return;
 		}
+		// Checked before anything is written: the version is a folder name and part of every artifact's name, so a
+		// project that got this far with `v1.0` would carry it into the site for good.
+		const version = versionName(values.version);
+		if (!version.ok) {
+			void vscode.window.showErrorMessage(`Temco Projects: ${version.why}`);
+			return;
+		}
 		const slug = slugOf(name);
 		const origin = ORIGINS.find((entry) => entry.value === values.origin && entry.available)?.value ?? 'blank';
 		const outputs = values.targets.filter((target) => TARGETS.some((known) => known.value === target));
@@ -410,7 +438,7 @@ export class ProjectFlowPage {
 			if (origin === 'folder' || origin === 'template' || origin === 'import') {
 				const folder = resolveFolder(values.folder, name, origin !== 'folder');
 				if (origin === 'template') {
-					const outcome = await writeTemplate(this.context.extensionUri, folder, name, values.version.trim() || '0.1.0', values.template);
+					const outcome = await writeTemplate(this.context.extensionUri, folder, name, version.value, values.template);
 					if (outcome !== undefined) {
 						void vscode.window.showErrorMessage(`Temco Projects: ${outcome}`);
 						return;
@@ -435,7 +463,7 @@ export class ProjectFlowPage {
 			catalog.createDocument({
 				name,
 				slug,
-				version: values.version.trim() || undefined,
+				version: version.value,
 				origin,
 				template: origin === 'template' ? values.template : undefined
 			});
@@ -861,7 +889,7 @@ ${empty}
 	${section({ title: 'The project', desc: 'What it is called, and who answers for it.' })}
 	${formFields([
 		{ label: 'Name', control: `<input class="az-input" data-field="name" value="${esc(DEFAULTS.name)}" aria-label="Project name">` },
-		{ label: 'Version', control: `<input class="az-input" data-field="version" value="${esc(DEFAULTS.version)}" aria-label="Version">`, hint: 'A project publishes one version at a time.' }
+		{ label: 'Version', control: `<input class="az-input" data-field="version" value="${esc(DEFAULTS.version)}" aria-label="Version" autocomplete="off"><span class="flow-version" id="version-note" aria-live="polite"></span>`, hint: 'One version at a time, in digits: 1.0, 17.4, or 2026.01. It names the folder and the address.' }
 	])}
 
 	<div data-form="empty">
@@ -917,6 +945,9 @@ const FLOW_CSS = `
 .flow-note:empty { display: none; }
 .flow-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
 .flow-path { color: var(--ink-3); font-family: var(--font-mono); font-size: 12px; }
+.flow-version { display: block; margin-top: 4px; color: var(--ink-3); font-family: var(--font-mono); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.flow-version:empty { display: none; }
+.flow-version.is-bad { color: var(--err-ink); font-family: inherit; }
 .flow-pin { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--hairline);
   border-radius: var(--r-2); background: var(--surface-card); }
 .flow-pin__icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--r-2);
@@ -984,6 +1015,8 @@ const WIZARD_SCRIPT = `
 	// The repositories this project cites, and the facts behind each name — both handed in from elsewhere.
 	let chosen = [];
 	let sourcesKnown = [];
+	// The last answer about the typed version: the host owns the rules, so *Create* reads its verdict, not a copy of it.
+	let versionVerdict = { ok: true, why: '' };
 
 	const HINTS = {
 		empty: 'Nothing is read and nothing is converted: the project exists, and the first page is yours to write.',
@@ -1129,6 +1162,22 @@ const WIZARD_SCRIPT = `
 	document.getElementById('wizard-cancel').addEventListener('click', function () { api.postMessage({ type: 'cancel' }); });
 
 	const template = document.querySelector('[data-field="template"]');
+
+	// The version's own name and address, answered by the host as it is typed: one set of rules, not two.
+	const versionField = document.querySelector('[data-field="version"]');
+	const nameField = document.querySelector('[data-field="name"]');
+	function askVersion() {
+		api.postMessage({
+			type: 'version',
+			value: versionField ? versionField.value : '',
+			name: nameField ? nameField.value : ''
+		});
+	}
+	if (versionField) {
+		versionField.addEventListener('input', askVersion);
+		askVersion();
+	}
+	if (nameField) { nameField.addEventListener('input', askVersion); }
 	if (template) { template.addEventListener('change', show); }
 
 	// The picker opens in the host — a webview cannot show a file dialog — and answers with what it read.
@@ -1137,6 +1186,15 @@ const WIZARD_SCRIPT = `
 	window.addEventListener('message', function (event) {
 		const message = event.data;
 		if (!message) { return; }
+		if (message.type === 'version') {
+			const note = document.getElementById('version-note');
+			versionVerdict = { ok: message.ok === true, why: message.note || '' };
+			if (note) {
+				note.textContent = message.note || '';
+				note.classList.toggle('is-bad', message.ok !== true);
+			}
+			return;
+		}
 		if (message.type === 'files') {
 			const list = document.getElementById('file-list');
 			if (message.error) {
@@ -1199,6 +1257,7 @@ const WIZARD_SCRIPT = `
 	document.getElementById('wizard-create').addEventListener('click', function () {
 		const v = values();
 		if (!v.name.trim()) { fail('A project needs a name.'); return; }
+		if (!versionVerdict.ok) { fail(versionVerdict.why || 'The version is not usable as a folder name.'); return; }
 		if (v.origin === 'template' && !v.folder.trim()) { fail('Name the folder to write the starter under.'); return; }
 		if ((v.origin === 'folder' || v.origin === 'import') && !v.importSource.trim()) { fail('Choose the folder or file to bring in.'); return; }
 		if (v.origin === 'repository' && v.sources.length === 0) { fail('Choose at least one repository to cite.'); return; }
