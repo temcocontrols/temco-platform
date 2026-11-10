@@ -12,7 +12,7 @@
 
 This guide follows one product through that loop once, from an empty folder to a live page. Read steps 1–9 the first time through; after that, what you need day to day is in [Running it again](#running-it-again). It assumes you have never opened the application before, and it assumes no background in VS Code, in Git, or in the site's own code: where one of those cannot be avoided — a commit, a catalog — it is explained at the step where you meet it.
 
-## The two halves
+## The application and the site
 
 Temco Platform and Temco Learn are two halves of one idea, and they meet in a single place: a copy of a project's build.
 
@@ -21,9 +21,9 @@ you, writing          Temco Platform              the site clone            Temc
 a page          →      builds and publishes  →     one commit on main   →    what a reader opens
 ```
 
-**On your side**, four of the application's eight areas carry the whole flow: **Repositories** (step 1) decides where the folders live, **Home** (step 2) is where a project is made, **Documentation** (steps 3 to 5) holds the pages and runs the build, and **Temco Learn** (steps 6 to 9) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and the [appendix](#appendix--every-button-one-page) names every button by area if you go looking.
+**In the application**, four of the eight areas carry the whole flow: **Repositories** (step 1) decides where the folders live, **Home** (step 2) is where a project is made, **Documentation** (steps 3 to 5) holds the pages and runs the build, and **Temco Learn** (steps 6 to 9) takes that build, makes the downloads and publishes it. The other four — AI, Forum, Tools and Settings — are outside this walk, and the [appendix](#appendix--every-button-one-page) names every button by area if you go looking.
 
-**On the reader's side**, the site has five levels: a **home page** listing the sections, a **section** listing the projects filed under it, a **project** listing its versions, a **version** listing its pages, and the **page** itself, with a download menu for the PDF, the help file and the Markdown. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it.
+**On the site**, a reader moves down five levels: a **home page** listing the sections, a **section** listing the projects filed under it, a **project** listing its versions, a **version** listing its pages, and the **page** itself, with a download menu for the PDF, the help file and the Markdown. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it.
 
 You only need the left-hand side to finish this guide. The right-hand side is why the work has a point — and the reason one step makes a PDF by hand, since the site cannot make one for you.
 
@@ -52,7 +52,7 @@ You do not have to be the person who set the machine up. If somebody else did, [
 
 | Section | Answers |
 |---|---|
-| [The two halves](#the-two-halves) | the loop between the application and the site, the four areas of the app you use, and the five levels a reader walks |
+| [The application and the site](#the-application-and-the-site) | the loop between them, the four areas of the app you use, and the five levels a reader walks |
 | [What you are making](#what-you-are-making) | what a project, a build and the site are, and where each one lives |
 | [The general flow](#the-general-flow) | the five acts, what each writes, and what a reader notices |
 | [Words this guide uses](#words-this-guide-uses) | page id, area, chapter, version, section, catalog, guard, downloads |
