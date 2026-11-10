@@ -118,7 +118,11 @@ jobs:
             label: Linux x64
             platform: linux
             arch: x64
-          - os: macos-14
+          # `macos-15` is the Apple silicon image this repository can actually get: `macos-14` (and every `-large` or
+          # `-xlarge` variant) is refused before a runner is assigned — "The configuration 'macos-14-arm64-us-default'
+          # is not supported" — while `macos-15` starts and reports `uname -m` as `arm64` on an M1. The build is native
+          # arm64 either way, so nothing else in this job changes.
+          - os: macos-15
             label: macOS arm64
             platform: darwin
             arch: arm64
