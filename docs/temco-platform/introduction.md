@@ -56,84 +56,124 @@ Temco Platform has eight features, the eight you see down the activity bar on th
 
 ### #1 Home
 
-The window's own summary, in two surfaces: a panel of three views, and one page.
+![Home ▸ Overview: the four counted rows, with Projects and What needs doing beside them.](media/publishing/16-home-overview.png)
 
-In the panel, **Overview** counts what this window can attest to — the projects it holds, the pages they declare, what needs review, and the last release — and every number opens the page behind it. **Projects** lists the projects on this machine. **What needs doing** is the queue: a screenshot with no page to sit on, a page the code has moved away from, and pages nobody has reviewed. A row leaves that queue when the fact behind it changes, so what is left is real work.
+The projects on this machine, and the work waiting on them.
 
-The page behind the panel is the **Dashboard**: **Overview** gathers the same figures with the sources and areas they come from, and **Recent Activity** records what the platform did — drafts written, releases published.
+- **Overview** — four rows: *Projects*, *Pages*, *Needs review*, *Last release*. Each carries a count at its right, and opens the page behind it.
+- **Projects** — one row per project. The row opens that project.
+- **What needs doing** — what is unfinished: a screenshot with no page yet, a page the code has changed since, a page nobody has reviewed. A row runs the command that deals with it.
 
-> **Screenshot — Home ▸ Overview: the four counted rows, with Projects and What needs doing beside them.**
-> `media/publishing/16-home-overview-01.png`
-
-> **Screenshot — the Dashboard page: the figures with their sources, and Recent Activity under them.**
-> `media/publishing/16-home-overview-02.png`
+The **Overview** button on the panel's title opens the Dashboard page: the same counts broken down by source and area, and **Recent Activity** behind **All Activity**.
 
 ### #2 Documentation
 
-A project's three views. **Project** shows one project's state — its pages, the outputs it produces, and the button that builds it. **Pages** is the tree of areas, chapters and pages, with the row actions that rename, move, retire a page, or create the file a `missing` row is waiting for. **Publish** is where a build becomes something a reader can be given: the Review Center, the Build Center, and Publish & Releases.
+![Documentation ▸ Project: one project's pages, its outputs, and its counts.](media/publishing/17-project-page.png)
 
-> **Screenshot — Documentation ▸ Project: one project's pages, its outputs, and its counts.**
-> `media/publishing/17-project-page.png`
+![The Review Center: drafts waiting, each shown on its own page with Accept and Discard.](media/publishing/18-review-center.png)
 
-> **Screenshot — the Review Center: drafts waiting, each shown on its own page with Accept and Discard.**
-> `media/publishing/18-review-center.png`
+The pages of one project, and the build that turns them into a site.
+
+- **Project** — the selected project: its pages, the outputs it is set to produce, its counts, and the button that builds it.
+- **Pages** — areas, chapters and pages as a tree. A row renames, moves or retires a page, or creates the file a `missing` row is waiting for.
+- **Publish** — three pages behind it: **Review Center** (drafts waiting, each settled on its own page), **Build Center** (every build, and the files it wrote), and **Publish & Releases** (a build held under a version).
 
 ### #3 Repositories
 
-Where code is documented from — and optional, because a project made empty or from a template reads no source at all. The panel lists the sources: a repository, a folder on this machine, a document. **Reading** one records what it declares into the catalog — its file tree, the files a draft may quote, and any `docs/help/registry.json` it already has — and never writes to it. A repository is read over its API at the branch you choose, or cloned into the working area when a draft or a build needs the files on disk; the **dashboard** then shows what moved since the last read, and which pages name the files that changed. A project cites a source rather than copying it, so several projects can read one repository. Its own page is also the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it.
+![Repositories ▸ Sources: the enterprises, one repository opened to its files, and `source` on the rows this project cites.](media/publishing/26-repositories-01.png)
+
+![The Repositories page: the organisation's repositories, with Start, New project, Open and Clone on a row.](media/publishing/26-repositories-02.png)
+
+Sources for documenting code. A project cites them rather than copying them, and a project made empty or from a template reads none.
+
+- **Sources** (the panel) — enterprises, their repositories, and the files inside one. `source` marks a repository this project cites.
+- **The Repositories** (first title button) — the enterprise's repositories, one row each, with **Start**, **New project**, **Open**, **Clone** and **Remove copy**.
+- **Dashboard** (second title button) — every clone, what changed since its last read, and the pages that name those files.
+- **Settings** (a link on the page) — the working area, the projects folder, and the GitHub token. The first two are set in [Before you start](#before-you-start).
+
+Reading never writes back. The catalog keeps what a source declares, and the one command that touches a clone applies a drafted change as a patch, after a question that names it.
 
 ### #4 Temco Learn
 
-The site from this side: **Overview** (its projects, versions and pages), **Site** (the builds waiting to be added, the versions already on the site, and the serve/stop controls), and **Artifacts** (the files the site actually serves).
+![Temco Learn ▸ Overview: what needs doing, the four steps, and where the site stands.](media/publishing/19-learn-site-01.png)
 
-> **Screenshot — Temco Learn ▸ Site: builds waiting to be added, and the versions already on the site.**
-> `media/publishing/19-learn-site.png`
+![The Documentation Site page: whether it is cloned, installed, built and running, each with its button.](media/publishing/19-learn-site-02.png)
+
+![The Artifacts page: what a build wrote — the site, the PDF, the help file, the zip.](media/publishing/19-learn-site-03.png)
+
+The site from this side: what is on it, what is waiting to go on it, and what a build wrote.
+
+- **Overview** — what needs doing (*a build on disk is not on the website*, *changes are not published*, each with its button), the four steps from a page to a reader — Build, Add, Publish, Download — and where the site stands.
+- **Documentation Site** — four questions and the button that changes each: is it cloned, installed, built, running. The log sits under them.
+- **Artifacts** — what a build wrote, per project: the site, the PDF, the `.chm`, the zip, the Word document, single pages. A project with no `.chm` simply has no `.chm` row.
+- **Publishing** — what changed since the last publish, the steps, and the button. It is also where step 8 sends you.
 
 ### #5 AI
 
-A draft written beside your text, applied only when you accept it. Its server runs on your own machine, and the tools it may use are the ones the application itself has.
+![AI ▸ Draft: a draft written beside the page, with Accept and Discard.](media/publishing/20-ai-draft.png)
 
-> **Screenshot — AI ▸ Draft: a draft written beside the page, with Accept and Discard.**
-> `media/publishing/20-ai-draft.png`
+A local model that writes beside the page, and the record of what it used.
+
+- **Draft** — *Update a page the code moved* (the pages the generator flagged, and the files under them) and *Drafts waiting* (what the model produced, before anyone settles it).
+- **What it does** — *Actions* (the five acts, and the page each starts on) and *Citations* (the pages the answers leant on, looked up again).
+- **Server** — *Server & Prompts*: the runtime, the model, and what the model is told.
+- **Tools** — the AI panel itself, the tool server and whether it is running, and every call the model may make.
+
+Nothing is applied without you: a draft waits in the Review Center, and accepting one is a single undoable edit.
 
 ### #6 Forum
 
-The community site, `forums.temcocontrols.com`, brought into the window, and its point is one question: **what should the documentation do about this thread?** The panel lists the forum's categories with how many topics each holds, a category opens as a table of topics, and a topic opens as a tab with the conversation and the page whose title the thread uses.
+![A forum topic: the conversation, the page it names, and the suggestion card with Suggest with the AI.](media/publishing/23-forum-01.png)
 
-On that tab, **Suggest with the AI** (`temcoDocs.forumSuggest`) answers the question — twice. First comes what the project can say on its own: the thread's words, the page it names, whether that page has been reviewed, and how long the thread has waited. It is badged **from the registry**, and it arrives even with no model on the machine. Then the AI panel opens on the same thread, the model's answer streams there, becomes the suggestion, is badged **AI**, and is saved on the topic — so the next person reads it without asking again.
+![The AI panel answering that thread: the question above the streamed answer.](media/publishing/23-forum-02.png)
 
-A suggestion is advice, not a decision: nothing is written to a page, and nothing is posted to the forum, because the forum owns the conversation. Once the model has answered, the button reads **Ask the AI again** — and a topic nobody has answered in a month is called out rather than left in the table.
+The community site, and what the documentation should do about each thread.
 
-> **Screenshot — a forum topic: the conversation, the page it names, and the suggestion card with Suggest with the AI.**
-> `media/publishing/23-forum-01.png`
+- **Browse** — the categories with how many topics each holds. A category opens as a table of topics; a topic opens as a tab with the conversation and the page whose title the thread uses.
+- **The suggestion** — **Suggest with the AI** writes one from the registry at once, badged *from the registry*; then the AI panel answers, its text replaces the draft, badged *AI*, and stays on the topic for the next person.
+- **All Topics** — the whole forum in one page, in the site's own order.
 
-> **Screenshot — the AI panel answering that thread: the question above the streamed answer.**
-> `media/publishing/23-forum-02.png`
+Nothing is posted from here, because the forum owns the conversation, and a topic nobody has answered in a month is called out rather than left in the table.
 
 ### #7 Tools
 
-Looks at the platform rather than at a page, one studio per subject. One studio is there today: **SQL**, the platform's own database, in two jobs — *Tables & queries* (the query editor, the rows, a table's structure, the history and the query library) and *The file* (where it lives, its integrity, a backup, a reset). A query runs **read-only** unless you reach for the writing command. The other studios — Devices, I/O, BACnet and Network — are not built yet, and the panel is a table, so each one arrives as a row of its own.
+![Tools ▸ Studios: the SQL studio, its two jobs, and the pages under each.](media/publishing/24-tools.png)
 
-> **Screenshot — Tools ▸ Studios: the SQL studio, its two jobs, and the pages under each.**
-> `media/publishing/24-tools.png`
+Studios for looking at the platform rather than at a page. One is built:
+
+- **SQL** — the platform's own database, in two jobs. *Tables & queries*: Query Editor, Data, Table Structure, Query History, Query Library. *The file*: where it lives, its integrity, a backup, a reset.
+- A query runs read-only unless you take the writing command.
+- Devices, I/O, BACnet and Network are not built yet. The panel is a table, so each one arrives as a row when it is.
 
 ### #8 Settings
 
-The six pages the application is configured from. Each is a row in the panel, and each opens a page of its own:
+The six pages the application is configured from, in the order the panel lists them.
 
-| Page | Configures |
-|---|---|
-| *General* | its look, what it opens with, where work is kept, what it reports |
-| *Repositories* | the default enterprise, where clones are kept, where projects are made, and the GitHub token |
-| *Modules* | the modules loaded into this window, and what each owns |
-| *AI Runtime* | the local model, the servers that run it, and what they may reach |
-| *Publishing* | where a release goes and what it may overwrite |
-| *Branding* | the mark, the colour roles and the identity |
+**General** — the theme, the startup view, breadcrumbs, telemetry, and the update channel.
 
-The three paths this guide depends on are on *Repositories*, and [Before you start](#before-you-start) settles them first. Every page writes to your **user** settings — the same file `settings.json` holds — so a choice belongs to the machine rather than to a folder. Repositories has a **Save** button, so read the resolved lines under its fields rather than trusting what you typed.
+![Settings ▸ General: the theme, the startup view, breadcrumbs, telemetry and the update channel.](media/publishing/25-settings-01.png)
 
-> **Screenshot — Settings: the six pages, each a row that opens a page of its own.**
-> `media/publishing/25-settings.png`
+**Repositories** — the default enterprise, where clones are kept, where projects are made, and the GitHub token.
+
+![The Repositories settings page: Working folder, Projects folder, and the two resolved lines under them.](media/publishing/02-folders.png)
+
+**Modules** — the modules loaded into this window, and what each owns.
+
+![Settings ▸ Modules: what is loaded into this window, and what each module owns.](media/publishing/25-settings-02.png)
+
+**AI Runtime** — the local model, the servers that run it, and what they may reach.
+
+![Settings ▸ AI Runtime: the model, the servers that run it, and what they may reach.](media/publishing/25-settings-03.png)
+
+**Publishing** — where a release goes, and what it may overwrite.
+
+![Settings ▸ Publishing: where a release goes, and what it may overwrite.](media/publishing/25-settings-04.png)
+
+**Branding** — the mark, the colour roles and the identity.
+
+![Settings ▸ Branding: the mark, the colour roles and the identity.](media/publishing/25-settings-05.png)
+
+Every page writes to your **user** settings — the same file `settings.json` holds — so a choice belongs to the machine rather than to a folder. Repositories has a **Save** button, so read the resolved lines under its fields rather than trusting what you typed.
 
 ### The editor
 
@@ -207,27 +247,23 @@ Two things live there. The **Outline** lists the page's headings, and clicking o
 | You need | Why |
 |---|---|
 | the application, installed and running | this guide is about using it, not installing it |
-| Node 22, and the site clone at `~/temco/temco-learn` | the site's own scripts and catalog run on Node, and the site is its own repository. The Site page clones it for you |
-| write access to `temcocontrols/temco-learn`, or a colleague who has it | the last step pushes a commit there. Without it, everything up to *publish* still works and simply stops |
+| Node 22, and the site clone at `~/temco/temco-learn` | the site's scripts and catalog run on Node, and the site is its own repository. The Site page clones it for you |
+| write access to `temcocontrols/temco-learn` | step 8 pushes a commit there. Everything before it still works without it |
 | git configured with your GitHub account | a publish is a `git add`, a `commit` and a `push`, in your name |
 
-In the clone, once per machine: `npm ci`, then `npx playwright install chromium`, because the PDFs are printed by a browser. A Windows help file also needs HTML Help Workshop (`hhc.exe`); without it the site simply has no `.chm`.
+Once per machine, in the clone: `npm ci`, then `npx playwright install chromium` — the PDFs are printed by a browser. A Windows help file needs HTML Help Workshop (`hhc.exe`); without it the site has no `.chm`.
 
-Budget an hour for the first run — steps 1 and 6 take most of it — and about two minutes for every publish after that.
+The first run takes about an hour, mostly in steps 1 and 6. A publish after that takes about two minutes.
 
-Three settings decide every path. Set them once; every page reads them back, so you check the answer rather than the field:
+Three settings decide every path:
 
 | Setting | Where | Meaning |
 |---|---|---|
-| `temcoRepositories.workspaceFolder` | Settings ▸ Repositories ▸ Working folder | the working area. Clones go to `<it>/source/<repository>` |
-| `temcoRepositories.projectsFolder` | Settings ▸ Repositories ▸ Projects folder | a project's own folder is made at `<it>/<slug>` |
-| `temcoLearn.siteRepo` | the Site page ▸ **Choose the Site Folder**, or the setting | the site clone: `~/temco/temco-learn` unless you say otherwise |
+| `temcoRepositories.workspaceFolder` | Settings ▸ Repositories ▸ Working folder | the working area: clones go to `<it>/source/<repository>` |
+| `temcoRepositories.projectsFolder` | Settings ▸ Repositories ▸ Projects folder | a project's folder is made at `<it>/<slug>` |
+| `temcoLearn.siteRepo` | the Site page ▸ **Choose the Site Folder**, or the setting | the site clone, `~/temco/temco-learn` unless you say otherwise |
 
-**Then confirm the answer on the page.** Open **Settings ▸ Repositories** and read the two lines under the fields, not the fields themselves: they are resolved from your saved settings, so they are the honest answer to "where will this go?".
-
-![The Repository settings page, with “Clones land in …” and “Projects are made in …” visible.](media/publishing/02-folders.png)
-
-`Clones land in …\temco\source` and `Projects are made in …\temco\projects` are what you want to read. A value you typed but did not save still shows the old one — press *Choose* or leave the field, then look again. `Projects are made in …\temco` means the projects folder is empty, and new projects will land beside the clones.
+The two lines under the fields are the resolved answer: `Clones land in …\temco\source` and `Projects are made in …\temco\projects`. A value you typed but did not save is not in them yet, and `Projects are made in …\temco` means that folder is empty, so new projects land beside the clones.
 
 ## Part 2 — Temco Learn, the site
 
