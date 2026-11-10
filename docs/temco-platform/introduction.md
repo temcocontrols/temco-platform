@@ -70,8 +70,7 @@ Three settings decide every path. Set them once; every page reads them back, so 
 
 **Then confirm the answer on the page.** Open **Settings ▸ Repositories** and read the two lines under the fields, not the fields themselves: they are resolved from your saved settings, so they are the honest answer to "where will this go?".
 
-> **Screenshot — the Repository settings page, with “Clones land in …” and “Projects are made in …” visible.**
-> `media/publishing/02-folders.png`
+![The Repository settings page, with “Clones land in …” and “Projects are made in …” visible.](media/publishing/02-folders.png)
 
 `Clones land in …\temco\source` and `Projects are made in …\temco\projects` are what you want to read. A value you typed but did not save still shows the old one — press *Choose* or leave the field, then look again. `Projects are made in …\temco` means the projects folder is empty, and new projects will land beside the clones.
 
