@@ -21,11 +21,11 @@ you, writing          Temco Platform              the site clone            Temc
 a page          →      builds and publishes  →     one commit on main   →    what a reader opens
 ```
 
-**In the application**, a project is one folder of Markdown, and it is written from **sources**: a repository, a folder on this machine, or a document. **Repositories** reads a source into the catalog — the page registry it declares, and the code files a draft can be written from — and the project then cites it, so one source can serve several projects and nothing is ever written back into it. **Documentation** holds the pages and runs the build, **Temco Learn** takes that build, makes the downloads and publishes it, and **Home** is where the project is made. [Part 1](#part-1--temco-platform-the-application) takes each feature in turn, and the [appendix](#appendix--every-control-and-its-command) names every button.
+**In the application**, a project is one folder of Markdown. Four of the eight features carry it from nothing to a published build: **#1 Home** creates it, **#3 Repositories** reads the sources its pages are written from, **#2 Documentation** writes the pages and runs the build, and **#4 Temco Learn** makes the downloads and publishes the result. [Part 1](#part-1--temco-platform-the-application) takes each feature in turn; the [appendix](#appendix--every-control-and-its-command) names the buttons.
 
-**On the site**, a reader moves down five levels — a home page, a section, a project, a version, the page. All five are written by one catalog, so a page you publish appears at every level at once, and a version you add never overwrites the one before it. [Part 2](#part-2--temco-learn-the-site) shows what each level holds.
+**On the site**, a reader moves down five levels — the home page, a section, a project, a version, the page. One catalog writes all five, so a page you publish appears at every level at once, and a version you add never overwrites the one before it. [Part 2](#part-2--temco-learn-the-site) shows what each level holds.
 
-A source gives material, not pages. Reading it records the registry it declares, the pages that registry names, and the code files a draft may quote; a draft written from one of those files waits in the Review Center until a person accepts it, so nothing reaches a page without that decision. The downloads are the same shape of work: the PDF needs a browser and the help file needs `hhc.exe`, and the site's own deploy has neither, so both are made here and committed.
+**A source gives material, not pages.** Reading one records the registry it declares, the pages that registry names, and the code files a draft may quote; a draft then waits in the Review Center until a person accepts it. The downloads follow the same rule: the PDF needs a browser and the help file needs `hhc.exe`, the site's deploy has neither, so both are made here and committed.
 
 ## What is in this guide
 
