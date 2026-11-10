@@ -2,6 +2,18 @@
 
 **Temco Platform is where product documentation is written and published.** It is a desktop application, built on VS Code. In it you write pages and group them into a **project**. You then build that project into a website, with a printable PDF and a Windows help file, and publish the result to **Temco Learn**: the documentation site readers actually open, at `https://temcocontrols.github.io/temco-learn/`.
 
+Two windows, one loop: every step below happens between them.
+
+> **Screenshot — Temco Platform with a project open: its pages listed on the left, and one of them being written in the middle.**
+> `media/publishing/00-temco-platform.png`
+
+**Temco Platform is the window you work in.** The list on the left is a folder of Markdown files, the middle is the file you are editing, and nothing you type is visible to anyone else: the application keeps no server, and the only copy is on your own disk.
+
+> **Screenshot — Temco Learn in a browser, on a product's documentation page: the reading menu beside the page, and the version selector with its download menu at the top.**
+> `media/publishing/01-temco-learn.png`
+
+**Temco Learn is the window a reader opens, and it only exists because a build was published.** The same pages as a website, with search, a version selector, and the PDF and Windows help file the build left behind.
+
 This guide walks that whole journey once, from an empty folder to a live page. It assumes you have never opened the application before, and it assumes no background in VS Code, in Git, or in the site's own code. Where one of those cannot be avoided — a commit, a catalog — it is explained at the step where you meet it.
 
 ## The 30-second version
@@ -14,7 +26,7 @@ This guide walks that whole journey once, from an empty folder to a live page. I
 Read steps 1–9 the first time through. After that, everything you need day to day is in [Running it again](#running-it-again).
 
 > **Screenshot — the finished result: a project card under Documentation, opened to a page, with the version selector and the download menu visible.**
-> `media/publishing/00-published-page.png`
+> `media/publishing/02-published-page.png`
 
 ## The two halves
 
@@ -216,7 +228,7 @@ Three settings decide every path in this guide. Set them once. Every page reads 
 Open **Settings ▸ Repositories** and read the two sentences under the fields, not the fields themselves. The page reads your saved settings, so those sentences are the honest answer to "where will this go?".
 
 > **Screenshot — the Repositories settings page, with “Clones land in …” and “Projects are made in …” visible.**
-> `media/publishing/01-folders.png`
+> `media/publishing/03-folders.png`
 
 | | |
 |---|---|
@@ -230,7 +242,7 @@ The third setting this guide depends on is **not** on that page. `temcoLearn.sit
 **Create a Project** (`temcoProjects.newProject`). Give it the name `T3000` and the version `1.0`, and leave the outputs ticked: *Website*, *PDF*, *Offline help* and *Search index*.
 
 > **Screenshot — the create-project form, with the output ticks visible and a name typed in.**
-> `media/publishing/02-create-project.png`
+> `media/publishing/04-create-project.png`
 
 **Where the pages come from** is the choice that decides what exists once the form closes:
 
@@ -256,7 +268,7 @@ The folder is added to the window so that its `docs/` shows in Explorer. That is
 **New Page** (`temcoDocs.newPage`) with T3000 selected. It opens a **form** rather than a prompt: the place is already chosen from the row you were on, and the form shows the kind of page, the file it will write, and the body it starts from. The palette offers the kinds alongside it (*New Article*, *New Task*, *New Reference*, *New Troubleshooting*, *New Release Note*), and they differ only in their starter headings.
 
 > **Screenshot — the Pages view and the New Page form side by side, with the kind, the target file and the starter body visible.**
-> `media/publishing/03-pages.png`
+> `media/publishing/05-pages.png`
 
 | In the form | Decides |
 |---|---|
@@ -289,7 +301,7 @@ Come back to this step whenever you have more to write. Nothing downstream notic
 **Build the Site** (`temcoDocs.buildSite`), or *Build the Site* on the project page. It builds the project that is **selected**, reading the folders that project cites, so the folder does not have to be open in the window.
 
 > **Screenshot — the Build Center after a build: the four counts, one card per output this project builds, and the newest run at the head of the log.**
-> `media/publishing/04-build.png`
+> `media/publishing/06-build.png`
 
 Two things can produce the site, and what is in the folder decides which one runs:
 
@@ -312,7 +324,7 @@ The exit code is never the verdict. What counts is a file that did not exist bef
 Skip this step unless T3000 cites a real repository clone under `~/temco/source/`. **Temco Projects: Build** (`temcoProjects.buildProject`) takes the outputs you ticked and runs the repository's own script for each one, **once each**:
 
 > **Screenshot — the terminal during a project build: `docs:registry`, then one script per ticked output, then the list of files it left behind.**
-> `media/publishing/05-project-outputs.png`
+> `media/publishing/07-project-outputs.png`
 
 | Ticked output | Script it looks for, in the repository |
 |---|---|
@@ -335,7 +347,7 @@ This is the step that produces a PDF or a `.chm` **for the docs module**: the co
 **Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the Publishing page. The page that lists every build on disk is `temcoLearn.addBuilds`.
 
 > **Screenshot — the version box, showing “project t3000” and the version field.**
-> `media/publishing/06-add-build.png`
+> `media/publishing/08-add-build.png`
 
 It finds every `dist/site` and `dist/docs` two folders below the window's folders, the projects folder and the working folder, and offers the ones that contain an `index.html` or, for a documentation project, an `index.md`. A Markdown build is added as content, so its pages become editable pages of the site; an HTML build is copied beside the catalog as it came. The box then names the project it will land in (`project t3000`) and asks one question: which version. Type `1.0`.
 
@@ -364,7 +376,7 @@ Adding a build is a local act. Nothing is published by this step.
 **Make the Downloads** (`temcoLearn.site.downloads`) is the step between *Add* and *Publish* on the Publishing page.
 
 > **Screenshot — the Publishing page, with the five steps visible and the downloads step running.**
-> `media/publishing/07-downloads.png`
+> `media/publishing/09-downloads.png`
 
 It runs the site's own scripts in this order, and stops at the first real failure:
 
@@ -388,7 +400,7 @@ These files are the one thing the deploy cannot make for you. The site's CI has 
 **Start the Site** (`temcoLearn.site.start`).
 
 > **Screenshot — the site in a browser at localhost:1025: T3000's card under Documentation, and its page open.**
-> `media/publishing/08-preview.png`
+> `media/publishing/10-preview.png`
 
 It builds the site first if `dist/index.html` is not there, then serves the built pages on one port: `temcoLearn.sitePort`, 1025 by default. What you are looking at is the **clone**, with the catalog that step 6 wrote. It is what a reader will see, minus the address.
 
@@ -412,7 +424,7 @@ If a page is missing, it is either unregistered or marked `ship: false`, so go b
 **Publish** (`temcoLearn.publish`) opens the publishing page: what changed, the steps of a publish in order, and the button. Press *Publish* there and confirm the message. **Publish Now** (`temcoLearn.publishNow`) does the same thing from the palette.
 
 > **Screenshot — the Publishing page before the push: the changed paths, the five steps, and the Publish button.**
-> `media/publishing/09-publish.png`
+> `media/publishing/11-publish.png`
 
 It does four things in order, and it stops at the first one that says no:
 
@@ -441,7 +453,7 @@ You will spend most of your time here, so five minutes learning the surface save
 A page opens in **Temco Editor**, the editor that owns `*.md`. It has one row of controls above the text, the text in the middle, and a **Page** container on the far right. The headings you see in the text are the page's prose; its title in the navigation comes from the registry, so renaming one does not rename the other.
 
 > **Screenshot — a page open in Temco Editor, with the ribbon groups numbered: undo/redo, Style, Lists, marks, blocks, insert, `···`, and the right group.**
-> `media/publishing/10-editor-ribbon.png`
+> `media/publishing/12-editor-ribbon.png`
 
 ### The ribbon, left to right
 
@@ -465,7 +477,7 @@ The same actions are in the editor title bar and in the right-click menu under *
 Click a picture once to select it. A ring appears, with drag handles at its edges. Drag a handle to resize, and the width is written into the Markdown title as `"w=480"`, so the built site and the offline help honour it too.
 
 > **Screenshot — a picture selected in the editor, with the drag handles and the 25% · 50% · 75% · 100% · Delete menu visible.**
-> `media/publishing/11-editor-picture.png`
+> `media/publishing/13-editor-picture.png`
 
 With a picture selected, the inline menu offers the widths **25% · 50% · 75% · 100%** and **Delete**. `Ctrl+Z` puts a resize back. Nothing is written to the file until the editor saves, so an experiment costs you nothing until you decide to keep it.
 
@@ -474,14 +486,14 @@ With a picture selected, the inline menu offers the widths **25% · 50% · 75% �
 ### The Page container, on the right
 
 > **Screenshot — the Page container: the page's Outline, and the Draft the AI wrote beside the page's own text.**
-> `media/publishing/12-editor-sidebar.png`
+> `media/publishing/14-editor-sidebar.png`
 
 Two things live there. The **Outline** lists the page's headings, and clicking one jumps to it. The **Draft** appears when the AI module has written one. A draft is never applied by itself: you accept it, and it becomes a single undoable edit.
 
 ### Preview, Diff and Source
 
 > **Screenshot — Preview of a page beside the editor, then the Diff view against HEAD.**
-> `media/publishing/13-editor-preview.png`
+> `media/publishing/15-editor-preview.png`
 
 | Control | Shows | Use it when |
 |---|---|---|
@@ -642,7 +654,7 @@ If you already have a `docs/` folder, create the project with **From existing fi
 **Export…** (`temcoDocs.export`) opens the Exports page, which tells you what you get before you get it. Every export writes into the project's `dist/`, and the notification offers *Show in Folder*.
 
 > **Screenshot — the Exports page: the four shapes, each saying what is inside it and where it lands.**
-> `media/publishing/14-exports.png`
+> `media/publishing/16-exports.png`
 
 | Shape | Command | You get |
 |---|---|---|
@@ -658,7 +670,7 @@ Nothing is uploaded. A page with very large pictures makes a very large single f
 **Translate This Page…** (`temcoDocs.translatePage`) writes the translation **beside** the page, never over it: `docs/guide/setup.md` becomes `docs/guide/setup.de.md`.
 
 > **Screenshot — the language picker, and the translated sibling page open beside the original.**
-> `media/publishing/15-translate.png`
+> `media/publishing/17-translate.png`
 
 - Only the prose is translated. Code fences, inline code, table rules, link targets, image paths, front matter and the leading `#`, `-` and `>` markers are preserved byte for byte, so a translated page still builds, still links and still shows its pictures.
 - **Once**: an Azure AI Translator resource. Its key goes into the OS keychain with **Set the Translator Key** (`temcoDocs.setTranslatorKey`), and the endpoint and region are the settings `temcoDocs.translator.endpoint` and `temcoDocs.translator.region`.

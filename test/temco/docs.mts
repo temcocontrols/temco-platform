@@ -344,6 +344,10 @@ group.test('a slot becomes a picture only when the picture is there', () => {
 		picturesForSlots(slot.replace(/\n/gu, '\r\n'), () => true).includes('\r\n'),
 		'a CRLF document came back with different line endings'
 	);
+	// A document that shows the convention must be able to show it: a slot inside a fence is a sample, and the sample
+	// must survive a run even when a file at that path happens to exist.
+	const sample = ['```text', slot.trimEnd(), '```', ''].join('\n');
+	assert.equal(picturesForSlots(sample, () => true), sample);
 });
 
 group.test('every page in docs/ tells the truth', () => {

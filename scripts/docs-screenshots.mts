@@ -58,11 +58,18 @@ export function picturesForSlots(text: string, exists: (path: string) => boolean
 	const eol = text.includes('\r\n') ? '\r\n' : '\n';
 	const lines = text.split(/\r?\n/u);
 	const out: string[] = [];
+	// A fence is how a document shows the convention rather than using it, so a slot written inside one is a sample.
+	let fenced = false;
 	for (let index = 0; index < lines.length; index++) {
+		if (lines[index].trimStart().startsWith('```')) {
+			fenced = !fenced;
+			out.push(lines[index]);
+			continue;
+		}
 		const next = lines[index + 1];
 		const path = next === undefined ? null : SLOT_PATH.exec(next);
 		const sentence = SLOT_SENTENCE.exec(lines[index]);
-		if (path === null || sentence === null) {
+		if (fenced || path === null || sentence === null) {
 			out.push(lines[index]);
 			continue;
 		}
@@ -101,9 +108,15 @@ function main(): void {
 		const text = readFileSync(file, 'utf8');
 		const exists = (path: string): boolean => existsSync(join(dirname(file), path));
 		const after = picturesForSlots(text, exists);
+		// The same fence rule as the conversion above: a sample of the convention is not a picture to wait for.
+		let fenced = false;
 		for (const line of text.split(/\r?\n/u)) {
+			if (line.trimStart().startsWith('```')) {
+				fenced = !fenced;
+				continue;
+			}
 			const path = SLOT_PATH.exec(line);
-			if (path !== null && !exists(path[1])) {
+			if (!fenced && path !== null && !exists(path[1])) {
 				waiting.push(`${relative(root, file)} → ${path[1]}`);
 			}
 		}
