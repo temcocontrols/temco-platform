@@ -6,7 +6,7 @@ Two windows, one loop: every step below happens between them.
 
 ![The welcome page, with the Documentation panel down the left showing one project's pages.](media/publishing/00-temco-platform.png)
 
-**Temco Platform is the window you work in.** It opens on the welcome page, and the **Documentation** panel down the left lists a project's pages — one Markdown file each. Pick one and it opens in the middle of the window; nothing you type is visible to anyone else until you build and publish.
+**Temco Platform** is where the writing happens: create a project, write and review pages, build them into a website, a PDF and a Windows help file, and publish the result to Temco Learn.
 
 > **Screenshot — Temco Learn in a browser, on a product's documentation page: the reading menu beside the page, and the version selector with its download menu at the top.**
 > `media/publishing/01-temco-learn.png`
