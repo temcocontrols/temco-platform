@@ -74,10 +74,17 @@ The activity bar down the left of the window holds eight areas. Four of them car
 > **Screenshot — AI ▸ Draft: a draft written beside the page, with Accept and Discard.**
 > `media/publishing/20-ai-draft.png`
 
-**Forum** is the community site, `forums.temcocontrols.com`, as the platform reads it — so you can see what people are asking about your pages without leaving the window. The panel lists its categories with how many topics each holds; a category opens as a table of topics; a topic opens as a tab with the conversation, the page it is about, and a suggestion for what the docs should do. Nothing is posted from here, because the forum owns the conversation, and a topic nobody has answered in a month is called out rather than left in the table.
+**Forum** brings the community site, `forums.temcocontrols.com`, into the window, and its point is one question: **what should the documentation do about this thread?** The panel lists the forum's categories with how many topics each holds, a category opens as a table of topics, and a topic opens as a tab with the conversation and the page whose title the thread uses.
 
-> **Screenshot — Forum ▸ Browse: the categories with their topic counts, and a topic open beside them.**
-> `media/publishing/23-forum.png`
+On that tab, **Suggest with the AI** (`temcoDocs.forumSuggest`) answers the question — twice. First comes what the project can say on its own: the thread's words, the page it names, whether that page has been reviewed, and how long the thread has waited. It is badged **from the registry**, and it arrives even with no model on the machine. Then the AI panel opens on the same thread, the model's answer streams there, becomes the suggestion, is badged **AI**, and is saved on the topic — so the next person reads it without asking again.
+
+A suggestion is advice, not a decision: nothing is written to a page, and nothing is posted to the forum, because the forum owns the conversation. Once the model has answered, the button reads **Ask the AI again** — and a topic nobody has answered in a month is called out rather than left in the table.
+
+> **Screenshot — a forum topic: the conversation, the page it names, and the suggestion card with Suggest with the AI.**
+> `media/publishing/23-forum-01.png`
+
+> **Screenshot — the AI panel answering that thread: the question above the streamed answer.**
+> `media/publishing/23-forum-02.png`
 
 **Tools** looks at the platform rather than at a page, one studio per subject. One studio is there today: **SQL**, the platform's own database, in two jobs — *Tables & queries* (the query editor, the rows, a table's structure, the history and the query library) and *The file* (where it lives, its integrity, a backup, a reset). A query runs **read-only** unless you reach for the writing command. The other studios — Devices, I/O, BACnet and Network — are not built yet, and the panel is a table so each one arrives as a row of its own.
 
