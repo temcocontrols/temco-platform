@@ -10,7 +10,28 @@
 
 **Temco Learn** is the site a reader opens. Everything on it — the pages, the search, the PDF, the help file — came from a build that was published.
 
-This guide follows one product through that loop once, from an empty folder to a live page. Read steps 1–9 the first time through; after that, what you need day to day is in [Running it again](#running-it-again). It assumes you have never opened the application before, and it assumes no background in VS Code, in Git, or in the site's own code: where one of those cannot be avoided — a commit, a catalog — it is explained at the step where you meet it.
+This guide follows one product through that loop once, from an empty folder to a live page. It assumes you have never opened the application before, and it assumes no background in VS Code, in Git, or in the site's own code: where one of those cannot be avoided — a commit, a catalog — it is explained at the step where you meet it.
+
+## How to read this guide
+
+- **Steps 1 to 9 in order, once.** They are the whole flow; after that, [Running it again](#running-it-again) is the day-to-day version.
+- **Every step has three parts:** what you do, **You should see** (a file or screen to check), and **If not** (the usual cause). If the file a step promises is missing, that step failed — nothing after it is worth testing.
+- **Buttons are named as they appear on screen**, with the command id beside them, like `temcoDocs.buildSite`. A greyed-out button still runs from the Command Palette (`Ctrl+Shift+P`).
+- **`~` is your home folder.** Paths are written for Windows; on macOS and Linux the same path uses `/`. The `.chm` is the only Windows-only piece, because it needs the help compiler.
+
+When you need to jump:
+
+| If you want to… | Read |
+|---|---|
+| to understand the pieces and the flow | [What you are making](#what-you-are-making) · [The application and the site](#the-application-and-the-site) |
+| to set up a machine | [Before you start](#before-you-start) |
+| to do the whole thing, once | [Steps 1–9](#step-1--check-the-folders) |
+| to publish again next week | [Running it again](#running-it-again) · [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) |
+| to work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
+| to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
+| to know what an output tick means | [Reference: the outputs](#reference-what-the-outputs-mean) |
+| to fix something | [When a step goes wrong](#when-a-step-goes-wrong) · [When something else goes wrong](#when-something-else-goes-wrong) |
+| to look up a button or a command id | [Appendix](#appendix--every-button-one-page) |
 
 ## The application and the site
 
@@ -93,27 +114,6 @@ A few words mean something narrower here than elsewhere:
 | **catalog** | `public/catalog.json` in the site, the one file the site's app reads to know what exists |
 | **downloads** | the PDFs and help files the site serves. The deploy cannot build them, so they are made on your machine and committed |
 | **guard** | the site's check that every catalogued version has its downloads. CI runs it, and so does a publish before it commits |
-
-## How to read this guide
-
-- **Steps 1 to 9 in order, once.** They are the whole flow; after that, [Running it again](#running-it-again) is the day-to-day version.
-- **Every step has three parts:** what you do, **You should see** (a file or screen to check), and **If not** (the usual cause). If the file a step promises is missing, that step failed — nothing after it is worth testing.
-- **Buttons are named as they appear on screen**, with the command id beside them, like `temcoDocs.buildSite`. A greyed-out button still runs from the Command Palette (`Ctrl+Shift+P`).
-- **`~` is your home folder.** Paths are written for Windows; on macOS and Linux the same path uses `/`. The `.chm` is the only Windows-only piece, because it needs the help compiler.
-
-When you need to jump:
-
-| If you want to… | Read |
-|---|---|
-| to understand the pieces and the flow | [What you are making](#what-you-are-making) · [The application and the site](#the-application-and-the-site) |
-| to set up a machine | [Before you start](#before-you-start) |
-| to do the whole thing, once | [Steps 1–9](#step-1--check-the-folders) |
-| to publish again next week | [Running it again](#running-it-again) · [Two things worth doing on purpose](#two-things-worth-doing-on-purpose) |
-| to work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
-| to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [What the files look like](#what-the-files-look-like) |
-| to know what an output tick means | [Reference: the outputs](#reference-what-the-outputs-mean) |
-| to fix something | [When a step goes wrong](#when-a-step-goes-wrong) · [When something else goes wrong](#when-something-else-goes-wrong) |
-| to look up a button or a command id | [Appendix](#appendix--every-button-one-page) |
 
 ## Step 1 — check the folders
 
