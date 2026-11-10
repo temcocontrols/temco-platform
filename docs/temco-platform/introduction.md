@@ -21,7 +21,7 @@ you, writing          Temco Platform              the site clone            Temc
 a page          →      builds and publishes  →     one commit on main   →    what a reader opens
 ```
 
-**In the application**, a project is one folder of Markdown. Four of the eight features carry it from nothing to a published build: **#1 Home** creates it, **#3 Repositories** reads the sources its pages are written from, **#2 Documentation** writes the pages and runs the build, and **#4 Temco Learn** makes the downloads and publishes the result. [Part 1](#part-1--temco-platform-the-application) takes each feature in turn; the [appendix](#appendix--every-control-and-its-command) names the buttons.
+**In the application**, a project is one folder of Markdown. It starts empty, from a template, or from something that already exists — a folder, a repository, a document. Three features carry it to a published build: **#1 Home** creates it, **#2 Documentation** writes the pages and runs the build, and **#4 Temco Learn** makes the downloads and publishes the result. The fourth, **#3 Repositories**, is for documenting code: it lists the sources a project can read — a repository, a folder, a document — and reads one into the catalog, so a draft can be written from a file of it. [Part 1](#part-1--temco-platform-the-application) takes each feature in turn; the [appendix](#appendix--every-control-and-its-command) names the buttons.
 
 **On the site**, a reader moves down five levels — the home page, a section, a project, a version, the page. One catalog writes all five, so a page you publish appears at every level at once, and a version you add never overwrites the one before it. [Part 2](#part-2--temco-learn-the-site) shows what each level holds.
 
@@ -51,7 +51,7 @@ Temco Platform has eight features, the eight you see down the activity bar on th
 |---|---|---|
 | [#1](#1-home) | **Home** | the library, and what needs doing |
 | [#2](#2-documentation) | **Documentation** | pages, the editor, the build |
-| [#3](#3-repositories) | **Repositories** | where the pages come from |
+| [#3](#3-repositories) | **Repositories** | documenting code from its source |
 | [#4](#4-temco-learn) | **Temco Learn** | the site, from this side |
 | [#5](#5-ai) | **AI** | a draft beside the page |
 | [#6](#6-forum) | **Forum** | the community site |
@@ -79,7 +79,7 @@ A project's three views. **Project** shows one project's state — its pages, th
 
 ### #3 Repositories
 
-Where pages are written from: a repository, a folder on this machine, or a document. **Reading** a source records what it declares into the catalog — its `docs/help/registry.json`, the pages that registry names, and when it was read — and never writes to it. A repository is read over its API at the branch you choose, or cloned into the working area when a draft or a build needs the files on disk; the **dashboard** then shows what moved since the last read, and which pages name the files that changed. One source can be cited by several projects. Its own page is also the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it.
+Where code is documented from — and optional, because a project made empty or from a template reads no source at all. The panel lists the sources: a repository, a folder on this machine, a document. **Reading** one records what it declares into the catalog — its file tree, the files a draft may quote, and any `docs/help/registry.json` it already has — and never writes to it. A repository is read over its API at the branch you choose, or cloned into the working area when a draft or a build needs the files on disk; the **dashboard** then shows what moved since the last read, and which pages name the files that changed. A project cites a source rather than copying it, so several projects can read one repository. Its own page is also the one that sets the three paths this guide depends on — [Before you start](#before-you-start) shows it.
 
 ### #4 Temco Learn
 
