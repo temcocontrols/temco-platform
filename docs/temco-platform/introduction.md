@@ -56,10 +56,17 @@ Temco Platform has eight features, the eight you see down the activity bar on th
 
 ### #1 Home
 
-The library at a glance: every project you have made, what needs doing across them, and the pages that have no file yet.
+The window's own summary, in two surfaces: a panel of three views, and one page.
 
-> **Screenshot — the Home page: the projects, and what needs doing across them.**
-> `media/publishing/16-home-overview.png`
+In the panel, **Overview** counts what this window can attest to — the projects it holds, the pages they declare, what needs review, and the last release — and every number opens the page behind it. **Projects** lists the projects on this machine. **What needs doing** is the queue: a screenshot with no page to sit on, a page the code has moved away from, and pages nobody has reviewed. A row leaves that queue when the fact behind it changes, so what is left is real work.
+
+The page behind the panel is the **Dashboard**: **Overview** gathers the same figures with the sources and areas they come from, and **Recent Activity** records what the platform did — drafts written, releases published.
+
+> **Screenshot — Home ▸ Overview: the four counted rows, with Projects and What needs doing beside them.**
+> `media/publishing/16-home-overview-01.png`
+
+> **Screenshot — the Dashboard page: the figures with their sources, and Recent Activity under them.**
+> `media/publishing/16-home-overview-02.png`
 
 ### #2 Documentation
 
