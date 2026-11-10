@@ -231,6 +231,13 @@ export interface FeatureCard {
 	/** How far the thing described has got, 0–1. Drawn only when a page can attest to it. */
 	progress?: number;
 	/**
+	 * Pre-rendered buttons for the card itself, when the card is a thing to act on rather than a way in.
+	 *
+	 * A card carrying a command is a button from edge to edge; a card that is only partly an act — one target of a
+	 * build, say — says so with a button of its own, so reading the card cannot start a build by accident.
+	 */
+	actions?: string;
+	/**
 	 * Present but not this project's: drawn without its icon colour and with a plain border, so a card a person did not
 	 * ask for is readable as one they did not ask for — greyed, never hidden.
 	 */
@@ -246,10 +253,11 @@ export function cards(items: readonly FeatureCard[], options: { dense?: boolean 
 		const chip = item.mark === undefined ? '' : `<span class="az-card__icon">${icon(item.mark)}</span>`;
 		const head = `<span class="az-card__head">${chip}<span class="az-card__title">${escapeHtml(item.title)}</span></span>`;
 		const note = item.note === undefined ? '' : `<p class="az-card__note">${escapeHtml(item.note)}</p>`;
+		const actions = item.actions === undefined ? '' : `<span class="az-card__actions">${item.actions}</span>`;
 		const share = item.progress === undefined ? 0 : Math.round(Math.min(1, Math.max(0, item.progress)) * 100);
 		const bar = item.progress === undefined ? '' : `<span class="az-card__bar"><span class="az-card__fill" style="width:${share}%"></span></span>`;
 		const muted = item.muted === true ? ' az-card--muted' : '';
-		return `<div class="az-card${plain ? '' : ' az-card--action'}${muted}"${attr}>${head}<p class="az-card__desc">${escapeHtml(item.desc)}</p>${note}${bar}${plain ? '' : `<span class="az-card__go">${escapeHtml(item.go ?? 'Open')}${icon('chevron-right', 'icon--sm')}</span>`}</div>`;
+		return `<div class="az-card${plain ? '' : ' az-card--action'}${muted}"${attr}>${head}<p class="az-card__desc">${escapeHtml(item.desc)}</p>${note}${actions}${bar}${plain ? '' : `<span class="az-card__go">${escapeHtml(item.go ?? 'Open')}${icon('chevron-right', 'icon--sm')}</span>`}</div>`;
 	}).join('')}</div>`;
 }
 

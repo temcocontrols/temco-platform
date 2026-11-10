@@ -1746,42 +1746,40 @@ export function buildsBody(facts1: BuildFacts): string {
 		files.map((file) => file.builtAt).sort((one, other) => other.localeCompare(one))[0];
 
 	/**
-	 * One output of this project, as a row: what it is for, the script that would be run here, and what is in it now.
+	 * One output of this project, as a card in a row: what it is for, what it would run here, and what is in it now.
 	 *
 	 * The script is read from the folder being built, never assumed — so an output this repository cannot make says what
-	 * it would need instead of offering a button that runs something else. The ticks are the project's own, which is why
-	 * the row also says when an output is not one of them.
+	 * it would need instead of offering a button that runs something else. The card itself is not a button: reading it
+	 * cannot start a build, and the act is the word under it.
 	 */
 	const made = outputs.chosen(facts1.outputs);
-	const outputRow = (output: Output): string => {
+	const outputCard = (output: Output): { mark: string; title: string; desc: string; note: string; actions?: string; muted?: boolean } => {
 		const part = made.some((chosen) => chosen.value === output.value);
 		const script = outputs.scriptFor(output, facts1.scripts.map((one) => one.name));
 		const files = artifacts.filter((artifact) => outputs.byKind(artifact.kind)?.value === output.value);
 		const newest = newestOf(files);
-		return entry({
+		const state = script === undefined
+			? (output.madeBy ?? `Nothing here makes it: this folder has no ${output.scripts.join(' or ')} script`)
+			: `runs ${script} — ${files.length === 0 || newest === undefined ? 'nothing written yet' : `${n(files.length, 'file', 'files')} now, newest ${waitingSince(newest)}`}`;
+		return {
 			mark: output.mark,
-			tone: script === undefined && output.madeBy === undefined ? 'warn' : 'ok',
 			title: output.label,
-			status: part ? undefined : 'not part of this project',
-			meta: [
-				part ? output.purpose : 'The create form did not tick this one, so the project does not build it.',
-				script === undefined ? (output.madeBy ?? `this folder has no ${output.scripts.join(' or ')} script, so nothing would run`) : `runs ${script}`,
-				files.length === 0 || newest === undefined ? 'nothing written yet' : `${n(files.length, 'file', 'files')} now, newest ${waitingSince(newest)}`
-			],
-			actions:
-				part && script !== undefined
-					? azButton(`Build the ${output.label}`, 'temcoDocs.buildOutput', { small: true, mark: 'play', args: [output.value] })
-					: undefined,
-			// The button already says the script was found; the words are kept for the case that needs explaining.
-			state: script === undefined ? 'no script' : undefined
-		});
+			desc: part ? output.purpose : 'Not part of this project — the create form did not tick it',
+			// What it would run, or why nothing would — an output the project does not build is not asked about.
+			note: part ? state : output.purpose,
+			actions: part && script !== undefined
+				? azButton(`Build the ${output.label}`, 'temcoDocs.buildOutput', { small: true, mark: 'play', args: [output.value] })
+				: undefined,
+			muted: !part
+		};
 	};
 
 	/** What this project was made to build, in the order the create form asked, and what each one would run here. */
 	const whereItWrites = `${section({
 		title: 'What this project builds',
 		desc: 'The ticks the project was created with, in the order the form asked for them. A build runs that output’s own script as a task, then looks for the file it should have written — nothing is written by this page.'
-	})}${azEntries(outputs.all.map(outputRow))}<p class="az-note">${facts1.folder === undefined ? 'No folder is being read, so nothing can be built.' : `Scripts are read from <span class="cell-mono">${esc(facts1.folder)}</span>, never assumed.`} The deploying help build (<span class="cell-mono">build:help</span>) is never run from here: it copies the CHM into a product installation, and building is not shipping.</p>`;
+	})}${cards(outputs.all.map(outputCard), { dense: true })}
+<p class="az-note">${facts1.folder === undefined ? 'No folder is being read, so nothing can be built.' : `Scripts are read from <span class="cell-mono">${esc(facts1.folder)}</span>, never assumed.`} The deploying help build (<span class="cell-mono">build:help</span>) is never run from here: it copies the CHM into a product installation, and building is not shipping.</p>`;
 
 	// Nothing has run: the callout says what a build is, and the page still answers where it would write.
 	if (builds.length === 0) {

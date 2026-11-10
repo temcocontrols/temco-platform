@@ -36,13 +36,14 @@ const ui = {
 		`<div class="az-section"><h2 class="az-section__title">${esc(options.title)}</h2>${
 			options.desc === undefined ? '' : `<p class="az-section__desc">${esc(options.desc)}</p>`
 		}${options.actions ?? ''}</div>`,
-	cards: (items: readonly { title: string; desc: string; note?: string; muted?: boolean }[]) =>
+	cards: (items: readonly { title: string; desc: string; note?: string; muted?: boolean; actions?: string }[]) =>
 		items
 			.map(
 				(card) =>
 					`<div class="az-card${card.muted === true ? ' az-card--muted' : ''}"><span class="az-card__title">${esc(card.title)}</span>` +
 					`<p class="az-card__desc">${esc(card.desc)}</p>` +
-					`${card.note === undefined ? '' : `<p class="az-card__note">${esc(card.note)}</p>`}</div>`
+					`${card.note === undefined ? '' : `<p class="az-card__note">${esc(card.note)}</p>`}` +
+					`${card.actions === undefined ? '' : `<span class="az-card__actions">${card.actions}</span>`}</div>`
 			)
 			.join(''),
 	actionBar: () => '',
@@ -240,7 +241,7 @@ test('a file row opens the file, and says what it is and when it was written', (
 	assert.match(pages.buildsBody(facts()), /Website|Offline help/u, 'the kind of the file is not shown');
 });
 
-test('one row per output the project was made with, in the create form\'s order, saying what it would run', () => {
+test('one card per output the project was made with, in the create form\'s order, saying what it would run', () => {
 	const html = pages.buildsBody(
 		facts({
 			scripts: [
@@ -249,9 +250,9 @@ test('one row per output the project was made with, in the create form\'s order,
 			]
 		})
 	);
-	const named = rows(html)
-		.filter((row) => ['Website', 'PDF', 'Offline help', 'Search index', 'AI index'].includes(row.title))
-		.map((row) => row.title);
+	const named = categoryCards(html)
+		.filter((card) => ['Website', 'PDF', 'Offline help', 'Search index', 'AI index'].includes(card.title))
+		.map((card) => card.title);
 	assert.deepEqual(named, ['Website', 'PDF', 'Offline help', 'Search index', 'AI index'], 'the outputs are not in the form\'s order');
 	assert.match(html, /runs docs:site/u, 'the site script is not named');
 	assert.match(html, /runs build:help:dry/u, 'the help script is not named');
@@ -259,7 +260,7 @@ test('one row per output the project was made with, in the create form\'s order,
 	assert.match(html, /1 file now, newest .* ago/u, 'the files already written are not counted');
 });
 
-test('a Build button belongs to the outputs this repository can make, and names the output it builds', () => {
+test('a Build button sits inside the card of every output this repository can make, and names it', () => {
 	const html = pages.buildsBody(
 		facts({
 			scripts: [
@@ -279,11 +280,13 @@ test('a Build button belongs to the outputs this repository can make, and names 
 		],
 		'a button is offered for an output this repository cannot build, or one is missing'
 	);
+	// A card is not itself a button: reading it must not start a build.
+	assert.doesNotMatch(html, /class="az-card[^"]*" data-command/u, 'the whole card starts a build');
 });
 
 test('an output this repository has no script for is reported by name, never run as something else', () => {
 	const html = pages.buildsBody(facts({ scripts: [{ name: 'docs:site', command: 'docfx build' }] }));
-	assert.match(html, /this folder has no docs:pdf or build:pdf script, so nothing would run/u, 'a missing PDF build is not reported');
+	assert.match(html, /this folder has no docs:pdf or build:pdf script/u, 'a missing PDF build is not reported');
 	assert.match(html, /this folder has no build:help:dry or docs:help script/u, 'a missing help build is not reported');
 	// The search index is written by the site when a build is imported, which is a different answer from "no script".
 	assert.match(html, /The site writes this index when a build of the pages is imported/u, 'the index is not explained');
@@ -292,9 +295,10 @@ test('an output this repository has no script for is reported by name, never run
 
 test('an output the project was not made with says so, and offers nothing', () => {
 	const html = pages.buildsBody(facts({ outputs: ['website'] }));
-	const ai = rows(html).find((row) => row.title === 'AI index');
-	assert.match(String(ai?.meta), /The create form did not tick this one/u, 'an unused output is not explained');
-	assert.match(html, /not part of this project/u, 'the row does not say it is not this project\'s');
+	const ai = categoryCards(html).find((card) => card.title === 'AI index');
+	assert.match(String(ai?.desc), /Not part of this project/u, 'an unused output is not explained');
+	assert.equal(ai?.note, 'Embeddings for answers, kept on this machine', 'the card does not say what the output is for');
+	assert.equal(ai?.muted, true, 'an unused output is not greyed');
 });
 
 test('a build never offers the deploying form of the help build', () => {

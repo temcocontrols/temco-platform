@@ -25,6 +25,12 @@ interface FeatureCard {
 	command?: string;
 	args?: unknown;
 	go?: string;
+	/** A counted fact under the description, e.g. `517 files · 15.7 MB`. */
+	note?: string;
+	/** Pre-rendered buttons for the card itself, when the card is a thing to act on rather than a way in. */
+	actions?: string;
+	/** Present but not this project's: drawn greyed, never hidden. */
+	muted?: boolean;
 }
 
 /** One of the three options the front page offers side by side. */

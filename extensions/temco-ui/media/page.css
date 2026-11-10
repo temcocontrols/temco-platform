@@ -4335,6 +4335,15 @@ body {
 	line-height: 16px;
 }
 
+/* The acts a card owns, under its text: the card's own button, at its left edge. */
+.az-card__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--sp-1);
+	margin-top: auto;
+	padding-top: var(--sp-2);
+}
+
 /* How far the thing the card describes has got, drawn only when the window can attest to it. */
 .az-card__bar {
 	display: block;
