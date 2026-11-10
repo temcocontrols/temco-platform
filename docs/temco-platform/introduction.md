@@ -29,12 +29,13 @@ a page          →      builds and publishes  →     one commit on main   → 
 
 ## What is in this guide
 
-| Part | The question it answers |
+| Section | The question it answers |
 |---|---|
 | [Part 1 — Temco Platform](#part-1--temco-platform-the-application) | What is in the application, and what does each of the eight features do? |
 | [Part 2 — Temco Learn](#part-2--temco-learn-the-site) | What does a reader see on the site, from the address down to one page? |
 | [Part 3 — The walk](#part-3--the-walk-step-by-step) | How does one project go from an empty folder to a live page? |
-| [Part 4 — Beyond the flow](#part-4--beyond-the-flow-and-when-it-goes-wrong) | What else can a project do, and what do I do when a step fails? |
+| [Part 4 — Temco Editor](#part-4--temco-editor) | How do I write, format and check a page? |
+| [Part 5 — Beyond the flow](#part-5--beyond-the-flow-and-when-it-goes-wrong) | What else can a project do, and what do I do when a step fails? |
 | [Appendix](#appendix--every-control-and-its-command) | Which button runs which command? |
 
 A command id in brackets (`temcoDocs.buildSite`) is what the Command Palette (`Ctrl+Shift+P`) runs when the button it belongs to is greyed out, and `~` is your home folder.
@@ -175,73 +176,6 @@ The six pages the application is configured from, in the order the panel lists t
 
 Every page writes to your **user** settings — the same file `settings.json` holds — so a choice belongs to the machine rather than to a folder. Repositories has a **Save** button, so read the resolved lines under its fields rather than trusting what you typed.
 
-### The editor
-
-You will spend most of your time here, so five minutes learning the surface saves months of hunting for a button.
-
-A page opens in **Temco Editor**, the editor that owns `*.md`. It has one row of controls above the text, the text in the middle, and a **Page** container on the far right. The headings you see in the text are the page's prose; its title in the navigation comes from the registry, so renaming one does not rename the other.
-
-![A page open in Temco Editor, with the ribbon groups numbered: undo/redo, Style, Lists, marks, blocks, insert, `···`, and the right group.](media/publishing/11-editor-ribbon.png)
-
-#### The ribbon, left to right
-
-| Group | Holds |
-|---|---|
-| undo / redo | `Ctrl+Z`, `Ctrl+Y`. This is the page's own history, not git's |
-| **Style** | paragraph or heading level, and the alignment of the block |
-| **Lists** | bullet, numbered and task lists |
-| **Marks** | bold `Ctrl+B` · italic `Ctrl+I` · underline `Ctrl+U` · strikethrough `Ctrl+Shift+X` · inline code `Ctrl+E` · highlight `Ctrl+Shift+H` |
-| **Blocks** | quote `Ctrl+Shift+B` · code block `Ctrl+Alt+C` · horizontal rule · table |
-| **Insert** | **Picture**, **Screenshot**, **Annotate** (only when a picture is selected), **Link to page** |
-| `···` | everything the row has no space for, including *Open the source* (the plain Markdown, for a paste that must not be reformatted) and *Page properties* |
-| right group | Find `Ctrl+F` · Outline `Ctrl+Alt+O` · **Read the page**, which toggles to *Edit the page* · Preview `Ctrl+Alt+P` · Diff `Ctrl+Alt+D` · Source · Page properties |
-
-The same actions are in the editor title bar and in the right-click menu under **Temco Markdown**, so nothing is reachable only from the ribbon.
-
-**Read the page** is the one people miss. It turns the editor into the rendered page, links and all, without opening Preview. Toggle it back when you want to edit again.
-
-#### Pictures
-
-Click a picture once to select it. A ring appears, with drag handles at its edges. Drag a handle to resize, and the width is written into the Markdown title as `"w=480"`, so the built site and the offline help honour it too.
-
-![A picture selected in the editor, with the drag handles and the 25% · 50% · 75% · 100% · Delete menu visible.](media/publishing/12-editor-picture.png)
-
-With a picture selected, the inline menu offers the widths **25% · 50% · 75% · 100%** and **Delete**. `Ctrl+Z` puts a resize back. Nothing is written to the file until the editor saves, so an experiment costs you nothing until you decide to keep it.
-
-**Screenshot** inserts a capture straight into the page's `media/` folder. A capture taken with no page open waits in **Needs You**, where *Attach the Screenshot to a Page…* files it later. **Annotate** draws on the selected picture, and one arrow on a screenshot is often worth a paragraph of text.
-
-#### The Page container, on the right
-
-![The Page container: the page's Outline, and the Draft the AI wrote beside the page's own text.](media/publishing/13-editor-sidebar.png)
-
-Two things live there. The **Outline** lists the page's headings, and clicking one jumps to it. The **Draft** appears when the AI module has written one. A draft is never applied by itself: you accept it, and it becomes a single undoable edit.
-
-#### Preview, Diff and Source
-
-![Preview of a page beside the editor, then the Diff view against HEAD.](media/publishing/14-editor-preview.png)
-
-| Control | Shows | Use it when |
-|---|---|---|
-| **Preview** `Ctrl+Alt+P` | the page as the build renders it, in a tab of its own | you are checking a table, a callout or a picture width |
-| **Diff with HEAD** `Ctrl+Alt+D` | what changed since the last commit | before publishing, especially on someone else's page |
-| **Source** | the raw Markdown | a paste keeps coming out wrong |
-| Page properties | a **read-only sheet** of the page's registry entry: title, area, chapter, order, `ship` and audience, plus the two ways to change it (the registry, or the page) | a page does not appear where you expect |
-
-#### Keyboard, all in one place
-
-| Shortcut | Does |
-|---|---|
-| `Ctrl+B` / `Ctrl+I` / `Ctrl+U` | bold / italic / underline |
-| `Ctrl+Shift+X` | strikethrough |
-| `Ctrl+E` | inline code |
-| `Ctrl+Shift+H` | highlight |
-| `Ctrl+Shift+B` / `Ctrl+Alt+C` | block quote / code block |
-| `Ctrl+F` | find in the page |
-| `Ctrl+Alt+O` | outline |
-| `Ctrl+Alt+P` / `Ctrl+Alt+D` | preview / diff with HEAD |
-| `Ctrl+Z` / `Ctrl+Y` | undo / redo |
-| `Ctrl+S` | save the page to disk |
-
 ### Before you start
 
 | You need | Why |
@@ -273,8 +207,7 @@ A reader opens the address and moves down five levels. Every level is written by
 
 The site's sections as tiles, with Documentation where a product appears.
 
-> **Screenshot — the site's home page at localhost:1025: the sections as tiles, Documentation first.**
-> `media/publishing/21-learn-home.png`
+![The site's home page at localhost:1025: the sections as tiles, Documentation first.](media/publishing/21-learn-home.png)
 
 ### #2 A section
 
@@ -284,8 +217,7 @@ The projects filed under it, each with its title, its summary and its newest ver
 
 Every version you have added, newest first.
 
-> **Screenshot — the version selector open on a product page, listing every version added.**
-> `media/publishing/22-learn-versions.png`
+![The version selector open on a product page, listing every version added.](media/publishing/22-learn-versions.png)
 
 ### #4 A version
 
@@ -405,7 +337,7 @@ A page that is registered but whose file does not exist is an **error**, and the
 | **You should see** | a Markdown file under `~/temco/projects/t3000/docs/<area>/`, and `registry.json` listing it |
 | **If not** | the project has to be the **selected** project. The docs module reads the folders that project cites, not whatever folder happens to be open. A message about there being "no area to put a page in" means the project has no area yet: create a chapter, or start the project from a template |
 
-Come back to this step whenever you have more to write. Nothing downstream notices until you build. Writing itself is [The editor](#the-editor), later in this guide.
+Come back to this step whenever you have more to write. Nothing downstream notices until you build. Writing itself is [Part 4 — Temco Editor](#part-4--temco-editor), later in this guide.
 
 ### Step 3 — build the site
 
@@ -625,7 +557,72 @@ Add `"summary"` for the sentence on the project's card, and change `"section"` t
 
 The third file, `public/catalog.json`, is generated and never edited. A `"kind": "build"` row in it is the giveaway that the page came from your build rather than from the site's own content — and if your version is not listed after step 5, the catalog did not run.
 
-## Part 4 — Beyond the flow, and when it goes wrong
+## Part 4 — Temco Editor
+
+A page opens in **Temco Editor**, the editor that owns `*.md`. It has one row of controls above the text, the text in the middle, and a **Page** container on the far right. The headings you see in the text are the page's prose; its title in the navigation comes from the registry, so renaming one does not rename the other.
+
+![A page open in Temco Editor, with the ribbon groups numbered: undo/redo, Style, Lists, marks, blocks, insert, `···`, and the right group.](media/publishing/11-editor-ribbon.png)
+
+### The ribbon, left to right
+
+| Group | Holds |
+|---|---|
+| undo / redo | `Ctrl+Z`, `Ctrl+Y`. This is the page's own history, not git's |
+| **Style** | paragraph or heading level, and the alignment of the block |
+| **Lists** | bullet, numbered and task lists |
+| **Marks** | bold `Ctrl+B` · italic `Ctrl+I` · underline `Ctrl+U` · strikethrough `Ctrl+Shift+X` · inline code `Ctrl+E` · highlight `Ctrl+Shift+H` |
+| **Blocks** | quote `Ctrl+Shift+B` · code block `Ctrl+Alt+C` · horizontal rule · table |
+| **Insert** | **Picture**, **Screenshot**, **Annotate** (only when a picture is selected), **Link to page** |
+| `···` | everything the row has no space for, including *Open the source* (the plain Markdown, for a paste that must not be reformatted) and *Page properties* |
+| right group | Find `Ctrl+F` · Outline `Ctrl+Alt+O` · **Read the page**, which toggles to *Edit the page* · Preview `Ctrl+Alt+P` · Diff `Ctrl+Alt+D` · Source · Page properties |
+
+The same actions are in the editor title bar and in the right-click menu under **Temco Markdown**, so nothing is reachable only from the ribbon.
+
+**Read the page** is the one people miss. It turns the editor into the rendered page, links and all, without opening Preview. Toggle it back when you want to edit again.
+
+### Pictures
+
+Click a picture once to select it. A ring appears, with drag handles at its edges. Drag a handle to resize, and the width is written into the Markdown title as `"w=480"`, so the built site and the offline help honour it too.
+
+![A picture selected in the editor, with the drag handles and the 25% · 50% · 75% · 100% · Delete menu visible.](media/publishing/12-editor-picture.png)
+
+With a picture selected, the inline menu offers the widths **25% · 50% · 75% · 100%** and **Delete**. `Ctrl+Z` puts a resize back. Nothing is written to the file until the editor saves, so an experiment costs you nothing until you decide to keep it.
+
+**Screenshot** inserts a capture straight into the page's `media/` folder. A capture taken with no page open waits in **Needs You**, where *Attach the Screenshot to a Page…* files it later. **Annotate** draws on the selected picture, and one arrow on a screenshot is often worth a paragraph of text.
+
+### The Page container, on the right
+
+![The Page container: the page's Outline, and the Draft the AI wrote beside the page's own text.](media/publishing/13-editor-sidebar.png)
+
+Two things live there. The **Outline** lists the page's headings, and clicking one jumps to it. The **Draft** appears when the AI module has written one. A draft is never applied by itself: you accept it, and it becomes a single undoable edit.
+
+### Preview, Diff and Source
+
+![Preview of a page beside the editor, then the Diff view against HEAD.](media/publishing/14-editor-preview.png)
+
+| Control | Shows | Use it when |
+|---|---|---|
+| **Preview** `Ctrl+Alt+P` | the page as the build renders it, in a tab of its own | you are checking a table, a callout or a picture width |
+| **Diff with HEAD** `Ctrl+Alt+D` | what changed since the last commit | before publishing, especially on someone else's page |
+| **Source** | the raw Markdown | a paste keeps coming out wrong |
+| Page properties | a **read-only sheet** of the page's registry entry: title, area, chapter, order, `ship` and audience, plus the two ways to change it (the registry, or the page) | a page does not appear where you expect |
+
+### Keyboard, all in one place
+
+| Shortcut | Does |
+|---|---|
+| `Ctrl+B` / `Ctrl+I` / `Ctrl+U` | bold / italic / underline |
+| `Ctrl+Shift+X` | strikethrough |
+| `Ctrl+E` | inline code |
+| `Ctrl+Shift+H` | highlight |
+| `Ctrl+Shift+B` / `Ctrl+Alt+C` | block quote / code block |
+| `Ctrl+F` | find in the page |
+| `Ctrl+Alt+O` | outline |
+| `Ctrl+Alt+P` / `Ctrl+Alt+D` | preview / diff with HEAD |
+| `Ctrl+Z` / `Ctrl+Y` | undo / redo |
+| `Ctrl+S` | save the page to disk |
+
+## Part 5 — Beyond the flow, and when it goes wrong
 
 ### Beyond the flow
 
