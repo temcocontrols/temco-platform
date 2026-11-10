@@ -54,8 +54,6 @@ Temco Platform has eight features, the eight you see down the activity bar on th
 | [#7](#7-tools) | **Tools** | the platform's own database |
 | [#8](#8-settings) | **Settings** | the six settings pages |
 
-Four of them carry the walk — **#3** sets the folders, **#1** makes the project, **#2** writes and builds the pages, and **#4** takes the build to the site. Each gets its own section below.
-
 ### #1 Home
 
 The library at a glance: every project you have made, what needs doing across them, and the pages that have no file yet.
