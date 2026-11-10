@@ -12,26 +12,6 @@
 
 This guide follows one product through that loop once, from an empty folder to a live page. It assumes you have never opened the application before, and it assumes no background in VS Code, in Git, or in the site's own code: where one of those cannot be avoided — a commit, a catalog — it is explained at the step where you meet it.
 
-## How to read this guide
-
-- **Steps 1 to 8 in order, once.** They are the whole flow; after that, [Running it again](#running-it-again) is the day-to-day version.
-- **Every step has three parts:** what you do, **You should see** (a file or screen to check), and **If not** (the usual cause). If the file a step promises is missing, that step failed — nothing after it is worth testing.
-- **Buttons are named as they appear on screen**, with the command id beside them, like `temcoDocs.buildSite`. A greyed-out button still runs from the Command Palette (`Ctrl+Shift+P`).
-- **`~` is your home folder.** Paths are written for Windows; on macOS and Linux the same path uses `/`. The `.chm` is the only Windows-only piece, because it needs the help compiler.
-
-When you need to jump:
-
-| If you want to… | Read |
-|---|---|
-| to understand the pieces and the flow | [What you are making](#what-you-are-making) · [The application and the site](#the-application-and-the-site) |
-| to set up a machine | [Before you start](#before-you-start) |
-| to do the whole thing, once | [Step by step](#step-by-step) |
-| to publish again next week | [Running it again](#running-it-again) |
-| to work in the editor | [The editor](#the-editor) · [Beyond the flow](#beyond-the-flow) |
-| to see the files a build writes | [The same flow, as files](#the-same-flow-as-files-t3000) · [The two files you will edit](#the-two-files-you-will-edit) |
-| to fix something | [When something else goes wrong](#when-something-else-goes-wrong) |
-| to look up a button or a command id | [Appendix](#appendix--every-control-and-its-command) |
-
 ## The application and the site
 
 Temco Platform and Temco Learn are two halves of one idea, and they meet in a single place: a copy of a project's build.
@@ -47,7 +27,125 @@ a page          →      builds and publishes  →     one commit on main   → 
 
 You only need the left-hand side to finish this guide. The right-hand side is why the work has a point — and the reason one step makes a PDF by hand, since the site cannot make one for you.
 
-## Before you start
+## What is in this guide
+
+| Part | Answers |
+|---|---|
+| [Part 1 — Temco Platform](#part-1--temco-platform-the-application) | the application: what each of its eight areas can do, the editor, and the four things to settle before you start |
+| [Part 2 — Temco Learn](#part-2--temco-learn-the-site) | the site from a reader's side: five levels, the version selector, downloads, search |
+| [Part 3 — The walk](#part-3--the-walk-step-by-step) | the eight steps that publish one project, and what to re-run next time |
+| [Part 4 — Beyond the flow](#part-4--beyond-the-flow-and-when-it-goes-wrong) | importing, validating, releasing locally, exporting, and what to do when something fails |
+
+Three habits make the rest easy:
+
+- **Steps 1 to 8 in order, once.** After that, [Running it again](#running-it-again) is the day-to-day version.
+- **Every step has three parts:** what you do, **You should see** (a file or a screen to check), and **If not** (the usual cause). When the file a step promises is missing, that step failed, and nothing after it is worth testing.
+- **`~` is your home folder**, and the command id beside a button (`temcoDocs.buildSite`) is what the Command Palette (`Ctrl+Shift+P`) runs when the button is greyed out.
+
+## Part 1 — Temco Platform, the application
+
+### The eight areas, and what each can do
+
+The activity bar down the left of the window holds eight areas. Four of them carry the walk; each is worth a line here so that nothing surprises you later.
+
+**Home** is the library at a glance: every project you have made, what needs doing across them, and the pages that have no file yet.
+
+> **Screenshot — the Home page: the projects, and what needs doing across them.**
+> `media/publishing/16-home-overview.png`
+
+**Documentation** holds a project's three views. **Project** shows one project's state — its pages, the outputs it produces, and the button that builds it. **Pages** is the tree of areas, chapters and pages, with the row actions that rename, move, retire a page, or create the file a `missing` row is waiting for. **Publish** is where a build becomes something a reader can be given: the Review Center, the Build Center, and Publish & Releases.
+
+> **Screenshot — Documentation ▸ Project: one project's pages, its outputs, and its counts.**
+> `media/publishing/17-project-page.png`
+
+> **Screenshot — the Review Center: drafts waiting, each shown on its own page with Accept and Discard.**
+> `media/publishing/18-review-center.png`
+
+**Repositories** is where pages are written from: a repository, a folder on this machine, or a document. One source can be cited by several projects, and nothing is ever written back into it.
+
+**Temco Learn** is the site from this side: **Overview** (its projects, versions and pages), **Site** (the builds waiting to be added, the versions already on the site, and the serve/stop controls), and **Artifacts** (the files the site actually serves).
+
+> **Screenshot — Temco Learn ▸ Site: builds waiting to be added, and the versions already on the site.**
+> `media/publishing/19-learn-site.png`
+
+**AI** writes a draft beside your text and applies it only when you accept it. Its server runs on your own machine, and the tools it may use are the ones the application itself has.
+
+> **Screenshot — AI ▸ Draft: a draft written beside the page, with Accept and Discard.**
+> `media/publishing/20-ai-draft.png`
+
+**Forum** keeps questions and answers beside the documentation, so an answer can point at a page and a page can point at an answer.
+
+**Tools** holds the hardware studios — SQL, network, BACnet, devices — for looking at a controller rather than at a page.
+
+**Settings** holds six pages: General, Modules, AI Runtime, Branding, Publishing, and Repositories, where the three paths this guide depends on are set ([Before you start](#before-you-start)).
+
+### The editor
+
+You will spend most of your time here, so five minutes learning the surface saves months of hunting for a button.
+
+A page opens in **Temco Editor**, the editor that owns `*.md`. It has one row of controls above the text, the text in the middle, and a **Page** container on the far right. The headings you see in the text are the page's prose; its title in the navigation comes from the registry, so renaming one does not rename the other.
+
+![A page open in Temco Editor, with the ribbon groups numbered: undo/redo, Style, Lists, marks, blocks, insert, `···`, and the right group.](media/publishing/11-editor-ribbon.png)
+
+#### The ribbon, left to right
+
+| Group | Holds |
+|---|---|
+| undo / redo | `Ctrl+Z`, `Ctrl+Y`. This is the page's own history, not git's |
+| **Style** | paragraph or heading level, and the alignment of the block |
+| **Lists** | bullet, numbered and task lists |
+| **Marks** | bold `Ctrl+B` · italic `Ctrl+I` · underline `Ctrl+U` · strikethrough `Ctrl+Shift+X` · inline code `Ctrl+E` · highlight `Ctrl+Shift+H` |
+| **Blocks** | quote `Ctrl+Shift+B` · code block `Ctrl+Alt+C` · horizontal rule · table |
+| **Insert** | **Picture**, **Screenshot**, **Annotate** (only when a picture is selected), **Link to page** |
+| `···` | everything the row has no space for, including *Open the source* (the plain Markdown, for a paste that must not be reformatted) and *Page properties* |
+| right group | Find `Ctrl+F` · Outline `Ctrl+Alt+O` · **Read the page**, which toggles to *Edit the page* · Preview `Ctrl+Alt+P` · Diff `Ctrl+Alt+D` · Source · Page properties |
+
+The same actions are in the editor title bar and in the right-click menu under **Temco Markdown**, so nothing is reachable only from the ribbon.
+
+**Read the page** is the one people miss. It turns the editor into the rendered page, links and all, without opening Preview. Toggle it back when you want to edit again.
+
+#### Pictures
+
+Click a picture once to select it. A ring appears, with drag handles at its edges. Drag a handle to resize, and the width is written into the Markdown title as `"w=480"`, so the built site and the offline help honour it too.
+
+![A picture selected in the editor, with the drag handles and the 25% · 50% · 75% · 100% · Delete menu visible.](media/publishing/12-editor-picture.png)
+
+With a picture selected, the inline menu offers the widths **25% · 50% · 75% · 100%** and **Delete**. `Ctrl+Z` puts a resize back. Nothing is written to the file until the editor saves, so an experiment costs you nothing until you decide to keep it.
+
+**Screenshot** inserts a capture straight into the page's `media/` folder. A capture taken with no page open waits in **Needs You**, where *Attach the Screenshot to a Page…* files it later. **Annotate** draws on the selected picture, and one arrow on a screenshot is often worth a paragraph of text.
+
+#### The Page container, on the right
+
+![The Page container: the page's Outline, and the Draft the AI wrote beside the page's own text.](media/publishing/13-editor-sidebar.png)
+
+Two things live there. The **Outline** lists the page's headings, and clicking one jumps to it. The **Draft** appears when the AI module has written one. A draft is never applied by itself: you accept it, and it becomes a single undoable edit.
+
+#### Preview, Diff and Source
+
+![Preview of a page beside the editor, then the Diff view against HEAD.](media/publishing/14-editor-preview.png)
+
+| Control | Shows | Use it when |
+|---|---|---|
+| **Preview** `Ctrl+Alt+P` | the page as the build renders it, in a tab of its own | you are checking a table, a callout or a picture width |
+| **Diff with HEAD** `Ctrl+Alt+D` | what changed since the last commit | before publishing, especially on someone else's page |
+| **Source** | the raw Markdown | a paste keeps coming out wrong |
+| Page properties | a **read-only sheet** of the page's registry entry: title, area, chapter, order, `ship` and audience, plus the two ways to change it (the registry, or the page) | a page does not appear where you expect |
+
+#### Keyboard, all in one place
+
+| Shortcut | Does |
+|---|---|
+| `Ctrl+B` / `Ctrl+I` / `Ctrl+U` | bold / italic / underline |
+| `Ctrl+Shift+X` | strikethrough |
+| `Ctrl+E` | inline code |
+| `Ctrl+Shift+H` | highlight |
+| `Ctrl+Shift+B` / `Ctrl+Alt+C` | block quote / code block |
+| `Ctrl+F` | find in the page |
+| `Ctrl+Alt+O` | outline |
+| `Ctrl+Alt+P` / `Ctrl+Alt+D` | preview / diff with HEAD |
+| `Ctrl+Z` / `Ctrl+Y` | undo / redo |
+| `Ctrl+S` | save the page to disk |
+### Before you start
 
 | You need | Why |
 |---|---|
@@ -74,7 +172,38 @@ Three settings decide every path. Set them once; every page reads them back, so 
 
 `Clones land in …\temco\source` and `Projects are made in …\temco\projects` are what you want to read. A value you typed but did not save still shows the old one — press *Choose* or leave the field, then look again. `Projects are made in …\temco` means the projects folder is empty, and new projects will land beside the clones.
 
-## What you are making
+## Part 2 — Temco Learn, the site
+
+### What a reader meets
+
+A reader opens the address and moves down five levels. Every level is written by the same catalog, so a page you publish appears at all five at once.
+
+| The reader opens | And gets |
+|---|---|
+| the home page | the site's sections as tiles; Documentation is where a product appears |
+| a section | the projects filed under it, each with its title, its summary and its newest version |
+| a project | every version you have added, newest first |
+| a version | that version's pages, in the order the registry gives them |
+| a page | the page, its "in this page" list, and the previous and next links |
+
+> **Screenshot — the site's home page at localhost:1025: the sections as tiles, Documentation first.**
+> `media/publishing/21-learn-home.png`
+
+> **Screenshot — the version selector open on a product page, listing every version added.**
+> `media/publishing/22-learn-versions.png`
+
+Four things a reader meets that are not a level:
+
+- **the version selector**, at the top of every page: it switches between the versions of the project you are reading, so an older edition stays readable after a new one is added. A version is never overwritten.
+- **the download menu**, which offers the whole-guide PDF and, when it compiled, the Windows help file — the files [step 6](#step-6--make-the-downloads) makes and commits.
+- **search**, which is the index a build shipped rather than something the site works out, so a page that never reached a build cannot be found.
+- **feedback**, which records what a reader says was wrong and lands back in the application, where a draft is written and someone accepts it.
+
+What the site holds on disk is in [The two files you will edit](#the-two-files-you-will-edit), with the others in [The same flow, as files](#the-same-flow-as-files-t3000).
+
+## Part 3 — The walk, step by step
+
+### What you are making
 
 Six things take part:
 
@@ -112,11 +241,11 @@ A few words mean something narrower here than elsewhere:
 | **downloads** | the PDFs and help files the site serves. The deploy cannot build them, so they are made on your machine and committed |
 | **guard** | the site's check that every catalogued version has its downloads. CI runs it, and so does a publish before it commits |
 
-## Step by step
+### Step by step
 
 Each step does one thing and leaves something to check: the first four write and build the project, the next three take that build to the site and give it its downloads, and the last one publishes. Take them in order — each step reads what the one before it wrote, so a step that fails stops the rest.
 
-## Step 1 — create a project
+### Step 1 — create a project
 
 **Create a Project** (`temcoProjects.newProject`). Give it the name `T3000` and the version `1.0`, and leave the outputs ticked: *Website*, *PDF*, *Offline help* and *Search index*.
 
@@ -141,7 +270,7 @@ Either way, the project is recorded under the slug of its name (`T3000` becomes 
 
 The folder is added to the window so that its `docs/` shows in Explorer. That is expected, and nothing needs doing about it.
 
-## Step 2 — write the pages
+### Step 2 — write the pages
 
 **New Page** (`temcoDocs.newPage`) with T3000 selected. It opens a **form** rather than a prompt: the place is already chosen from the row you were on, and the form shows the kind of page, the file it will write, and the body it starts from. The palette offers the kinds alongside it (*New Article*, *New Task*, *New Reference*, *New Troubleshooting*, *New Release Note*), and they differ only in their starter headings.
 
@@ -173,7 +302,7 @@ A page that is registered but whose file does not exist is an **error**, and the
 
 Come back to this step whenever you have more to write. Nothing downstream notices until you build. Writing itself is [The editor](#the-editor), later in this guide.
 
-## Step 3 — build the site
+### Step 3 — build the site
 
 **Build the Site** (`temcoDocs.buildSite`), or *Build the Site* on the project page. It builds the project that is **selected**, reading the folders that project cites, so the folder does not have to be open in the window.
 
@@ -195,7 +324,7 @@ Either way, the attempt is recorded in the Build Center (`temcoDocs.builds`), an
 
 The exit code is never the verdict. What counts is a file that did not exist before the run and does now. A generator that exits 0 and writes nothing has failed; one that exits 1 after writing the site has not.
 
-## Step 4 — build the project's own outputs (only for a repository)
+### Step 4 — build the project's own outputs (only for a repository)
 
 Skip it unless T3000 cites a real repository clone under `~/temco/source/`. **Temco Projects: Build** (`temcoProjects.buildProject`) takes the outputs you ticked and runs the repository's own script for each one, **once each**:
 
@@ -219,7 +348,7 @@ Two of the ticks have no script here: **Search index** is the index the site loa
 
 This is the step that produces a PDF or a `.chm` **for the docs module**: the copies it records and Publish & Releases lists, under their own output. The PDF that the website serves is a different file, made in step 6 from the site's own content.
 
-## Step 5 — add the build to the site
+### Step 5 — add the build to the site
 
 **Add This Build to the Site** (`temcoLearn.addBuild`), or *Choose a build* on the **Publishing** page (Temco Learn ▸ Publish — a different page from Documentation ▸ Publish & Releases); **Add a Build to the Site** (`temcoLearn.addBuilds`) lists every build on disk.
 
@@ -249,7 +378,7 @@ The project's id is **its folder's name**, so a build in `<projectsFolder>/t3000
 
 Adding a build is a local act. Nothing is published by this step.
 
-## Step 6 — make the downloads
+### Step 6 — make the downloads
 
 **Make the Downloads** (`temcoLearn.site.downloads`) is the step between *Add* and *Publish* on the Publishing page.
 
@@ -272,7 +401,7 @@ These files are the one thing the deploy cannot make for you. The site's CI has 
 
 **Come back to this step every time you finish step 5.** Each new version needs its own PDF, and the guard counts versions rather than projects.
 
-## Step 7 — look at it before publishing
+### Step 7 — look at it before publishing
 
 **Start the Site** (`temcoLearn.site.start`).
 
@@ -295,7 +424,7 @@ It builds the site first if `dist/index.html` is not there, then serves the buil
 
 If a page is missing, it is either unregistered or marked `ship: false`, so go back to step 2 rather than rebuilding. **Stop the Site** (`temcoLearn.site.stop`) when you are finished. The open port, not the process, is the proof that it is running.
 
-## Step 8 — publish
+### Step 8 — publish
 
 **Publish** (`temcoLearn.publish`) opens the publishing page: what changed, the steps of a publish in order, and the button. Press *Publish* there and confirm the message. **Publish Now** (`temcoLearn.publishNow`) does the same thing from the palette.
 
@@ -319,74 +448,7 @@ Then the site's CI takes over. `pages.yml` runs its checks, builds the site, run
 
 A publish carries everything waiting in the clone, not only the project you were working on. If that is not what you want, open the publishing page first: it lists the paths the commit would take before you press the button.
 
-## The editor
-
-You will spend most of your time here, so five minutes learning the surface saves months of hunting for a button.
-
-A page opens in **Temco Editor**, the editor that owns `*.md`. It has one row of controls above the text, the text in the middle, and a **Page** container on the far right. The headings you see in the text are the page's prose; its title in the navigation comes from the registry, so renaming one does not rename the other.
-
-![A page open in Temco Editor, with the ribbon groups numbered: undo/redo, Style, Lists, marks, blocks, insert, `···`, and the right group.](media/publishing/11-editor-ribbon.png)
-
-### The ribbon, left to right
-
-| Group | Holds |
-|---|---|
-| undo / redo | `Ctrl+Z`, `Ctrl+Y`. This is the page's own history, not git's |
-| **Style** | paragraph or heading level, and the alignment of the block |
-| **Lists** | bullet, numbered and task lists |
-| **Marks** | bold `Ctrl+B` · italic `Ctrl+I` · underline `Ctrl+U` · strikethrough `Ctrl+Shift+X` · inline code `Ctrl+E` · highlight `Ctrl+Shift+H` |
-| **Blocks** | quote `Ctrl+Shift+B` · code block `Ctrl+Alt+C` · horizontal rule · table |
-| **Insert** | **Picture**, **Screenshot**, **Annotate** (only when a picture is selected), **Link to page** |
-| `···` | everything the row has no space for, including *Open the source* (the plain Markdown, for a paste that must not be reformatted) and *Page properties* |
-| right group | Find `Ctrl+F` · Outline `Ctrl+Alt+O` · **Read the page**, which toggles to *Edit the page* · Preview `Ctrl+Alt+P` · Diff `Ctrl+Alt+D` · Source · Page properties |
-
-The same actions are in the editor title bar and in the right-click menu under **Temco Markdown**, so nothing is reachable only from the ribbon.
-
-**Read the page** is the one people miss. It turns the editor into the rendered page, links and all, without opening Preview. Toggle it back when you want to edit again.
-
-### Pictures
-
-Click a picture once to select it. A ring appears, with drag handles at its edges. Drag a handle to resize, and the width is written into the Markdown title as `"w=480"`, so the built site and the offline help honour it too.
-
-![A picture selected in the editor, with the drag handles and the 25% · 50% · 75% · 100% · Delete menu visible.](media/publishing/12-editor-picture.png)
-
-With a picture selected, the inline menu offers the widths **25% · 50% · 75% · 100%** and **Delete**. `Ctrl+Z` puts a resize back. Nothing is written to the file until the editor saves, so an experiment costs you nothing until you decide to keep it.
-
-**Screenshot** inserts a capture straight into the page's `media/` folder. A capture taken with no page open waits in **Needs You**, where *Attach the Screenshot to a Page…* files it later. **Annotate** draws on the selected picture, and one arrow on a screenshot is often worth a paragraph of text.
-
-### The Page container, on the right
-
-![The Page container: the page's Outline, and the Draft the AI wrote beside the page's own text.](media/publishing/13-editor-sidebar.png)
-
-Two things live there. The **Outline** lists the page's headings, and clicking one jumps to it. The **Draft** appears when the AI module has written one. A draft is never applied by itself: you accept it, and it becomes a single undoable edit.
-
-### Preview, Diff and Source
-
-![Preview of a page beside the editor, then the Diff view against HEAD.](media/publishing/14-editor-preview.png)
-
-| Control | Shows | Use it when |
-|---|---|---|
-| **Preview** `Ctrl+Alt+P` | the page as the build renders it, in a tab of its own | you are checking a table, a callout or a picture width |
-| **Diff with HEAD** `Ctrl+Alt+D` | what changed since the last commit | before publishing, especially on someone else's page |
-| **Source** | the raw Markdown | a paste keeps coming out wrong |
-| Page properties | a **read-only sheet** of the page's registry entry: title, area, chapter, order, `ship` and audience, plus the two ways to change it (the registry, or the page) | a page does not appear where you expect |
-
-### Keyboard, all in one place
-
-| Shortcut | Does |
-|---|---|
-| `Ctrl+B` / `Ctrl+I` / `Ctrl+U` | bold / italic / underline |
-| `Ctrl+Shift+X` | strikethrough |
-| `Ctrl+E` | inline code |
-| `Ctrl+Shift+H` | highlight |
-| `Ctrl+Shift+B` / `Ctrl+Alt+C` | block quote / code block |
-| `Ctrl+F` | find in the page |
-| `Ctrl+Alt+O` | outline |
-| `Ctrl+Alt+P` / `Ctrl+Alt+D` | preview / diff with HEAD |
-| `Ctrl+Z` / `Ctrl+Y` | undo / redo |
-| `Ctrl+S` | save the page to disk |
-
-## Running it again
+### Running it again
 
 After the first publish, the loop is shorter than the guide above, because the folders, the project and the site clone already exist. What you re-run depends on what changed:
 
@@ -408,7 +470,7 @@ Publish                         temcoLearn.publish
 
 Two habits save the most time. **Add a new version for a new release**, because re-adding the same version replaces it and readers lose the old one. And **redo the downloads every time you add a version**, because the guard counts versions, so a new version without its PDF blocks the publish rather than the deploy.
 
-## The same flow, as files: T3000
+### The same flow, as files: T3000
 
 ```text
 ~/temco/projects/t3000/                   the project, and only the project
@@ -426,7 +488,7 @@ Two habits save the most time. **Add a new version for a new release**, because 
 └── dist/                                 step 8: what CI deploys
 ```
 
-## The two files you will edit
+### The two files you will edit
 
 Everything else in the arrangement is written for you. These two are yours, and knowing their shape lets you tell a wrong page from a wrong build without guessing.
 
@@ -458,25 +520,27 @@ Add `"summary"` for the sentence on the project's card, and change `"section"` t
 
 The third file, `public/catalog.json`, is generated and never edited. A `"kind": "build"` row in it is the giveaway that the page came from your build rather than from the site's own content — and if your version is not listed after step 5, the catalog did not run.
 
-## Beyond the flow
+## Part 4 — Beyond the flow, and when it goes wrong
+
+### Beyond the flow
 
 A project can do more than publish. None of the following is needed to get a page live, and all of it is available once you have one.
 
-### Bringing in material that already exists
+#### Bringing in material that already exists
 
 A **source** is where pages are written from: a repository, a folder, or a document. There are two doors to the same result: the project's own page (`temcoProjects.editProject`), or the `Pages` view title → **Add a Source** (`temcoProjects.addSource`, the plug beside `＋`).
 
 If you already have a `docs/` folder, create the project with **From existing files** and choose that folder or file. A folder that already has `docs/help/registry.json` is cited as it stands, and nothing is copied. Anything else (Markdown, HTML, Word `.docx`, or a compiled `.chm`) is converted **once** into `docs/` and a registry, so from then on it is ordinary pages. A source is recorded once and can be cited by more than one project, and nothing is ever written back to it.
 
-### Checking before you build
+#### Checking before you build
 
 **Validate** (`temcoDocs.validate`) answers one question: would a reader find a broken link, a missing page, or a page nobody registered? It reports in the Problems panel. A build does not fail on what it finds; the published site simply contains it. So run it before step 3.
 
-### Releasing a build locally
+#### Releasing a build locally
 
 **Publish** on the Publish & Releases page (`temcoDocs.publishRelease`) is not publishing to the site. It copies the last build's artifacts into the application's own storage, at `published/<project>/<version>` with a manifest, behind a confirmation that names the version, the destination and the file count. `temcoDocs.openPublished` opens that copy, `temcoDocs.servePublished` serves it and `temcoDocs.stopServing` stops it. Use it to hand a build to somebody, or to keep a version that will not change. Nothing is pushed anywhere.
 
-### Exporting
+#### Exporting
 
 **Export…** on **Publish & Releases**, or **Exports** in the Command Palette (`temcoDocs.export` — it has no button of its own in the activity bar), opens the Exports page, which tells you what you get before you get it. Every export writes into the project's `dist/`, and the notification offers *Show in Folder*.
 
@@ -491,7 +555,7 @@ If you already have a `docs/` folder, create the project with **From existing fi
 
 Nothing is uploaded. A page with very large pictures makes a very large single file, so export the site as a zip when the pictures matter more than the convenience.
 
-## When something else goes wrong
+### When something else goes wrong
 
 Each step names its own failure. These are the ones that are not about a step:
 
@@ -506,11 +570,11 @@ Each step names its own failure. These are the ones that are not about a step:
 
 The output explains itself: **View → Output → `Temco Docs`**. Every build, publish, export and generator decision is written there, with the path it used.
 
-## Appendix — every control, and its command
+### Appendix — every control, and its command
 
 Every control the platform puts on screen, grouped by where it lives. The command id beside each one runs the same action from the Command Palette (`Ctrl+Shift+P`). Every id here was checked against the manifests, so if a row is in this table, the command exists.
 
-### Projects (activity bar)
+#### Projects (activity bar)
 
 | Button | Where | Command |
 |---|---|---|
@@ -523,7 +587,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Build** (the project's own build) | right-click a project row | `temcoProjects.buildProject` |
 | **Stop Working on a Project** | right-click the *current* row | `temcoProjects.clearProject` |
 
-### Documentation (activity bar)
+#### Documentation (activity bar)
 
 | Button | Where | Command |
 |---|---|---|
@@ -553,7 +617,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Build Center** (row) | `Publish` view | `temcoDocs.builds` → opens the Build Center page |
 | **Publish & Releases** (row) | `Publish` view | `temcoDocs.releases` → opens the Publish & Releases page |
 
-### Editor (while a page is open)
+#### Editor (while a page is open)
 
 | Button | Where | Command |
 |---|---|---|
@@ -565,7 +629,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Open the source** (plain text) | editor title, ribbon `···` | `temcoEditor.openSource` |
 | **Temco Markdown** (whole menu) | editor right-click | submenu with every format verb |
 
-### The pages themselves
+#### The pages themselves
 
 | Button | On the page | Command |
 |---|---|---|
@@ -582,7 +646,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Open** (a release) | Publish & Releases → release rows | `temcoDocs.openPublished` |
 | **Stop Serving the Site** | palette | `temcoDocs.stopServing` |
 
-### The site
+#### The site
 
 | Button | On the page | Command |
 |---|---|---|
@@ -594,7 +658,7 @@ Every control the platform puts on screen, grouped by where it lives. The comman
 | **Publish** | Publishing | `temcoLearn.publish` |
 | **Publish Now** | Publishing | `temcoLearn.publishNow` |
 
-### Settings
+#### Settings
 
 | Button | On the page | Command |
 |---|---|---|

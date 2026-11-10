@@ -23,7 +23,7 @@
 //      a fragment of a registry entry, or a sketch with elisions, claims nothing and is left alone.
 //   5. **A fence is closed.** An odd number of ``` markers swallows the rest of the file.
 //   6. **A screenshot slot is numbered once.** `media/…/NN-name.png`, one per number, in order from 00.
-//   7. **Steps are sequential.** `## Step 1` … `## Step N`, with no gaps, in the guides that use that heading.
+//   7. **Steps are sequential.** `Step 1` … `Step N`, with no gaps, at whatever heading depth the guide uses.
 //
 // Each rule is then handed a document that breaks it, because a rule that catches nothing passes everything. Run by
 // `npm run test-temco`, or alone with `npm run test-temco-docs` (which is also part of `npm run check-temco`, so a
@@ -263,7 +263,7 @@ const inspect = (file: string, lines: string[]): string[] => {
 	// 7. steps are sequential
 	const steps: { step: number; line: number }[] = [];
 	lines.forEach((line, index) => {
-		const match = /^## Step (\d+)/.exec(line);
+		const match = /^#{2,4} Step (\d+)/.exec(line);
 		if (match !== null) {
 			steps.push({ step: Number(match[1]), line: index + 1 });
 		}
@@ -343,6 +343,20 @@ group.test('one step may show several pictures under one number, and a gap still
 		gap.some((text) => text.includes('screenshot slots are not numbered')),
 		'a gap went unnoticed because a number was repeated elsewhere'
 	);
+});
+
+group.test('steps are counted at whatever depth the guide puts them', () => {
+	// The walk sits under a part heading, so its steps are `###`. A rule that only saw `##` would count none of them and
+	// pass a guide with two Step 1s.
+	const nested = inspect(guide, ['## Part 3', '', '### Step 1', '', '### Step 1']);
+	assert.ok(
+		nested.some((text) => text.includes('steps are not sequential')),
+		`steps under a part heading were not counted: ${nested.join(' | ')}`
+	);
+
+	// Headings that merely begin with the word are not steps.
+	const notSteps = inspect(guide, ['### Step by step', '### Stepping through']);
+	assert.deepEqual(notSteps, [], `a heading that mentions steps was counted as one: ${notSteps.join(' | ')}`);
 });
 
 group.test('a slot becomes a picture only when the picture is there', () => {
