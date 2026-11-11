@@ -1,7 +1,7 @@
 name: Release
 
-# A tag is the release: pushing `v1.2.3` builds the installers for the three platforms and attaches them to a draft
-# GitHub Release named after the tag. Nothing is published until a person opens the draft and presses Publish.
+# A tag is the release: pushing `v1.2.3` builds the installer for Windows, the packages for Linux, and attaches them to
+# a draft GitHub Release named after the tag. Nothing is published until a person opens the draft and presses Publish.
 #
 # Why a tag and not a branch: a tag does not move, so a release can be rebuilt from exactly the source that shipped.
 # The tag must agree with `version` in package.json — the installer takes its version from there, not from the tag, and
@@ -13,6 +13,8 @@ name: Release
 #   2. git tag -a v<that version> -m "Temco Platform <that version>"
 #   3. git push origin v<that version>
 # To rebuild a tag that already exists, run this workflow by hand with its name.
+#
+# macOS arm64 is built only when asked for (`workflow_dispatch` with `macos` set to true): see the input's comment.
 
 on:
   push:
@@ -23,6 +25,14 @@ on:
       tag:
         description: 'Existing tag to build, e.g. v1.144.0'
         required: true
+      # Apple silicon is opt-in. This account has not been handed a `macos-15` runner on any of seven attempts — the
+      # job is cancelled at the queue's fifteen-minute limit with "The job was not acquired by Runner of type hosted"
+      # — while Windows and Linux have built every time. A tag therefore builds the two platforms that work and is
+      # released without waiting; set this to `true` when a runner is available and the arm64 zip is wanted too.
+      macos:
+        description: 'Also build the macOS arm64 package'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -44,6 +54,7 @@ jobs:
     outputs:
       tag: ${{ steps.check.outputs.tag }}
       version: ${{ steps.check.outputs.version }}
+      matrix: ${{ steps.platforms.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,12 +99,39 @@ jobs:
               ;;
           esac
 
+      # Which platforms this run builds, handed to `build` as its matrix. It is computed here rather than written out
+      # once so that one list of steps can serve two shapes: the two that always build, and those two plus macOS.
+      #
+      # The Linux build is pinned to 22.04: `vscode-linux-x64-prepare-deb` computes the package's shared-library
+      # dependencies with Chromium's vendored `dpkg-shlibdeps.pl`, which calls the *system* `Dpkg::Shlibs` Perl
+      # modules. Under dpkg 1.22 (Ubuntu 24.04, `ubuntu-latest`) that combination dies in `SymbolFile.pm` with
+      # "Can't use an undefined value as a HASH reference".
+      #
+      # `macos-15` is the Apple silicon image this repository asks for: `macos-14` (and every `-large`/`-xlarge`
+      # variant) is refused before a runner is assigned — "The configuration 'macos-14-arm64-us-default' is not
+      # supported" — and `macos-26` queues exactly like `macos-15`, so the newer image buys nothing.
+      - name: Decide which platforms this run builds
+        id: platforms
+        env:
+          WANT_MACOS: ${{ github.event.inputs.macos }}
+        run: |
+          set -euo pipefail
+          include='{"os":"windows-latest","label":"Windows x64","platform":"win32","arch":"x64"}'
+          include="$include"',{"os":"ubuntu-22.04","label":"Linux x64","platform":"linux","arch":"x64"}'
+          if [ "${WANT_MACOS:-false}" = "true" ]; then
+            include="$include"',{"os":"macos-15","label":"macOS arm64","platform":"darwin","arch":"arm64","optional":true}'
+          fi
+          echo "matrix={\"include\":[$include]}" >> "$GITHUB_OUTPUT"
+          echo "This run builds: $include"
+
   build:
     needs: guard
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
-    # `optional` marks a platform whose package is a bonus rather than a requirement: a queue that will not hand out
-    # its runner stops that job, not the release.
+    # `optional` marks a platform whose package is a bonus rather than a requirement: a job that fails does not fail the
+    # release. It cannot cover a job GitHub *cancels* while it waits for a runner that is never handed out — that ends
+    # the run as a failure anyway (run 42890122529) — which is why macOS is opt-in below and why the `release` job says
+    # outright that it may not be skipped.
     continue-on-error: ${{ matrix.optional == true }}
     timeout-minutes: 150
     env:
@@ -107,33 +145,10 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
     strategy:
       fail-fast: false
-      # The Linux build is pinned to 22.04 on purpose. `vscode-linux-x64-prepare-deb` computes the package's shared-library
-      # dependencies with Chromium's vendored `dpkg-shlibdeps.pl`, which calls the *system* `Dpkg::Shlibs` Perl modules.
-      # Under dpkg 1.22 (Ubuntu 24.04, `ubuntu-latest`) that combination dies in `SymbolFile.pm` with
-      # "Can't use an undefined value as a HASH reference", which is how the first Linux run that got that far failed.
-      matrix:
-        include:
-          - os: windows-latest
-            label: Windows x64
-            platform: win32
-            arch: x64
-          - os: ubuntu-22.04
-            label: Linux x64
-            platform: linux
-            arch: x64
-          # `macos-15` is the Apple silicon image this repository can get: `macos-14` (and every `-large` or `-xlarge`
-          # variant) is refused before a runner is assigned — "The configuration 'macos-14-arm64-us-default' is not
-          # supported" — and `macos-26` queues exactly like `macos-15`, so the newer image buys nothing.
-          #
-          # `optional` is why this entry differs from the other two: five macOS attempts in a row (macos-15 four
-          # times, macos-26 once) were cancelled at the fifteen-minute mark with "The job was not acquired by Runner of
-          # type hosted" and no runner at all, while Windows and Linux built every time. A missing arm64 package is
-          # worth a line in the release notes; it is not worth blocking the release.
-          - os: macos-15
-            label: macOS arm64
-            platform: darwin
-            arch: arm64
-            optional: true
+      # One entry per platform, decided by `guard` (see "Decide which platforms this run builds"): a tag builds
+      # Windows and Linux, and a run asked for macOS builds those and macOS. The steps below are the same either way,
+      # and each one that is platform-specific says which platform it is for.
+      matrix: ${{ fromJSON(needs.guard.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -327,11 +342,37 @@ jobs:
     needs: [guard, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Not left to the `needs` default, on purpose. A job that `needs` another job is skipped when that job fails **or
+    # is cancelled**, and a macOS job cancelled while it waits for a runner it never gets is exactly that: run
+    # 42890122529 built Windows and Linux, then skipped this job and published nothing — so a tag produced no release,
+    # and `continue-on-error` on the build job did not change that, because cancellation is not failure.
+    #
+    # Running anyway is safe because the step below refuses to publish when a package a release must have is missing:
+    # a broken Windows or Linux build still fails here, by name, before a draft is touched.
+    if: ${{ !cancelled() && needs.guard.result == 'success' }}
     steps:
+      # Whatever the build produced, and nothing invented: when a platform never ran its artifact is simply absent.
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: release
           merge-multiple: true
+
+      - name: Check the packages a release must have
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          missing=''
+          add() { missing="${missing}${missing:+, }$1"; }
+          ls release/TemcoPlatform-win32-x64-*.zip >/dev/null 2>&1 || add 'Windows zip'
+          ls release/*.exe                      >/dev/null 2>&1 || add 'Windows installer'
+          ls release/*amd64.deb                 >/dev/null 2>&1 || add 'Linux .deb'
+          ls release/temco-platform-linux-x64-*.tar.gz >/dev/null 2>&1 || add 'Linux tarball'
+          if [ -n "$missing" ]; then
+            echo "::error::Nothing was published: the build produced no $missing. Fix that platform and run this again."
+            exit 1
+          fi
+          ls -l release
 
       # The notes say what is actually in the draft, rather than what the plan was: an optional platform that never got
       # a runner would otherwise leave a release that silently lacks its arm64 package.
@@ -343,8 +384,9 @@ jobs:
             echo "macOS arm64 is included." >> release/PLATFORMS.md
           else
             echo "" > release/PLATFORMS.md
-            echo "**macOS arm64 is not in this build.** Its job was still waiting for a GitHub runner when the other" >> release/PLATFORMS.md
-            echo "platforms finished. Re-run the failed macOS job, then this job, and the zip is added here." >> release/PLATFORMS.md
+            echo "**macOS arm64 is not in this build.** Only Windows and Linux are built by a tag; the Apple silicon" >> release/PLATFORMS.md
+            echo "package is made when the Release workflow is run by hand with \`macos\` set to true. Run it and this" >> release/PLATFORMS.md
+            echo "release gains the zip — a tag does not stop for a runner that has not been handed out." >> release/PLATFORMS.md
           fi
           cat release/PLATFORMS.md
 
