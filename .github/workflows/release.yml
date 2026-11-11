@@ -376,17 +376,23 @@ jobs:
 
       # The notes say what is actually in the draft, rather than what the plan was: an optional platform that never got
       # a runner would otherwise leave a release that silently lacks its arm64 package.
+      # What the notes say is what is in the folder: the arm64 line belongs to the platform note rather than to the list
+      # of files, because a tag builds the two platforms that get runners and the line would otherwise name a file the
+      # release does not have.
       - name: Note which platforms are in this build
         run: |
           set -euo pipefail
+          version="${{ needs.guard.outputs.version }}"
+          echo "" > release/PLATFORMS.md
+          echo "## Platforms" >> release/PLATFORMS.md
           if ls release/TemcoPlatform-darwin-arm64-*.zip >/dev/null 2>&1; then
-            echo "" > release/PLATFORMS.md
-            echo "macOS arm64 is included." >> release/PLATFORMS.md
+            echo "" >> release/PLATFORMS.md
+            echo "- \`TemcoPlatform-darwin-arm64-$version.zip\` — the application for Apple silicon, as a zip of the \`.app\`" >> release/PLATFORMS.md
           else
-            echo "" > release/PLATFORMS.md
-            echo "**macOS arm64 is not in this build.** Only Windows and Linux are built by a tag; the Apple silicon" >> release/PLATFORMS.md
-            echo "package is made when the Release workflow is run by hand with \`macos\` set to true. Run it and this" >> release/PLATFORMS.md
-            echo "release gains the zip — a tag does not stop for a runner that has not been handed out." >> release/PLATFORMS.md
+            echo "" >> release/PLATFORMS.md
+            echo "Windows and Linux are here. **macOS arm64 is not in this build:** only those two are built by a tag, and" >> release/PLATFORMS.md
+            echo "the Apple silicon package is made when the Release workflow is run by hand with \`macos\` set to true." >> release/PLATFORMS.md
+            echo "A tag does not wait for a runner that has not been handed out." >> release/PLATFORMS.md
           fi
           cat release/PLATFORMS.md
 
@@ -400,7 +406,6 @@ jobs:
           - `TemcoPlatform-win32-x64-<version>.zip` — run `Temco Platform.exe` from the unpacked folder
           - a Windows installer `.exe` — per-user install, no admin rights
           - `temco-platform_<version>_amd64.deb` and `temco-platform-linux-x64-<version>.tar.gz`
-          - `TemcoPlatform-darwin-arm64-<version>.zip` — Apple silicon only
           - `temco-mcp-<platform>.tar.gz` — the assistant's tool server, per platform; the application downloads
             and verifies the one for its own machine the first time the assistant needs it
 
