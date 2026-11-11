@@ -5,7 +5,7 @@
 // own: **nothing is ever written to the origin, and nothing is ever pushed.**
 //
 //   <root>/source/<source>/        the clone — one branch, full history, one copy per repository
-//   <root>/<project>/              what we make for a project: drafts, notes. Files, not state.
+//   <root>/projects/<project>/     what we make for a project: drafts, notes. Files, not state.
 //
 // A clone is a copy of a **repository**, not a part of a project: the same repository cited by three projects is one
 // copy here, and removing a project never deletes code. What a project owns is its own folder — the drafts and notes
@@ -40,14 +40,17 @@ export function workRoot(): string {
 }
 
 /**
- * Where a project's own folder is made: `projectsFolder` when it is set, the working area otherwise.
+ * Where a project's own folder is made: `projectsFolder` when it is set, `<working area>/projects` otherwise.
  *
  * The two are separate questions — a clone is shared by every project that cites it, and a project is what one person
- * made — so the folder they live in can be too. Empty keeps the older arrangement, where both sat side by side.
+ * made — so the folder they live in is too: keeping projects in `projects/` leaves `source/` as the only thing beside
+ * them, so a clone and a project can never be mistaken for each other.
  */
 export function projectsRoot(): string {
   const configured = vscode.workspace.getConfiguration('temcoRepositories').get<string>('projectsFolder');
-  return configured !== undefined && configured.trim().length > 0 ? expandHome(configured.trim()) : workRoot();
+  return configured !== undefined && configured.trim().length > 0
+    ? expandHome(configured.trim())
+    : path.join(workRoot(), 'projects');
 }
 
 /** The folder one project owns: what we made for it. Clones do not live here — a repository is not a project's. */

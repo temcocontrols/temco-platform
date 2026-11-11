@@ -15,7 +15,9 @@
 
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { createRequire, Module } from 'node:module';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { suite, standalone } from './harness.mts';
@@ -82,6 +84,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean): unk
 interface ReadModule {
 	tokenOf(context: { secrets: { get(key: string): Promise<string | undefined> } }): Promise<string | undefined>;
 	coordinatesOf(remoteUrl: string): { owner: string; repo: string } | undefined;
+	readLocal(folder: string): Promise<{ pages: unknown[]; note?: string; gone?: boolean; registryPath?: string }>;
 }
 
 const read = load(join(out('temco-repositories'), 'read.js')) as ReadModule;
@@ -150,6 +153,33 @@ test('an address that is not a GitHub repository is refused, not guessed at', ()
 	}
 });
 
+// ---------- a folder that is gone ----------
+//
+// A project is a row in the catalog, and its folder is wherever it was pointed. Move the folder and the row outlives
+// it — which is how a moved project read as "no registry, so material" and emptied itself. The two answers are kept
+// apart: one names the folder that is not there, the other says the folder has no registry of its own.
+
+test('a folder that is not there says so, and names the folder', async () => {
+	const gone = join(tmpdir(), `temco-not-here-${process.pid}-${Date.now()}`);
+	const found = await read.readLocal(gone);
+	assert.equal(found.gone, true, 'a moved folder is not a folder holding no registry');
+	assert.deepEqual(found.pages, []);
+	assert.ok((found.note ?? '').includes(gone), found.note);
+	assert.ok((found.note ?? '').includes('is not there any more'), found.note);
+});
+
+test('a folder that is there without a registry is material, not a missing folder', async () => {
+	const material = await mkdtemp(join(tmpdir(), 'temco-material-'));
+	try {
+		const found = await read.readLocal(material);
+		assert.equal(found.gone, undefined);
+		assert.deepEqual(found.pages, []);
+		assert.ok((found.note ?? '').includes('no docs/help/registry.json in that folder'), found.note);
+	} finally {
+		await rm(material, { recursive: true, force: true });
+	}
+});
+
 // ---------- the cases ----------
 
-await standalone(import.meta.url, group.cases, 'the token a clone uses, and the address it reads');
+await standalone(import.meta.url, group.cases, 'the token a clone uses, the address it reads, and a folder that is gone');

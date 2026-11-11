@@ -335,16 +335,20 @@ async function readSource(
     output.appendLine('');
     output.appendLine(`Reading ${source.name} (${source.kind}${source.branch ? ` @ ${source.branch}` : ''})`);
 
-    const found =
+    const found: { pages: PageInput[]; note?: string; gone?: boolean; registryPath?: string } =
       source.kind === 'archive'
         ? { pages: [] as PageInput[], note: 'an archive is kept for reference; nothing is read from it yet' }
         : source.path !== undefined
           ? await readLocal(source.path)
           : await readRemote(context, source.remoteUrl ?? '', source.branch, source.defaultBranch);
 
-    catalog.replacePages(source.id, found.pages);
+    // A folder that is gone is not a folder that holds no pages: what was read from it the last time stays in the
+    // catalog, so a project whose folder is moved — or is on a drive that is not mounted — does not empty itself.
+    if (found.gone !== true) {
+      catalog.replacePages(source.id, found.pages);
+    }
     catalog.setSourceState(slug, {
-      pages: found.pages.length,
+      pages: found.gone === true ? undefined : found.pages.length,
       state: found.note ?? `${found.pages.length} pages`,
       registryPath: found.registryPath,
     });
@@ -357,8 +361,17 @@ async function readSource(
     refresh();
 
     if (!quiet) {
-      // Two things can be worth saying after a read, and neither is an error.
-      if (found.pages.length === 0 && found.note !== undefined && /no docs\/help\/registry\.json/.test(found.note)) {
+      // Three things can be worth saying after a read, and none of them is an error.
+      if (found.gone === true) {
+        // The one case where the source itself needs an answer: where the folder went.
+        const answer = await vscode.window.showWarningMessage(
+          `Temco Repositories: ${source.name} — ${found.note}. Point the source at its new place, or forget it.`,
+          'The Repositories'
+        );
+        if (answer !== undefined) {
+          void vscode.commands.executeCommand('temcoRepositories.page');
+        }
+      } else if (found.pages.length === 0 && found.note !== undefined && /no docs\/help\/registry\.json/.test(found.note)) {
         // A source without a registry is not a broken one: it is material rather than pages — a code
         // repository, which is exactly what a new page can be written from. Say which it is.
         void vscode.window.showInformationMessage(
@@ -393,12 +406,29 @@ async function readSource(
   }
 }
 
-/** A folder on this machine: its registry is a file, so read the file. */
-async function readLocal(folder: string): Promise<{
+/**
+ * A folder on this machine, read where it lies: its registry is a file, so read the file.
+ *
+ * Exported because the difference it draws — a folder that is gone against a folder that holds no registry — is the
+ * rule the platform got wrong once, and a rule worth pinning.
+ */
+export async function readLocal(folder: string): Promise<{
   pages: PageInput[];
   note?: string;
+  /** The folder itself is not there, as opposed to being there and holding no registry. */
+  gone?: boolean;
   registryPath?: string;
 }> {
+  // A folder that has been moved or renamed reads exactly like one that is there and holds no registry, and the
+  // two need different answers: one is a project that has to be pointed at its new place, the other is material.
+  const there = await fs.stat(folder).then((stat) => stat.isDirectory(), () => false);
+  if (!there) {
+    return {
+      pages: [],
+      note: `the folder ${folder} is not there any more — it may have been moved or renamed`,
+      gone: true,
+    };
+  }
   const registry = path.join(folder, ...REGISTRY_TAIL);
   let text: string;
   try {

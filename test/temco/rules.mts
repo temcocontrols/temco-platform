@@ -127,19 +127,19 @@ const markdown = (title: string, body = 'Body.'): string => `---\ntitle: "${titl
 
 // ---------- where a project's folder goes ----------
 
-test('with nothing set, work and projects share a visible folder in the home directory', async () => {
+test('with nothing set, clones live under the home directory and projects under its projects folder', async () => {
 	settings = {};
 	workspaceFolders = [];
 	const home = join(homedir(), 'temco');
 	assert.equal(place.workRoot(), home);
-	assert.equal(place.projectsRoot(), home);
-	assert.equal(place.projectFolder('T3000 Platform'), join(home, 't3000-platform'));
+	assert.equal(place.projectsRoot(), join(home, 'projects'));
+	assert.equal(place.projectFolder('T3000 Platform'), join(home, 'projects', 't3000-platform'));
 });
 
 test('the working area setting is the root, and it takes ~ for the home directory', async () => {
 	settings = { workspaceFolder: '~/docs' };
 	assert.equal(place.workRoot(), join(homedir(), 'docs'));
-	assert.equal(place.projectsRoot(), join(homedir(), 'docs'));
+	assert.equal(place.projectsRoot(), join(homedir(), 'docs', 'projects'));
 });
 
 test('a projects folder of its own moves the projects and leaves the clones where they were', async () => {

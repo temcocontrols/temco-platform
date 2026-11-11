@@ -69,8 +69,8 @@ export async function findBuilds(): Promise<Build[]> {
  * outside both of those places falls back to its title.
  */
 function idOf(folder: string, title: string): string {
-	// The clones are asked first: with no `projectsFolder` set the projects folder *is* the working area, so
-	// `<workRoot>/source` would otherwise read as a project called `source` and every clone would collide under one id.
+	// The clones are asked first: a projects folder set to the working area itself makes `<workRoot>/source` sit under
+	// both roots, and it would otherwise read as a project called `source`, colliding every clone under one id.
 	const clone = firstFolder(path.join(workRoot(), 'source'), folder);
 	if (clone !== undefined) {
 		return slugOf(clone);

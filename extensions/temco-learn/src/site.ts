@@ -86,14 +86,14 @@ export function workRoot(): string {
 }
 
 /**
- * Where project folders are made: `temcoRepositories.projectsFolder` when it is set, the working area otherwise.
+ * Where project folders are made: `temcoRepositories.projectsFolder` when it is set, `<working area>/projects` otherwise.
  *
  * The rule `temco-repositories` owns (`projectFolder()`); it is spelled again here because the build search walks the
- * folder a project's build was written into. Empty means the working area, which is where projects lived before the
- * setting existed.
+ * folder a project's build was written into. Empty means the working area's `projects/`, and a folder made beside the
+ * clones before that was the arrangement is still found — the search looks in both.
  */
 export function projectsRoot(): string {
-	return expand(vscode.workspace.getConfiguration('temcoRepositories').get<string>('projectsFolder'), workRoot());
+	return expand(vscode.workspace.getConfiguration('temcoRepositories').get<string>('projectsFolder'), path.join(workRoot(), 'projects'));
 }
 
 /** A configured folder, or `fallback` when it is empty: `~` and `~/x` mean the home folder. */
