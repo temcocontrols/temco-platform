@@ -1293,6 +1293,11 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
     void refresh();
     docsPages.refreshOpen();
   }));
+  // The project being worked on is the other half of that, and it changes without the catalog changing at all: the
+  // store's selection is what decides which project's pages the tree holds, so switching project has to rebuild the
+  // tree. Without this the Pages view kept the rows of the project selected before — clicking a project looked like
+  // it changed only the page in front, and the pages it opened were the previous project's.
+  context.subscriptions.push(selection.onDidChange(() => void refresh()));
   // Reading a source and the working area that holds a clone of one are the repositories module's: its own
   // activation registers them, and its own page shows what came of them. This module names it in its own
   // `extensionDependencies`, so its commands are there whenever a row here points at one.
@@ -1762,46 +1767,63 @@ function focusView(id: string): void {
  */
 async function pickProject(context: vscode.ExtensionContext): Promise<void> {
   let catalog: Catalog | undefined;
-  let projects: { name: string; slug: string; version: string }[] = [];
+  let projects: { name: string; slug: string; version?: string; sources: number; pages: number }[] = [];
   try {
     catalog = await Catalog.open(context);
-    projects = catalog.documents().map((row) => ({ name: row.name, slug: row.slug, version: row.version ?? '' }));
+    const store = catalog;
+    projects = store.documents().map((row) => ({
+      name: row.name,
+      slug: row.slug,
+      version: row.version,
+      sources: row.sources,
+      pages: store.documentPages(row.slug).length,
+    }));
   } catch {
     void vscode.window.showWarningMessage('Temco Docs: the project list could not be read.');
     return;
   } finally {
     catalog?.close();
   }
-  if (projects.length === 0) {
-    const answer = await vscode.window.showInformationMessage(
-      'Temco Docs: there is no project yet. A project is what you manage — create one, then give it a source.',
-      'Create a Project'
-    );
-    if (answer === 'Create a Project') {
-      await vscode.commands.executeCommand('temcoProjects.newProject');
-    }
-    return;
-  }
   const current = selection.project();
-  // A picker with one entry cannot pick anything: say which project this is and offer the way to a second one.
-  if (projects.length === 1) {
-    const only = projects[0];
-    const answer = await vscode.window.showInformationMessage(
-      `Temco Docs: ${only.name} is the only project in this window.`,
-      'Create a Project'
+
+  // A control in the title bar that opens a list has to open a list. With nothing recorded, the list is the one act
+  // there is — a modal that says "there is no project" is a button that answers its own question.
+  if (projects.length === 0) {
+    const create = await vscode.window.showQuickPick(
+      [
+        {
+          label: '$(add) Create a Project…',
+          detail: 'A project is what you manage — create one, then give it a source.',
+          create: true,
+        },
+      ],
+      { title: 'Switch Project', placeHolder: 'No project yet' }
     );
-    if (answer === 'Create a Project') {
+    if (create !== undefined) {
       await vscode.commands.executeCommand('temcoProjects.newProject');
     }
     return;
   }
+
+  // The row says what decides the choice: which project this is, its version, and how much is in it. A picker that
+  // lists names alone makes two projects look like two words.
   const pick = await vscode.window.showQuickPick(
     projects.map((project) => ({
       label: project.slug === current ? `$(check) ${project.name}` : project.name,
-      description: project.version,
+      description: [
+        project.version === undefined || project.version.length === 0 ? 'no version' : `v${project.version}`,
+        `${project.sources} source${project.sources === 1 ? '' : 's'}`,
+        `${project.pages} page${project.pages === 1 ? '' : 's'}`,
+      ].join(' · '),
       slug: project.slug,
     })),
-    { title: 'Switch Project', placeHolder: 'Choose a project to work on' }
+    {
+      title: 'Switch Project',
+      placeHolder:
+        current === undefined
+          ? 'Choose a project to work on'
+          : `Choose a project to work on — now on ${projects.find((project) => project.slug === current)?.name ?? current}`,
+    }
   );
   if (pick !== undefined) {
     await vscode.commands.executeCommand('temcoDocs.selectProject', pick.slug);

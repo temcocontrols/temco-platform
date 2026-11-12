@@ -105,7 +105,7 @@
       {
         "command": "temcoDocs.switchProject",
         "title": "Switch Project…",
-        "icon": "$(folder)"
+        "icon": "$(arrow-swap)"
       },
       {
         "command": "temcoDocs.removeProject",
@@ -999,11 +999,6 @@
           "group": "5_view@0"
         },
         {
-          "command": "temcoDocs.switchProject",
-          "when": "view == temcoDocs.pages",
-          "group": "5_view@1"
-        },
-        {
           "command": "temcoDocs.newPage",
           "when": "view == temcoDocs.pages",
           "group": "navigation@0"
@@ -1017,6 +1012,11 @@
           "command": "temcoDocs.refresh",
           "when": "view == temcoDocs.pages",
           "group": "navigation@2"
+        },
+        {
+          "command": "temcoDocs.switchProject",
+          "when": "view == temcoDocs.pages",
+          "group": "navigation@3"
         },
         {
           "command": "temcoDocs.createPage",

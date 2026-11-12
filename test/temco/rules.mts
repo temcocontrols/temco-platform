@@ -19,7 +19,7 @@
 // Needs `out/`, so compile first (`npm run test-temco` does). Run from the repository root.
 
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire, Module } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -252,4 +252,35 @@ test('a folder with no index.html is not a build', async () => {
 	}
 });
 
-await standalone(import.meta.url, group.cases, 'where a folder goes, and which project a build belongs to');
+// ---------- the shape of a view's title bar ----------
+//
+// A view title holds two kinds of entry: the `navigation` group, which the window draws as icons, and every other
+// group, which it folds into the `...` menu. One command in both is two controls for one act — and it is how a button
+// that was meant to be promoted out of the overflow menu stayed in it as well, which is invisible in a review diff and
+// obvious in a screenshot.
+test('no view title holds the same command twice, so an icon and its menu entry cannot both exist', () => {
+	const doubled: string[] = [];
+	for (const folder of readdirSync(join(here, 'extensions'))) {
+		if (!folder.startsWith('temco-')) {
+			continue;
+		}
+		const manifest = join(here, 'extensions', folder, 'package.json');
+		if (!existsSync(manifest)) {
+			continue;
+		}
+		const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as {
+			contributes?: { menus?: { 'view/title'?: { command?: string; when?: string }[] } };
+		};
+		const seen = new Set<string>();
+		for (const item of parsed.contributes?.menus?.['view/title'] ?? []) {
+			const key = `${item.when ?? ''}|${item.command ?? ''}`;
+			if (seen.has(key)) {
+				doubled.push(`${folder}: ${item.command} twice for "${item.when}"`);
+			}
+			seen.add(key);
+		}
+	}
+	assert.deepEqual(doubled, []);
+});
+
+await standalone(import.meta.url, group.cases, 'where a folder goes, which project a build belongs to, and a title bar without twins');

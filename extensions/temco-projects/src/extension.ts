@@ -41,6 +41,11 @@ export function activate(context: vscode.ExtensionContext): TemcoProjectsApi {
 	// Building a project's outputs, invoked in the source repository that owns the script.
 	registerProjectBuildCommands(context, output);
 
+	// Which project is being worked on changes without the catalog changing, and the list says so on every row
+	// (`· current`, the chevron that is already open). A row click sets it, so the list has to be told: otherwise the
+	// tick stayed on the project that was selected before, and the header went on naming it.
+	context.subscriptions.push(selection.onDidChange(() => projects.redraw()));
+
 	// S1: a window that is not working on a project and has no tab open has nothing to look at, so the list of
 	// projects comes forward — the one place a project is chosen. Both halves of the condition matter: a window
 	// restored with tabs keeps them, and a window that is on a project keeps that tab, so this happens on a first

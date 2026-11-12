@@ -699,6 +699,7 @@ The buttons you will go looking for, grouped by where they live: the activity ba
 | **Add a Source** | `Pages` title 🔌 | `temcoProjects.addSource` |
 | **Capture a Screenshot** | `Pages` title 📷 | `temcoDocs.captureImage` |
 | **Paste Screenshot** | `Pages` title 📋 | `temcoDocs.pasteImage` |
+| **Switch Project…** | `Pages` title `⇄` | `temcoDocs.switchProject` |
 | **Refresh** | every view title ⟳ | `temcoDocs.refresh` |
 | **Open the Page** | `Pages` `…` / page row | `temcoDocs.openPage` |
 | **Validate** | `Pages` `…` | `temcoDocs.validate` |
