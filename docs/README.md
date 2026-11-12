@@ -24,7 +24,7 @@ docs/
 │  ├─ introduction.md      where a new user starts: the whole app, the publish flow first
 │  ├─ catalog.md           the tables the store keeps, and every setting a module declares
 │  ├─ platform-design.md   the engineering design: what the platform is and why
-│  ├─ design/              two specifications: the assistant's MCP server, the authoring and MSDN target
+│  ├─ design/              four specifications: the assistant's MCP server, the authoring and MSDN target, support intake from T3000 and its engineering
 │  ├─ modules/
 │  │  ├─ README.md         the module register: what each module owns
 │  │  └─ temco-docs/       the documentation module
