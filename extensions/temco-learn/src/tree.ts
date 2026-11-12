@@ -49,10 +49,20 @@ const plural = (count: number, one: string, many?: string): string =>
 function row(
 	label: string,
 	icon: string | vscode.ThemeIcon,
-	options: { description?: string; command?: vscode.Command; tooltip?: string } = {}
+	options: {
+		description?: string;
+		command?: vscode.Command;
+		tooltip?: string;
+		/** A row that holds rows: `None` for a leaf, `Collapsed` for one with something under it. */
+		state?: vscode.TreeItemCollapsibleState;
+		kids?: Row[];
+	} = {}
 ): Row {
-	const item: Row = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+	const item: Row = new vscode.TreeItem(label, options.state ?? vscode.TreeItemCollapsibleState.None);
 	item.iconPath = typeof icon === 'string' ? new vscode.ThemeIcon(icon) : icon;
+	if (options.kids !== undefined) {
+		item.kids = options.kids;
+	}
 	if (options.description !== undefined) {
 		item.description = options.description;
 	}
@@ -328,13 +338,13 @@ export class BrowseTree implements vscode.TreeDataProvider<Row> {
 	}
 
 	/**
-	 * The projects the site serves, at their newest version, one level and one row each: `T3000 · 13.0`.
+	 * The projects the site serves, one row each: `T3000 · 13.0`.
 	 *
-	 * Projects used to be a group to expand before the thing you wanted, and every version was a row —a product with twenty
-	 * versions turned this into a scroll bar. The newest version is the one a person wants nine times in ten, and the site's
-	 * own list holds the rest, so the panel says what the site serves and stops there.
-	 */	/** The projects the site serves, at their newest version, one level and one row each: `T3000 · 13.0`. */
-	private library(data: Snapshot): Row {
+	 * Projects used to be a group to expand before the thing you wanted, and every version was a flat row — a product with
+	 * twenty versions turned this into a scroll bar. The row now carries the newest version in its label and *is* the group:
+	 * closed, it says what the site serves; opened, it lists every version the site has, newest first. A project with one
+	 * version has nothing under it, so it gets no arrow.
+	 */	private library(data: Snapshot): Row {
 		const rows = this.libraryRows(data);
 		const kids =
 			rows.length === 0
@@ -347,7 +357,7 @@ export class BrowseTree implements vscode.TreeDataProvider<Row> {
 					]
 				: rows;
 		const entry = group('Library', 'library', {
-			tooltip: 'Every project the site serves, at its newest version —the site lists the older ones',
+			tooltip: 'Every project the site serves; open one for the versions it has',
 			kids,
 			state: vscode.TreeItemCollapsibleState.Expanded
 		});
@@ -356,19 +366,45 @@ export class BrowseTree implements vscode.TreeDataProvider<Row> {
 		return entry;
 	}
 
-	/** One project, at its newest version, opening that page on the site. The catalog writes the versions newest first. */
+	/**
+	 * One project, at its newest version, and its versions underneath.
+	 *
+	 * The catalog writes the versions newest first, so the row and its first child are the same page: clicking the project
+	 * opens what a person wants nine times in ten, and opening it shows the rest without leaving the panel.
+	 */
 	private libraryRows(data: Snapshot): Row[] {
 		return data.site.projects.map((project) => {
 			const newest = project.versions[0];
 			const name = shortName(project.title);
 			const entry = row(newest === undefined ? name : `${name} · ${newest.version}`, 'library', {
-				tooltip: `Read ${name}${newest === undefined ? '' : ` ${newest.version}`} on the site —every earlier version is in the site's own list`,
+				tooltip: `Read ${name}${newest === undefined ? '' : ` ${newest.version}`} on the site`,
+				state:
+					project.versions.length > 1 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
 				command: {
 					command: 'temcoLearn.site.preview',
 					title: name,
 					arguments: [newest === undefined ? { project: project.id } : { project: project.id, version: newest.version }]
-				}
+				},
+				// One version needs no second row: the project row already opens it, so it carries no arrow and no children.
+				kids:
+					project.versions.length > 1
+						? project.versions.map((version, index) =>
+								row(version.version, index === 0 ? 'versions' : 'history', {
+									description: index === 0 ? 'newest' : plural(version.pages.length, 'page'),
+									tooltip: `Read ${name} ${version.version} on the site — ${plural(version.pages.length, 'page')}`,
+									command: {
+										command: 'temcoLearn.site.preview',
+										title: `${name} ${version.version}`,
+										arguments: [{ project: project.id, version: version.version }]
+									}
+								})
+							)
+						: []
 			});
+			for (const version of entry.kids ?? []) {
+				version.id = `${'temcoLearn.browse.project.' + project.id}.${version.label}`;
+				version.contextValue = 'temcoLearn.version';
+			}
 			entry.id = 'temcoLearn.browse.project.' + project.id;
 			entry.contextValue = 'temcoLearn.project';
 			return entry;

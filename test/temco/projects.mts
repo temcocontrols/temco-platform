@@ -26,7 +26,7 @@ const load = createRequire(import.meta.url);
 const out = (...parts: string[]): string => join(here, 'extensions', ...parts, 'out');
 
 if (!existsSync(out('temco-projects'))) {
-	throw new Error('the extensions are not compiled — run `npm run test-temco`, which compiles before it tests.');
+	throw new Error('the extensions are not compiled 鈥?run `npm run test-temco`, which compiles before it tests.');
 }
 
 interface FakeUri {
@@ -38,7 +38,7 @@ const uriOf = (fsPath: string): FakeUri => ({ fsPath });
 /** What the editor is told; `settings` is what a person's configuration would say. */
 let settings: Record<string, string | undefined> = {};
 
-/** The store's own outputs list, as the fake store publishes it — the compiled module, never a copy of it. */
+/** The store's own outputs list, as the fake store publishes it 鈥?the compiled module, never a copy of it. */
 const outputsModule = load(join(out('temco-store'), 'catalog', 'outputs.js')) as Record<string, unknown>;
 const outputs = {
 	all: outputsModule.PROJECT_OUTPUTS,
@@ -52,7 +52,7 @@ const outputs = {
 /**
  * A stand-in for the other modules' exports.
  *
- * `projectFlow` reads the store, the repositories and the UI module at load time — each of them refuses to work without
+ * `projectFlow` reads the store, the repositories and the UI module at load time 鈥?each of them refuses to work without
  * the others, which is the point of the rule that modules never import each other's source. The rules in this file call
  * none of them, so the modules are present and idle: anything asked of them answers `undefined`, and `offeredScripts`
  * answers an empty list so a read of it at load time does not throw.
@@ -157,6 +157,10 @@ interface Scan {
 		name: string;
 		version?: string;
 	}[];
+	correctionFor(
+		held: { name: string; version?: string },
+		project: { folder: string; slug: string; name: string; version?: string }
+	): { name: string; version?: string } | undefined;
 	PROJECT_MARKER: string;
 }
 
@@ -328,6 +332,37 @@ test('a folder is a project when it carries the registry, and the scan names it 
 
 test('a projects folder that is not there yet is a first run, not a failure', () => {
 	assert.deepEqual(scan.findProjects(join(tmpdir(), 'temco-scan-does-not-exist'), storeNames.slugOf), []);
+});
+
+// ---------- what a catalog row should say ----------
+//
+// A row is written by the create form, and a project made `blank` and then filled in keeps the version the form invented
+// (`1.0`) while its own `package.json` says `2026.01`. Findings them again is what corrects it 鈥?and the correction is
+// what the folder can answer for, not a re-creation: no manifest, no opinion.
+test('a row follows its folder\'s manifest, and a folder with no manifest corrects nothing', () => {
+	const found = (name: string, version?: string) =>
+		({ slug: storeNames.slugOf(name), name, version, folder: 'C:/Temco/projects/' + storeNames.slugOf(name) });
+
+	assert.deepEqual(
+		scan.correctionFor({ name: 'T3000', version: '1.0' }, found('T3000', '2026.01')),
+		{ name: 'T3000', version: '2026.01' },
+		'a version the manifest contradicts is not corrected'
+	);
+	assert.deepEqual(
+		scan.correctionFor({ name: 'tstat8', version: '1.0' }, found('TStat8')),
+		{ name: 'TStat8', version: '1.0' },
+		'a manifest with no version clears the one the catalog had'
+	);
+	assert.equal(
+		scan.correctionFor({ name: 'T3000', version: '2026.01' }, found('T3000', '2026.01')),
+		undefined,
+		'a row that already agrees is written again'
+	);
+	assert.equal(
+		scan.correctionFor({ name: 'T3000' }, found('T3000')),
+		undefined,
+		'a project the catalog knows and the folder cannot improve is rewritten'
+	);
 });
 
 // ---------- the cases ----------

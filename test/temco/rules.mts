@@ -101,6 +101,9 @@ interface Found {
 const place = load(join(out('temco-repositories'), 'workarea.js')) as Place;
 const builds = load(join(out('temco-learn'), 'builds.js')) as { findBuilds(): Promise<Found[]> };
 const pageAssets = load(join(out('temco-docs'), 'pageAssets.js')) as { pageRoots(pageFsPath: string): readonly string[] };
+const repo = load(join(out('temco-learn'), 'siteRepo.js')) as {
+	pageUrl(base: string, project?: string, version?: string, href?: string): string;
+};
 const facts = load(join(out('temco-learn'), 'siteFacts.js')) as {
 	classifyChanges(status: string, numstat: string): { code: string; path: string; untracked: boolean; kind: string }[];
 	discardOf(changes: readonly { path: string; untracked: boolean }[]): { restore: string[]; remove: string[] };
@@ -321,6 +324,29 @@ test('a build under a projects folder inside the working area is one build, not 
 	} finally {
 		rmSync(world.keep, { recursive: true, force: true });
 	}
+});
+
+// ---------- the address of a page on the site ----------
+//
+// The site routes on the path (`/t3000/2026.01/control/inputs`) and answers a deep address from a bundled `404.html`. The
+// module used to build a fragment (`/#/t3000/1.0`), which the site stopped reading when it moved from hash routing: every
+// address it opened was the site's home, so a row in the library looked like a project that was not on the site.
+test('a page address is a path the site routes, never a fragment', () => {
+	assert.deepEqual(
+		[
+			repo.pageUrl('http://localhost:1025/', 't3000', '2026.01', 'control/inputs'),
+			repo.pageUrl('http://localhost:1025/', 'temco-platform', '1.0'),
+			repo.pageUrl('https://temcocontrols.github.io/temco-learn/', 't3000', '2026.01', 'index'),
+			repo.pageUrl('http://localhost:1025/')
+		],
+		[
+			'http://localhost:1025/t3000/2026.01/control/inputs',
+			'http://localhost:1025/temco-platform/1.0',
+			'https://temcocontrols.github.io/temco-learn/t3000/2026.01/index',
+			'http://localhost:1025/'
+		],
+		'a nested page keeps its slashes, a project keeps the mount point, and the site itself is still its own address'
+	);
 });
 
 // ---------- what a discard may do, and to what ----------

@@ -65,6 +65,8 @@ The projects on this machine, and the work waiting on them.
 - **Projects** — one row per project. The row opens that project.
 - **What needs doing** — what is unfinished: a screenshot with no page yet, a page the code has changed since, a page nobody has reviewed. A row runs the command that deals with it.
 
+The list is the **catalog**, not the folder: a project appears when the catalog has a row for it. A folder that exists on disk but not in the catalog is named in one row of its own — **Find Projects on Disk** (`temcoProjects.discover`, the 🔍 in the view title) records it, and corrects a project whose `package.json` now names a different version than its row does. A folder with no `package.json` keeps the version the catalog has, because it has no opinion of its own.
+
 The **Overview** button on the panel's title opens the Dashboard page: the same counts broken down by source and area, and **Recent Activity** behind **All Activity**.
 
 ### #2 Documentation
@@ -108,6 +110,7 @@ The site from this side: what is on it, what is waiting to go on it, and what a 
 - **Documentation Site** — four questions and the button that changes each: is it cloned, installed, built, running. A **Refresh** beside **Pull** reads the clone again — it fetches first, so "16 commits" is what the remote has and not what the last fetch saw — and every act that takes time (a pull, a discard, a commit and push) says what it did in one line at the top of the page, above the activity area that holds the detail. The log shows its last five lines, with **Show more** for the whole of it, and it sits right under the title rather than at the bottom, because that is where a press leaves the eye.
 - **Artifacts** — what a build wrote, per project: the site, the PDF, the `.chm`, the zip, the Word document, single pages. A project with no `.chm` simply has no `.chm` row.
 - **Publishing** — what changed since the last publish, the steps, and the button. It is also where step 8 sends you.
+- **The panel** — *Preview the Site* (start, stop, and the two ways to read it) and *Library*: one row per project the site serves, at its newest version, opening it when clicked — and when a project has more than one version, opening the row lists them, newest first.
 
 ### #5 AI
 

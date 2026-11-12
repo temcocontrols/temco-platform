@@ -1961,11 +1961,11 @@ The brief is §23, at the end of this document, so it can name the feature under
 
 ---
 
-# 22. The document feature — the whole flow
+## 22. The document feature — the whole flow
 
 Scope decision: **this is the only feature we build now.** Products, hardware, firmware and releases stay as data the document feature can reference; their screens come later. Everything below is needed for an author to sit down and write a page with screenshots in it, and for the page to stay correct across versions.
 
-## 22.1 One pipeline for every image
+### 22.1 One pipeline for every image
 
 Three entrances, one path. The author never picks a format, a folder, or a filename.
 
@@ -1990,7 +1990,7 @@ Rules that make this worth building:
 - **P4** Insertion is at the caret, never appended. The editor's selection survives, which is the whole point of "quick".
 - **P5** Failure is visible: no clipboard permission, no capture permission, unsupported type — each gets a sentence naming the cause and the fallback.
 
-## 22.2 The paste matrix — what each clipboard flavour becomes
+### 22.2 The paste matrix — what each clipboard flavour becomes
 
 | Clipboard holds | Result | Why |
 |---|---|---|
@@ -2005,7 +2005,7 @@ Rules that make this worth building:
 
 The one rule behind the table: **format follows the source's structure, not its styling.**
 
-## 22.3 The annotation surface
+### 22.3 The annotation surface
 
 ```
 ┌─ Annotate screenshot ─────────────────────────────────────────────────────┐
@@ -2033,7 +2033,7 @@ The one rule behind the table: **format follows the source's structure, not its 
 - **A6** **Callout** magnifies the dragged region (≈2.2×) into an inset connected by leader lines, so a small terminal value can be read on a 900 px screenshot. It samples the pixels underneath, so an arrow drawn first also appears magnified.
 - **A7** **Crop** bakes everything drawn so far and is undoable once. After a crop the canvas is the new truth; the author is never asked to confirm a destructive step they can reverse.
 
-## 22.4 Attachments age; documents do not
+### 22.4 Attachments age; documents do not
 
 A screenshot is a photograph of a version. When firmware 13.1 ships, every screenshot of the 13.0 device list is a lie that still looks true.
 
@@ -2051,7 +2051,7 @@ A screenshot is a photograph of a version. When firmware 13.1 ships, every scree
 - **S3** Stale is a warning on the page, not a block. Publishing a stale screenshot is allowed and recorded.
 - **S4** An attachment referenced by nothing is shown as orphaned rather than deleted silently.
 
-## 22.5 Automation: an agent proposes, a person approves
+### 22.5 Automation: an agent proposes, a person approves
 
 The stakeholder ask is "MCP / GitHub actions generate changes automatically as we do new versions". The honest shape of that is a **proposal loop**, not a write-through.
 
@@ -2089,7 +2089,7 @@ The stakeholder ask is "MCP / GitHub actions generate changes automatically as w
 
 **Shipped:** [`.github/workflows/docs-propose.yml`](../../.github/workflows/docs-propose.yml). It runs on any `v*` tag (or by hand), derives the version pair from the tag, scans the configured folder for the old version, uploads a report and a markdown summary, applies the replacements on a branch and opens a **draft** pull request. It has no path that writes to the default branch, and no path that publishes. The scanner is inline in the workflow because this repository forbids new `.js` files — a scanner outside the tree is a scanner that rots silently.
 
-## 22.6 What "a very good editor" means here, concretely
+### 22.6 What "a very good editor" means here, concretely
 
 Not a feature list — a set of properties that can be tested:
 
@@ -2131,7 +2131,7 @@ as a workflow (`.github/workflows/docs-propose.yml`) but has not yet run against
 
 ---
 
-# 23. One-paragraph brief for the generator
+## 23. One-paragraph brief for the generator
 
 > Build TEMCO Platform inside the existing VS Code fork. The shell is VS Code and must not be touched; every screen we own is a webview built with React 19 and Fluent UI v9 from `extensions/temco-ui`, themed by bridging `--vscode-*` variables into a Fluent theme. Office documents are edited by ONLYOFFICE, behind a pluggable `OfficeTransport`: either a Document Server embedded as a single cross-origin iframe (JWT-signed config, `key` derived from `(assetId, revision, options)`, short-lived signed content URL, save callback that writes an immutable revision), or a fully embedded build with static `web-apps` plus `x2t.wasm` where conversion happens in-process and no server exists at all. Markdown has two hosts — a Fluent editor by default, the same Office host when the asset remembers that choice in `preferredHost` — resolved by `explicit override → preferredHost → setting → format priority`. **The feature under construction is documents (§22): a markdown editor where a screenshot goes from clipboard to annotated and inserted in one keystroke, every image is an attachment with a caption and a version it depicts, and version changes arrive as proposals from CI that a person approves.** The domain is five concepts — Product, Asset, Editor Host, Publication, Knowledge — and no sixth noun may appear. Every save is a revision; nothing edits in place; nothing ever shows a blank iframe.
 

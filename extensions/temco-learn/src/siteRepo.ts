@@ -60,13 +60,22 @@ export function siteUrl(port = sitePort()): string {
 /**
  * One page of the site, as an address.
  *
- * The site routes in the fragment (`/#/t3000/1.0/ports`), because GitHub Pages serves static files and cannot rewrite a
- * path; a fragment needs no rewrite. `base` is whichever of the two addresses is running.
+ * The site routes on the **path** — `/t3000/2026.01/control/inputs` — and ships a `404.html` that answers a deep address
+ * on a host with no SPA rewrite, which is how GitHub Pages serves it. This used to build a fragment (`/#/t3000/1.0`),
+ * which is what the site did once: nothing reads a fragment now, so every address the module opened landed on the site's
+ * home — the row for "Temco Platform 1.0" in the library looked like a project that was not on the site at all.
+ *
+ * `base` is whichever address is running, and `href` is a page's own path inside the version (`control/inputs`), so its
+ * slashes are kept: one segment would never match a nested page.
  */
 export function pageUrl(base: string, project?: string, version?: string, href?: string): string {
-	const parts = [project, version, href].filter((part): part is string => typeof part === 'string' && part !== '');
-	if (parts.length === 0) {
+	const places = [project, version].filter((part): part is string => typeof part === 'string' && part !== '');
+	const segments = places.map((part) => encodeURIComponent(part));
+	for (const segment of (href ?? '').split('/').filter((part) => part !== '')) {
+		segments.push(encodeURIComponent(segment));
+	}
+	if (segments.length === 0) {
 		return base;
 	}
-	return `${base}#/${parts.map((part) => encodeURIComponent(part)).join('/')}`;
+	return `${base.replace(/\/+$/u, '')}/${segments.join('/')}`;
 }

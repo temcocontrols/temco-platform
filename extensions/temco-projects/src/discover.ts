@@ -11,13 +11,15 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { PROJECT_MARKER, findProjects, FoundProject } from './projectScan';
+import { correctionFor, PROJECT_MARKER, findProjects, FoundProject } from './projectScan';
 import { projectsRoot } from './repositories';
 import { Catalog, CatalogUnavailable, outputs, slugOf } from './store';
 
 /** What a scan did, so the caller can say it in one sentence. */
 export interface ScanOutcome {
 	added: RegisteredProject[];
+	/** Projects the catalog knew, whose folder now says a different name or version. */
+	corrected: CorrectedProject[];
 	known: FoundProject[];
 	/** Projects whose folder name is already a source that points somewhere else: reported, never written over. */
 	conflicts: FoundProject[];
@@ -31,22 +33,34 @@ export interface RegisteredProject {
 	sourceSlug: string;
 }
 
+/** A catalog row that disagreed with the folder it points at, and what it now says. */
+export interface CorrectedProject {
+	project: FoundProject;
+	/** What the catalog said before, as a person reads it: `1.0`. */
+	was: { name: string; version?: string };
+}
+
 /** Every project in the projects folder, whether or not the catalog knows it. */
 export function scanProjects(root: string = projectsRoot()): FoundProject[] {
 	return findProjects(root, slugOf);
 }
 
 /**
- * Records every project in the projects folder that the catalog does not know.
+ * Records every project in the projects folder that the catalog does not know, and corrects the ones it knows wrongly.
  *
- * The four writes per project are the create form's own: a source for the folder, the project row, the citation
+ * The four writes per new project are the create form's own: a source for the folder, the project row, the citation
  * between them, and the recipe that says how it is built. Nothing else is invented — no pages, no drafts, no build —
  * because a project found on disk already has an answer to all of those.
+ *
+ * A project the catalog already knows is not skipped outright: its folder's `package.json` is the project's own answer
+ * to what it is called and which version it is, and a row written before that manifest existed — a project created
+ * `blank` and then filled in — says something else. The version is corrected from the manifest, and only from the
+ * manifest: a project with no `package.json` keeps whatever the catalog says, because there is nothing to prefer.
  */
 export async function registerFoundProjects(context: vscode.ExtensionContext, root?: string): Promise<ScanOutcome> {
 	const folder = root ?? projectsRoot();
 	const found = findProjects(folder, slugOf);
-	const outcome: ScanOutcome = { added: [], known: [], conflicts: [], root: folder };
+	const outcome: ScanOutcome = { added: [], corrected: [], known: [], conflicts: [], root: folder };
 	if (found.length === 0) {
 		return outcome;
 	}
@@ -59,7 +73,23 @@ export async function registerFoundProjects(context: vscode.ExtensionContext, ro
 
 		for (const project of found) {
 			if (known.has(project.slug)) {
-				outcome.known.push(project);
+				const held = store.document(project.slug);
+				const corrected = held === undefined ? undefined : correctionFor(held, project);
+				if (held === undefined || corrected === undefined) {
+					outcome.known.push(project);
+					continue;
+				}
+				// `audience` and `owner` are a person's answers, so they are carried across rather than cleared: this is a
+				// correction of what the folder says about itself, not a re-creation of the project.
+				store.createDocument({
+					name: corrected.name,
+					slug: project.slug,
+					version: corrected.version,
+					audience: held.audience,
+					owner: held.owner,
+					origin: held.origin
+				});
+				outcome.corrected.push({ project, was: { name: held.name, version: held.version } });
 				continue;
 			}
 
@@ -92,12 +122,30 @@ export async function registerFoundProjects(context: vscode.ExtensionContext, ro
 
 /** The sentence a person reads after a scan. */
 export function outcomeLine(outcome: ScanOutcome): string {
-	if (outcome.added.length === 0 && outcome.known.length === 0 && outcome.conflicts.length === 0) {
+	if (
+		outcome.added.length === 0 &&
+		outcome.corrected.length === 0 &&
+		outcome.known.length === 0 &&
+		outcome.conflicts.length === 0
+	) {
 		return `No projects found in ${outcome.root}. A project is a folder with ${PROJECT_MARKER.replace(/\\/g, '/')} in it.`;
 	}
 	const parts: string[] = [];
 	if (outcome.added.length > 0) {
 		parts.push(`${outcome.added.length} added (${outcome.added.map((entry) => entry.project.name).join(', ')})`);
+	}
+	if (outcome.corrected.length > 0) {
+		parts.push(
+			`${outcome.corrected.length} corrected (` +
+				outcome.corrected
+					.map((entry) => {
+						const now = [entry.project.name, entry.project.version].filter((part) => part !== undefined && part !== '');
+						const before = [entry.was.name, entry.was.version].filter((part) => part !== undefined && part !== '');
+						return `${before.join(' · ')} → ${now.join(' · ')}`;
+					})
+					.join(', ') +
+				')'
+		);
 	}
 	if (outcome.known.length > 0) {
 		parts.push(`${outcome.known.length} already in the catalog`);

@@ -1,4 +1,4 @@
-﻿// The panel's own contract: five views, names only, and the number at the row's right edge.
+// The panel's own contract: five views, names only, and the number at the row's right edge.
 //
 // A tree row has two slots — the label and the thing pushed to its right edge — and this module promised to use them the
 // way Home does: never a sentence in a row, and the one extra fact is a number, drawn as a badge. Each case below is that
@@ -233,7 +233,7 @@ test('the dot is the state: green while it runs, spinning while it starts, red w
 	}
 });
 
-test('the library is one row per project, at its newest version', async () => {
+test('the library is one row per project, with its versions underneath', async () => {
 	const provider = new views.BrowseTree(newReads(snapshot), () => stopped);
 	const [, library] = await provider.getChildren();
 	const rows = await provider.getChildren(library);
@@ -245,7 +245,24 @@ test('the library is one row per project, at its newest version', async () => {
 		],
 		'the library is not one row per project at its newest version'
 	);
-	assert.deepEqual(rows[0].command?.arguments, [{ project: 't3000', version: '13.0' }], 'a library row does not say which page it opens');
+	assert.deepEqual(
+		rows[0].command?.arguments,
+		[{ project: 't3000', version: '13.0' }],
+		'a library row does not say which page it opens'
+	);
+	// The row is the group: closed it says what the site serves, open it says which versions it serves. A project with a
+	// single version has nothing under it and gets no arrow — an arrow that opens onto one row is a refusal to answer.
+	assert.deepEqual(
+		(await provider.getChildren(rows[0])).map((row) => [row.label, row.description, row.command?.arguments]),
+		[
+			['13.0', 'newest', [{ project: 't3000', version: '13.0' }]],
+			['12.9', '1 page', [{ project: 't3000', version: '12.9' }]]
+		],
+		'the versions under a project are not its versions, newest first'
+	);
+	assert.deepEqual(await provider.getChildren(rows[1]), [], 'a project with one version offers something to expand');
+	assert.equal(rows[0].collapsibleState, 1, 'a project with two versions cannot be opened');
+	assert.equal(rows[1].collapsibleState, 0, 'a project with one version draws an arrow');
 });
 
 test('a site with nothing on it offers to add a build instead of only saying so', async () => {

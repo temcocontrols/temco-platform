@@ -26,6 +26,26 @@ export interface FoundProject {
 export const PROJECT_MARKER = path.join('docs', 'help', 'registry.json');
 
 /**
+ * What a catalog row should say, given the folder it points at — or `undefined` when the two already agree.
+ *
+ * The folder's `package.json` is the project's own answer to what it is called and which version it is, and a row written
+ * before that manifest existed — a project created `blank` and then filled in — says something else. Only what the folder
+ * can answer for is corrected: a project with no manifest has no opinion, so its version is left exactly as it was rather
+ * than cleared. `audience` and `owner` are a person's answers and are not this function's business at all.
+ */
+export function correctionFor(
+	held: { name: string; version?: string },
+	project: FoundProject
+): { name: string; version?: string } | undefined {
+	const name = project.name !== '' && project.name !== held.name ? project.name : held.name;
+	const version = project.version !== undefined ? project.version : held.version;
+	if (name === held.name && version === held.version) {
+		return undefined;
+	}
+	return { name, version };
+}
+
+/**
  * Every project in `root`, in folder order.
  *
  * One level deep, because that is the shape the create form makes: `<projects folder>/<slug>`. A project nested inside
