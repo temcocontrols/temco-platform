@@ -140,6 +140,12 @@
         "category": "Temco Learn"
       },
       {
+        "command": "temcoLearn.site.refresh",
+        "title": "Refresh the Clone's Facts",
+        "category": "Temco Learn",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "temcoLearn.site.update",
         "title": "Get the Latest temco-learn",
         "category": "Temco Learn",

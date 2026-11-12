@@ -105,7 +105,7 @@ Reading never writes back. The catalog keeps what a source declares, and the one
 The site from this side: what is on it, what is waiting to go on it, and what a build wrote.
 
 - **Overview** — what needs doing (*a build on disk is not on the website*, *changes are not published*, each with its button), the four steps from a page to a reader — Build, Add, Publish, Download — and where the site stands.
-- **Documentation Site** — four questions and the button that changes each: is it cloned, installed, built, running. The log sits under them.
+- **Documentation Site** — four questions and the button that changes each: is it cloned, installed, built, running. A **Refresh** beside **Pull** reads the clone again — it fetches first, so "16 commits" is what the remote has and not what the last fetch saw — and every act that takes time (a pull, a discard, a commit and push) says what it did in one line at the top of the page, above the activity area that holds the detail. The log shows its last five lines, with **Show more** for the whole of it, and it sits right under the title rather than at the bottom, because that is where a press leaves the eye.
 - **Artifacts** — what a build wrote, per project: the site, the PDF, the `.chm`, the zip, the Word document, single pages. A project with no `.chm` simply has no `.chm` row.
 - **Publishing** — what changed since the last publish, the steps, and the button. It is also where step 8 sends you.
 
@@ -757,6 +757,10 @@ The buttons you will go looking for, grouped by where they live: the activity ba
 | **Start the Site** | Documentation Site | `temcoLearn.site.start` |
 | **Stop the Site** | Documentation Site | `temcoLearn.site.stop` |
 | **Build the Site** (the site itself) | Documentation Site | `temcoLearn.site.build` |
+| **Refresh** (read the clone again) | Documentation Site | `temcoLearn.site.refresh` |
+| **Pull** | Documentation Site | `temcoLearn.site.pull` |
+| **Discard** (back to the commit, or gone from disk) | Documentation Site | `temcoLearn.site.discard` |
+| **Commit and push** | Documentation Site | `temcoLearn.site.commit` |
 | **Make the Downloads** | Publishing, Documentation Site | `temcoLearn.site.downloads` |
 | **Add a Build to the Site** | Publishing | `temcoLearn.addBuilds` |
 | **Publish** | Publishing | `temcoLearn.publish` |

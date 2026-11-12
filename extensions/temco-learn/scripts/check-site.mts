@@ -6,8 +6,12 @@
 // page opened *for* the section puts it first.
 
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createRequire, Module } from 'node:module';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('..', import.meta.url));
 
 interface PageModule {
 	html(state: unknown): string;
@@ -22,8 +26,10 @@ const ui = {
 	escapeHtml: esc,
 	icon: (name: string) => `[${name}]`,
 	toneMark: (name: string) => `[${name}]`,
-	hero: (options: { title: string; desc?: string }) => `<div class="az-wash"><h1>${esc(options.title)}</h1></div>`,
-	optionCards: () => '',
+	hero: (options: { title: string; desc?: string; actions?: readonly { label: string; command: string }[] }) =>
+		`<div class="az-wash"><h1>${esc(options.title)}</h1>${(options.actions ?? [])
+			.map((action) => `<button data-command="${esc(action.command)}">${esc(action.label)}</button>`)
+			.join('')}</div>`,	optionCards: () => '',
 	cards: () => '',
 	callout: (options: { title: string }) => `<aside class="az-callout"><p>${esc(options.title)}</p></aside>`,
 	section: (options: { title: string; desc?: string; actions?: string }) =>
@@ -189,6 +195,84 @@ test('a clean clone says nothing about changes, rather than drawing an empty lis
 	const html = site.html(facts());
 	assert.equal(html.includes('Changes in the clone'), false, 'the page draws a changes section with nothing in it');
 	assert.equal(html.includes('temcoLearn.site.commit'), false, 'the page offers a commit with nothing to commit');
+});
+
+// ---------- what the page says after an act ----------
+//
+// A pull of sixteen commits, a discard and a commit-and-push all finish by redrawing this page, and it used to come back
+// looking exactly as it did before: the lines were in the activity area at the bottom, off-screen, so a person who had
+// just pressed a button could not tell whether anything had happened. The outcome now sits under the title, where the eye
+// already is, with the few lines behind it and one way to the whole log.
+
+test('Refresh sits beside Pull, and only the one with something to do is promised', () => {
+	const behind = site.html(facts({ repo: { ...repo, behind: 16 } }));
+	assert.match(behind, /data-command="temcoLearn\.site\.pull"/u, 'a clone sixteen commits behind does not offer the pull');
+	assert.match(behind, /data-command="temcoLearn\.site\.refresh"/u, 'the page cannot be asked to read the clone again');
+	const current = site.html(facts({ repo: { ...repo, behind: 0 } }));
+	assert.equal(current.includes('temcoLearn.site.pull'), false, 'a clone that is up to date still offers a pull');
+	assert.match(current, /data-command="temcoLearn\.site\.refresh"/u, 'an up-to-date clone cannot be read again');
+	assert.equal(
+		site.html(facts({ repo: { ...repo, ready: false } })).includes('temcoLearn.site.refresh'),
+		false,
+		'a folder that is not the site offers to read it again'
+	);
+});
+
+test('an act that just finished says what it did, in one line, above the activity area', () => {
+	const html = site.html(facts({ report: { title: 'Pulled 16 commits', tone: 'ok' } }));
+	const at = (needle: string): number => html.indexOf(needle);
+	assert.ok(at('site-report') > 0, 'the page says nothing about the act that opened it');
+	assert.ok(at('site-report') < at('Activity'), 'the outcome sits below the log it belongs to');
+	assert.ok(at('Activity') < at('This machine'), 'Activity is not the first thing after the title, so a press reports off-screen');
+	assert.match(html, /site-report__title">Pulled 16 commits</u, 'the outcome is not named');
+	assert.equal(html.includes('site-report--warn'), false, 'a good outcome is drawn as a warning');
+	assert.match(html, /data-command="temcoLearn\.site\.showLog"/u, 'the page does not lead to the whole log');
+});
+
+test('the activity area shows the last five lines, with one press for the rest', () => {
+	const log = Array.from({ length: 12 }, (_, index) => `line ${index + 1}`);
+	const html = site.html(facts({ log }));
+	const pre = (cls: string): string => new RegExp(`<pre class="site-console ${cls}">([\\s\\S]*?)</pre>`, 'u').exec(html)?.[1] ?? '';
+	const tail = pre('site-console--tail');
+	const all = pre('site-console--all');
+	assert.equal(tail.split('\n').length, 5, 'the fold is not five lines');
+	assert.match(tail, /^line 8\n/gu, 'the fold does not start where the last five do');
+	assert.match(tail, /line 12$/u, 'the fold hides the newest lines instead of the oldest');
+	assert.equal(all.split('\n').length, 12, 'the whole log is not there to unfold');
+	assert.match(html, /<label class="site-tabs__toggle" for="site-more">/u, 'there is no way to ask for the rest');
+	assert.match(html, /Show more/u);
+	assert.match(html, /Show less/u);
+	assert.match(html, /id="site-more"/u, 'the fold is not a checkbox the labels can switch');
+});
+
+test('a log with nothing hidden has no fold, and no second copy of itself', () => {
+	const html = site.html(facts({ log: ['one', 'two', 'three'] }));
+	assert.equal(html.includes('site-tabs__toggle'), false, 'the page offers to unfold three lines');
+	assert.equal(html.includes('site-console--all'), false, 'the same three lines are drawn twice');
+	assert.match(html, /site-console--tail">one\ntwo\nthree</u, 'the lines are not the log');
+});
+
+test('every glyph the page asks for is one the shared sprite draws', () => {
+	// `icon()` looks a name up in `media/icons.svg` of the UI module, so a name that is not there renders as an empty box —
+	// no error, no console message, just a blank where the mark should be. The fold's chevron was written as `chevron-up`,
+	// which the sprite does not have: the up-arrow is the same glyph turned over by the stylesheet.
+	const sprite = readFileSync(join(root, '..', 'temco-ui', 'media', 'icons.svg'), 'utf8');
+	const drawn = new Set([...sprite.matchAll(/id="i-([\w-]+)"/gu)].map((match) => match[1]));
+	const source = readFileSync(join(root, 'src', 'sitePage.ts'), 'utf8');
+	const asked = [...source.matchAll(/\b(?:icon|toneMark)\(\s*'([\w-]+)'|\bmark:\s*'([\w-]+)'/gu)].map((match) => match[1] ?? match[2]);
+	assert.ok(asked.length > 0, 'the page draws no glyphs at all, so this case would pass on a rewritten page');
+	assert.deepEqual(
+		asked.filter((name) => !drawn.has(name)),
+		[],
+		'named a glyph the sprite does not draw'
+	);
+});
+
+test('a failure is the same line, in the warning tone, and nothing at all when nothing happened', () => {
+	const failed = site.html(facts({ report: { title: 'Nothing was pulled', tone: 'warn' } }));
+	assert.match(failed, /class="site-report site-report--warn"/u, 'a failure is drawn like a success');
+	assert.match(failed, /Nothing was pulled/u);
+	assert.equal(site.html(facts()).includes('site-report'), false, 'the outcome is drawn when nothing was done');
 });
 
 let failedCount = 0;

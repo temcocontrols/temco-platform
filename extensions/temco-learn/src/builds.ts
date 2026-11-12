@@ -45,6 +45,11 @@ export async function findBuilds(): Promise<Build[]> {
 		projectsRoot()
 	]);
 	const found: Build[] = [];
+	// One folder, one build. The same project is reachable from more than one root — a projects folder inside the working
+	// area is walked twice, once through the area and once directly — and on Windows the two spellings of that folder can
+	// differ only in case. Without this the Site page offered "Add…" for one build twice, and the second press would have
+	// imported the same version over the first.
+	const seen = new Set<string>();
 	for (const root of roots) {
 		for (const folder of await buildFolders(root)) {
 			// A build names its front page one of three ways: HTML a generator rendered, the Markdown a project wrote, or the
@@ -52,6 +57,11 @@ export async function findBuilds(): Promise<Build[]> {
 			if (!['index.html', '00-index.md', 'index.md'].some(name => fs.existsSync(path.join(folder, name)))) {
 				continue;
 			}
+			const key = path.resolve(folder).toLowerCase();
+			if (seen.has(key)) {
+				continue;
+			}
+			seen.add(key);
 			const fallback = path.basename(path.dirname(path.dirname(folder)));
 			const title = (await projectNameOf(folder)) ?? fallback;
 			found.push({ folder, title, id: idOf(folder, title), at: fs.statSync(folder).mtimeMs });

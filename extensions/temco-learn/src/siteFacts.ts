@@ -15,6 +15,15 @@ export interface Change {
 	code: string;
 	path: string;
 	/**
+	 * Whether the last commit has this path at all.
+	 *
+	 * `git restore` can only bring back a path the commit knows: given one it has never seen it prints "pathspec did not
+	 * match any file(s) known to git" and restores **nothing at all**, so one untracked build folder used to make every
+	 * discard — and every tidy-up before a pull — a silent no-op. What an untracked path needs is deletion, which is also
+	 * what has to happen before a pull can write the committed copy of a file with that name.
+	 */
+	untracked: boolean;
+	/**
 	 * What kind of change this is, which decides what may be done about it.
 	 *
 	 * - `generated` — a file the site's own scripts write on every build. Committed, so it shows as modified after a build,
@@ -63,15 +72,16 @@ export function classifyChanges(status: string, numstat: string): Change[] {
 		.map((line) => {
 			const code = line.slice(0, 2).trim() || 'M';
 			const path = line.slice(3).trim();
+			const untracked = code.startsWith('??');
 			const counts = counted.get(path);
 			const kind: Change['kind'] = GENERATED.some((pattern) => pattern.test(path))
 				? 'generated'
-				: code.includes('?')
+				: untracked
 					? 'edit'
 					: counts === undefined || (counts.added === 0 && counts.removed === 0)
 						? 'noise'
 						: 'edit';
-			return { code, path, kind };
+			return { code, path, untracked, kind };
 		});
 }
 
@@ -144,15 +154,24 @@ export function forgetFetch(folder = siteRepo()): void {
 }
 
 /**
- * The paths a pull may throw away on its own: the build's output, and the files Windows reports only because the line
- * endings in the working copy differ from the ones in the commit.
+ * What discarding a set of paths means, split by what git can do about each.
  *
- * Exactly the changes nobody made, and nothing else — an edit is never in here, so nothing a person wrote can be lost by a
- * pull. Both kinds are reproducible: the build writes the first, and git writes the second back the moment the file is
- * restored.
+ * A path the last commit has goes back to the commit: `git restore`, no question asked, nothing to lose. A path it has
+ * never had is discarded by deleting it, because that is the only sense "discard" can make for a file git cannot restore —
+ * and because a pull that brings a committed file of that name is refused until the untracked one is out of the way.
+ *
+ * The split is not cosmetic. `git restore -- a b public/pdf/` validates every pathspec before restoring any of them, so a
+ * single untracked folder in the list left the two tracked files untouched as well: the clone stayed dirty, the log said
+ * "pathspec did not match any file(s) known to git", and the pull never ran.
+ *
+ * Callers hand it the changes nobody made — build output and line endings — and never an edit, so nothing a person wrote
+ * can be restored or deleted by a pull.
  */
-export function disposableOf(changes: readonly Change[]): string[] {
-	return changes.filter((change) => change.kind !== 'edit').map((change) => change.path);
+export function discardOf(changes: readonly Change[]): { restore: string[]; remove: string[] } {
+	return {
+		restore: changes.filter((change) => !change.untracked).map((change) => change.path),
+		remove: changes.filter((change) => change.untracked).map((change) => change.path)
+	};
 }
 
 /** The changes somebody actually made: what a pull refuses to run over, and what a commit is for. */

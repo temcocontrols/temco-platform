@@ -101,6 +101,10 @@ interface Found {
 const place = load(join(out('temco-repositories'), 'workarea.js')) as Place;
 const builds = load(join(out('temco-learn'), 'builds.js')) as { findBuilds(): Promise<Found[]> };
 const pageAssets = load(join(out('temco-docs'), 'pageAssets.js')) as { pageRoots(pageFsPath: string): readonly string[] };
+const facts = load(join(out('temco-learn'), 'siteFacts.js')) as {
+	classifyChanges(status: string, numstat: string): { code: string; path: string; untracked: boolean; kind: string }[];
+	discardOf(changes: readonly { path: string; untracked: boolean }[]): { restore: string[]; remove: string[] };
+};
 const site = load(join(out('temco-learn'), 'site.js')) as {
 	slugOf(title: string): string;
 	buildPages(root: string): Promise<{ href: string; title: string; kind?: 'md' | 'build' }[]>;
@@ -297,6 +301,64 @@ test('a folder with no index.html is not a build', async () => {
 	} finally {
 		rmSync(world.keep, { recursive: true, force: true });
 	}
+});
+
+test('a build under a projects folder inside the working area is one build, not two', async () => {
+	const world = space();
+	try {
+		// The projects folder is inside the working area, so a walk of the area reaches the build and a walk of the projects
+		// folder reaches it again — and on Windows the two spellings of one folder can differ only in case. The Site page
+		// offered one build twice, and its second Add would have imported the same version over the first.
+		write(join(world.root, 'projects', 't3000', 'dist', 'docs', '00-index.md'), markdown('T3000'));
+		settings = { workspaceFolder: world.root, projectsFolder: join(world.root, 'projects') };
+		workspaceFolders = [];
+		const found = await builds.findBuilds();
+		assert.deepEqual(
+			found.map((build) => build.title),
+			['T3000'],
+			'the same folder reached from two roots is still one build'
+		);
+	} finally {
+		rmSync(world.keep, { recursive: true, force: true });
+	}
+});
+
+// ---------- what a discard may do, and to what ----------
+//
+// The Site page's "Discard" was a `git restore` over whatever the page called build output. Git refuses a path the last
+// commit has never seen — and refuses the whole command, restoring none of the others — so a clone whose build had written
+// `public/pdf/` could not be tidied and could not be pulled: four paths were offered, two were untracked, and nothing
+// happened. Deleting is the only discard an untracked path can have, and it is also what a pull needs done before it can
+// write the committed copy of a file with that name.
+test('a path no commit has is removed, not restored, and a person\'s new file is neither', () => {
+	const changes = facts.classifyChanges(
+		[
+			' M public/catalog.json',
+			' M public/search.json',
+			'?? public/imported/',
+			'?? public/pdf/',
+			'?? content/t3000/',
+			'?? src/imported.ts'
+		].join('\n'),
+		['1\t1\tpublic/catalog.json', '1\t1\tpublic/search.json'].join('\n')
+	);
+	assert.deepEqual(
+		changes.map((change) => ({ path: change.path, kind: change.kind, untracked: change.untracked })),
+		[
+			{ path: 'public/catalog.json', kind: 'generated', untracked: false },
+			{ path: 'public/search.json', kind: 'generated', untracked: false },
+			{ path: 'public/imported/', kind: 'generated', untracked: true },
+			{ path: 'public/pdf/', kind: 'generated', untracked: true },
+			{ path: 'content/t3000/', kind: 'edit', untracked: true },
+			{ path: 'src/imported.ts', kind: 'edit', untracked: true }
+		],
+		'what the commit has, what the build wrote, and what a person added are three different things'
+	);
+	assert.deepEqual(
+		facts.discardOf(changes.filter((change) => change.kind !== 'edit')),
+		{ restore: ['public/catalog.json', 'public/search.json'], remove: ['public/imported/', 'public/pdf/'] },
+		'restore is asked only of paths the commit has, and the person\'s own files are in neither list'
+	);
 });
 
 // ---------- the shape of a view's title bar ----------

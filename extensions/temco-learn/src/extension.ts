@@ -24,7 +24,7 @@ import { ensureRepo, publishSite, PublishSink } from './publish';
 import { Server } from './server';
 import { importBuild, readSite, Site, workRoot } from './site';
 import { pageUrl, repoReady, sitePort, siteRepo } from './siteRepo';
-import { disposableOf, editsOf, forgetFetch, readRepoFacts } from './siteFacts';
+import { discardOf, editsOf, forgetFetch, readRepoFacts } from './siteFacts';
 import { SiteLog } from './siteLog';
 import { SitePage, SitePageFacts, SITE_VIEW_TYPE } from './sitePage';
 import { describe, SiteRunner, SiteStatus } from './siteRunner';
@@ -459,6 +459,8 @@ export function activate(context: vscode.ExtensionContext): void {
 	 */
 	const publishNow = async (): Promise<void> => {
 		publishSink.appendLine('[publish] started');
+		// What the page says when this is over. Undefined means the person cancelled, and a cancelled publish is not news.
+		let outcome: { title: string; tone: 'ok' | 'warn' } | undefined;
 		try {
 			await ensureRepo(repo());
 			const facts = await readRepoFacts(repo());
@@ -499,6 +501,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			const catalogued = await runner.run('catalog', log);
 			if (catalogued !== 0) {
 				publishSink.appendLine('[publish] the catalog could not be rebuilt, so nothing was committed');
+				outcome = { title: 'Nothing was published — the catalog could not be rebuilt', tone: 'warn' };
 				return;
 			}
 			// The site's own gate, invoked rather than reimplemented: `guard` is what `pages.yml` runs before it deploys,
@@ -509,42 +512,163 @@ export function activate(context: vscode.ExtensionContext): void {
 				publishSink.appendLine(
 					'[publish] the site\'s guard refused this clone, so nothing was committed — the lines above name the missing download. Make the downloads, then publish again.'
 				);
+				outcome = { title: 'Nothing was published — the site\'s guard refused the clone', tone: 'warn' };
 				return;
 			}
-			const published = await publishSite(repo(), publishSink, message);
+			// Committing, pushing and waiting for the answer takes long enough that a press with no visible answer reads as
+			// a press that did nothing.
+			const published = await vscode.window.withProgress(
+				{
+					location: vscode.ProgressLocation.Notification,
+					title:
+						'Committing and pushing ' +
+						plural(facts.changes.length, 'path') +
+						(theirs.length === 0 ? '' : ', ' + plural(theirs.length, 'edit') + ' of them yours'),
+					cancellable: false
+				},
+				() => publishSite(repo(), publishSink, message)
+			);
 			publishSink.appendLine(
 				published.unchanged
 					? '[publish] nothing had changed - ' + (published.commit === '' ? 'the last commit' : published.commit) + ' is already on ' + published.base
 					: '[publish] pushed ' + published.commit + ' - ' + published.base + ' (a minute to appear)'
 			);
+			outcome = {
+				title: published.unchanged ? 'Nothing to push — the site is already on ' + published.base : 'Pushed to ' + published.base,
+				tone: 'ok'
+			};
 			refresh();
 		} catch (error) {
 			publishSink.appendLine('[publish] nothing was published - ' + reason(error));
+			outcome = { title: 'Nothing was published', tone: 'warn' };
 		} finally {
-			publishing.refresh();
-			sitePage.refresh();
-			overview.refresh();
-			output.show(true);
+			refresh();
+			// The page is where the person is looking, so it carries the result. The full channel comes forward only when
+			// something went wrong, where the reason is longer than a strip.
+			if (outcome?.tone === 'warn') {
+				output.show(true);
+			}
+			if (outcome !== undefined) {
+				sitePage.report(outcome);
+			}
 		}
 	};
 
-	/** Set paths back to the last commit — the act that makes a refused pull possible again. */
+	/**
+	 * Read the clone again, from GitHub.
+	 *
+	 * "16 commits behind" is a comparison against `origin/main`, and that ref only moves when something fetches — so the
+	 * figure is a claim about the last fetch, not about the remote. A press means "now", so the cached fetch is forgotten
+	 * first; the answer goes on the page as a report and in the activity area as a line, because a redraw on its own says
+	 * nothing about whether anything changed.
+	 */
+	const reread = async (): Promise<void> => {
+		if (!repoReady(repo())) {
+			sitePage.open();
+			return;
+		}
+		forgetFetch(repo());
+		const facts = await readRepoFacts(repo(), { fetch: true });
+		refresh();
+		say(
+			'Read the clone again — ' +
+				plural(facts.behind, 'commit') +
+				' to pull, ' +
+				plural(facts.ahead, 'commit') +
+				' to push, ' +
+				plural(facts.changes.length, 'path') +
+				' changed.'
+		);
+		sitePage.report({ title: 'Read the clone again' });
+	};
+
+	/**
+	 * Remove paths the last commit does not have.
+	 *
+	 * The only thing a discard can do for an untracked path, and the thing a pull needs done before it can write the
+	 * committed copy of a file with that name. A path from `git status` is relative to the clone and cannot leave it; the
+	 * check is here anyway, because deleting a folder is the one act in this module git cannot undo.
+	 */
+	const removePaths = async (paths: readonly string[]): Promise<number> => {
+		const root = path.resolve(repo());
+		let gone = 0;
+		for (const one of paths) {
+			const target = path.resolve(root, one);
+			const inside = path.relative(root, target);
+			if (inside === '' || inside.startsWith('..') || path.isAbsolute(inside)) {
+				continue;
+			}
+			await fs.promises.rm(target, { recursive: true, force: true });
+			gone += 1;
+		}
+		return gone;
+	};
+
+	/** The question a discard asks when part of it cannot be undone: what git cannot put back, by name. */
+	const askToRemove = async (count: number, remove: readonly string[]): Promise<boolean> => {
+		const them = remove.length === 1 ? 'it is' : 'they are';
+		const answer = await vscode.window.showWarningMessage(
+			`Discard ${plural(count, 'path')}? ${plural(remove.length, 'path')} ${them} not in the last commit, so ${
+				remove.length === 1 ? 'it is' : 'they are'
+			} deleted from disk. The build writes ${remove.length === 1 ? 'it' : 'them'} again.`,
+			{
+				modal: true,
+				detail: remove.slice(0, 6).join('\n') + (remove.length > 6 ? `\n… and ${remove.length - 6} more` : '')
+			},
+			'Discard'
+		);
+		return answer === 'Discard';
+	};
+
+	/**
+	 * Discard paths: back to the last commit for the ones it has, gone from disk for the ones it does not.
+	 *
+	 * The two are not interchangeable. `git restore` refuses a path the commit has never seen — and then restores none of
+	 * the others either — which is what made this button do nothing at all on a clone whose last build had written
+	 * `public/pdf/`: the log said "pathspec did not match any file(s) known to git", and the two tracked files it was also
+	 * asked for were left exactly as they were.
+	 */
 	const discard = async (target?: unknown): Promise<void> => {
 		const asked = typeof target === 'string' ? [target] : (target as { paths?: unknown } | undefined)?.paths;
 		const paths = Array.isArray(asked) ? asked.filter((entry): entry is string => typeof entry === 'string') : [];
 		if (paths.length === 0) {
 			return;
 		}
-		const code = await runner.git(['restore', '--', ...paths], log);
-		if (code !== 0) {
-			say('Nothing was discarded — the log says what git refused.');
+		// Asked of git rather than taken from the page: whether the commit has a path is a fact about the commit, and a path
+		// that is already clean is not a failure.
+		const facts = await readRepoFacts(repo());
+		const named = new Set(paths.map((one) => one.replace(/\/+$/u, '')));
+		const chosen = facts.changes.filter((change) => named.has(change.path.replace(/\/+$/u, '')));
+		if (chosen.length === 0) {
+			say('Nothing to discard — those paths already match the last commit.');
+			sitePage.report({ title: 'Nothing to discard' });
 			return;
 		}
-		say(
-			'Discarded ' + plural(paths.length, 'path') + ' — ' + (paths.length === 1 ? 'it matches' : 'they match') + ' the last commit again.'
-		);
-		sitePage.refresh();
-		overview.refresh();
+		const { restore, remove } = discardOf(chosen);
+		if (remove.length > 0 && !(await askToRemove(chosen.length, remove))) {
+			say('Nothing was discarded.');
+			sitePage.report({ title: 'Nothing was discarded', tone: 'warn' });
+			return;
+		}
+		if (restore.length > 0) {
+			const code = await runner.git(['restore', '--', ...restore], log);
+			if (code !== 0) {
+				say('Nothing was discarded — the log says what git refused.');
+				sitePage.report({ title: 'Nothing was discarded', tone: 'warn' });
+				return;
+			}
+		}
+		const gone = await removePaths(remove);
+		const told: string[] = [];
+		if (restore.length > 0) {
+			told.push(plural(restore.length, 'path') + ' back to the last commit');
+		}
+		if (gone > 0) {
+			told.push(plural(gone, 'path') + ' deleted, which the commit never had');
+		}
+		say('Discarded ' + plural(chosen.length, 'path') + ' — ' + told.join(', ') + '.');
+		refresh();
+		sitePage.report({ title: 'Discarded ' + plural(chosen.length, 'path') });
 	};
 
 	/** The difference a row is about, in the editor's own diff rather than a copy of it on a page. */
@@ -606,17 +730,33 @@ export function activate(context: vscode.ExtensionContext): void {
 		// written by the site's own scripts and committed, and on Windows every one of them also reports a line-ending
 		// change. Those are discarded — they are reproduced by the build that follows a pull — so that a pull is not blocked
 		// by the last build. What somebody actually edited still stops it.
-		const disposable = disposableOf(facts.changes);
-		if (disposable.length > 0) {
-			const restored = await runner.git(['restore', '--', ...disposable], log);
+		//
+		// Two kinds of path here, and git only obliges on one of them: a committed file goes back to the commit, and a file
+		// the build wrote that no commit has is deleted — which a pull needs anyway, because git will not write a committed
+		// file over an untracked one of the same name.
+		const disposable = facts.changes.filter((change) => change.kind !== 'edit');
+		const { restore, remove } = discardOf(disposable);
+		if (remove.length > 0 && !(await askToRemove(disposable.length, remove))) {
+			say('Nothing was pulled: the build output is still there, and git will not write over it.');
+			sitePage.report({ title: 'Nothing was pulled', tone: 'warn' });
+			return;
+		}
+		if (restore.length > 0) {
+			const restored = await runner.git(['restore', '--', ...restore], log);
 			if (restored !== 0) {
 				complain('The build output could not be set aside, so nothing was pulled — the log says why.');
+				sitePage.report({ title: 'Nothing was pulled', tone: 'warn' });
 				return;
 			}
+		}
+		const gone = await removePaths(remove);
+		if (restore.length > 0 || gone > 0) {
 			say(
 				'Set aside ' +
-					plural(disposable.length, 'path') +
-					' the last build wrote, so the clone is clean enough to pull.'
+					plural(restore.length, 'path') +
+					' the last build wrote' +
+					(gone === 0 ? '' : ' and removed ' + plural(gone, 'path') + ' it wrote that no commit has') +
+					' — the clone is clean enough to pull.'
 			);
 		}
 		const edits = editsOf(facts.changes);
@@ -639,18 +779,27 @@ export function activate(context: vscode.ExtensionContext): void {
 		}
 		if (facts.behind === 0) {
 			say('temco-learn is already up to date' + (facts.ahead > 0 ? ' — ' + plural(facts.ahead, 'commit') + ' here are not pushed' : '') + '.');
+			sitePage.report({ title: 'Already up to date' });
 			return;
 		}
 
 		const before = (await git(folder, ['rev-parse', 'HEAD']).catch(() => '')).trim();
 		say('Pulling ' + plural(facts.behind, 'commit') + ' into ' + folder + '...');
 		forgetFetch(folder);
-		const pulled = await runner.pull(log);
+		// A pull of sixteen commits fetches, merges and touches hundreds of files: say so in the one place a person looks
+		// while it runs, rather than printing "Pulling..." into a panel they cannot see.
+		const pulled = await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title: 'Pulling ' + plural(facts.behind, 'commit') + ' into temco-learn',
+				cancellable: false
+			},
+			() => runner.pull(log)
+		);
 		refresh();
-		sitePage.refresh();
-		overview.refresh();
 		if (pulled !== 0) {
 			complain('The pull failed — the log says why. Nothing was rebuilt.');
+			sitePage.report({ title: 'Nothing was pulled', tone: 'warn' });
 			return;
 		}
 
@@ -667,6 +816,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			'Later'
 		);
 		if (answer !== 'Build now') {
+			sitePage.report({ title: 'Pulled ' + plural(facts.behind, 'commit') });
 			return;
 		}
 		if (movedDependencies) {
@@ -674,6 +824,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			const installed = await runner.run('install', log);
 			if (installed !== 0) {
 				complain('The dependencies could not be installed — the log says why. Nothing was built.');
+				sitePage.report({ title: 'Pulled, but the dependencies could not be installed', tone: 'warn' });
 				return;
 			}
 		}
@@ -681,6 +832,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		const built = await runner.run('build', log);
 		if (built !== 0) {
 			complain('The site could not be built from the new code — the log says why.');
+			sitePage.report({ title: 'Pulled, but the site could not be built', tone: 'warn' });
 			return;
 		}
 		// `serve` hands out `dist/`, so a preview that is already running has to be restarted to show the new build.
@@ -690,8 +842,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		}
 		say('temco-learn is on the new code and the site is built from it.');
 		refresh();
-		sitePage.refresh();
-		overview.refresh();
+		sitePage.report({ title: 'Pulled ' + plural(facts.behind, 'commit') + ' and built the site' });
 	};
 
 	/** Point the module at a clone that is already on this machine. */
@@ -850,6 +1001,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		// and the palette call. Both do the same thing, so there is one behaviour to trust rather than two that drift.
 		vscode.commands.registerCommand('temcoLearn.site.pull', getLatest),
 		vscode.commands.registerCommand('temcoLearn.site.update', getLatest),
+		vscode.commands.registerCommand('temcoLearn.site.refresh', reread),
 		// One row of the changes list: its difference, and setting it back to the last commit.
 		vscode.commands.registerCommand('temcoLearn.site.diff', showDiff),
 		vscode.commands.registerCommand('temcoLearn.site.discard', discard),

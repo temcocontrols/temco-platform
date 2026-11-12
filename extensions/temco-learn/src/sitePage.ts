@@ -56,6 +56,16 @@ export const PAGE_STYLE = `
 .site-tabs__label { margin-bottom: -1px; padding: 2px 10px 3px; border-bottom: 2px solid transparent; color: var(--ink-3); font-size: 11.5px; line-height: 18px; cursor: pointer; }
 .site-tabs__label:hover { color: var(--ink-1); }
 .site-tabs__pane { display: none; }
+.site-tabs__toggle { display: flex; align-items: center; gap: 3px; margin-left: auto; padding-bottom: 1px; color: var(--az-blue, #0078d4); font-size: 11.5px; line-height: 18px; cursor: pointer; }
+.site-tabs__toggle:hover { text-decoration: underline; }
+.site-tabs__toggle-less { display: none; }
+.site-tabs__toggle-less .icon { transform: rotate(180deg); }
+#site-more:checked ~ .site-tabs__bar .site-tabs__toggle-more { display: none; }
+#site-more:checked ~ .site-tabs__bar .site-tabs__toggle-less { display: flex; }
+#site-more:focus-visible ~ .site-tabs__bar .site-tabs__toggle { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
+.site-console--all { display: none; }
+#site-more:checked ~ .site-tabs__pane .site-console--tail { display: none; }
+#site-more:checked ~ .site-tabs__pane .site-console--all { display: block; }
 #site-tab-output:checked ~ .site-tabs__bar label[for='site-tab-output'],
 #site-tab-publish:checked ~ .site-tabs__bar label[for='site-tab-publish'] { color: var(--ink-1); border-bottom-color: var(--az-blue, #0078d4); }
 #site-tab-output:focus-visible ~ .site-tabs__bar label[for='site-tab-output'],
@@ -63,6 +73,7 @@ export const PAGE_STYLE = `
 #site-tab-output:checked ~ .site-tab-pane--output { display: block; }
 #site-tab-publish:checked ~ .site-tab-pane--publish { display: block; }
 .site-console { margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); background: color-mix(in srgb, var(--az-blue, #0078d4) 3%, var(--surface-card)); color: var(--ink-2); font-family: var(--font-mono); font-size: 11.5px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.site-console--all { max-height: 260px; overflow-y: auto; }
 .site-add { display: grid; gap: 2px; padding: var(--sp-2) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); background: color-mix(in srgb, var(--az-blue, #0078d4) 4%, var(--surface-card)); }
 .site-add--focus { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
 .site-add__row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--sp-3); padding: var(--sp-1) 0; }
@@ -79,6 +90,9 @@ export const PAGE_STYLE = `
 .site-change__path { min-width: 0; color: var(--ink-1); font-family: var(--font-mono); font-size: 11.5px; line-height: 16px; overflow-wrap: anywhere; }
 .site-change__acts { display: flex; gap: var(--sp-3); }
 .site-change__more { color: var(--ink-3); font-size: 11.5px; line-height: 16px; padding-left: 30px; }
+.site-report { display: flex; align-items: baseline; gap: var(--sp-3); margin: 0 0 var(--sp-2); padding: 5px 12px 6px; border-radius: var(--r-2); border-left: 2px solid var(--vscode-charts-green, #3fb950); background: var(--surface-card); background: color-mix(in srgb, var(--vscode-charts-green, #3fb950) 8%, var(--surface-card)); }
+.site-report--warn { border-left-color: var(--vscode-charts-yellow, #d29922); background: color-mix(in srgb, var(--vscode-charts-yellow, #d29922) 10%, var(--surface-card)); }
+.site-report__title { min-width: 0; color: var(--ink-1); font-size: 12.5px; line-height: 18px; overflow-wrap: anywhere; }
 `;
 
 /** The links in the meta line are buttons in the page's own dress: a command, never an `href` into the website. */
@@ -110,11 +124,26 @@ export interface SitePageFacts {
 	pending: readonly PendingBuild[];
 	/** Set when the page was opened *for* a section: it comes first, and says so. */
 	focus?: 'add' | 'changes';
+	/**
+	 * What an act just did, in the caller's words.
+	 *
+	 * A pull of sixteen commits, a discard and a commit-and-push all finish by redrawing this page, and the page used to
+	 * come back looking exactly as it did before — so a person who pressed a button could not tell whether anything had
+	 * happened. This is that answer, in one line, above the activity area that holds the detail.
+	 */
+	report?: Report;
+}
+
+/** The outcome of the act that opened the page. */
+export interface Report {
+	title: string;
+	tone: 'ok' | 'warn';
 }
 
 export class SitePage implements vscode.Disposable {
 	private opened: vscode.WebviewPanel | undefined;
 	private focus: 'add' | 'changes' | undefined;
+	private held: { title: string; tone: Report['tone'] } | undefined;
 
 	constructor(private readonly read: () => Promise<SitePageFacts>) { }
 
@@ -139,6 +168,18 @@ export class SitePage implements vscode.Disposable {
 		void this.render();
 	}
 
+	/**
+	 * Opens the page on what an act just did.
+	 *
+	 * The report is held for exactly one drawing: the next redraw is about the clone's state again, not about a pull that
+	 * has since been read. Its lines are the tail of the log at the moment it is drawn, so the caller names the outcome and
+	 * git names the details.
+	 */
+	report(held: { title: string; tone?: Report['tone'] }): void {
+		this.held = { title: held.title, tone: held.tone ?? 'ok' };
+		this.open();
+	}
+
 	refresh(): void {
 		void this.render();
 	}
@@ -159,8 +200,11 @@ export class SitePage implements vscode.Disposable {
 		}
 		const facts = await this.read();
 		const focus = this.focus;
+		const held = this.held;
 		this.focus = undefined;
-		opened.webview.html = page(html(focus === undefined ? facts : { ...facts, focus }), {
+		this.held = undefined;
+		const state = focus === undefined ? { ...facts, report: held } : { ...facts, report: held, focus };
+		opened.webview.html = page(html(state), {
 			title: SITE_PAGE_TITLE,
 			script: commandScript,
 			extraCss: PAGE_STYLE
@@ -374,6 +418,11 @@ export function html(state: SitePageFacts): string {
 	if (repo.ready && repo.behind > 0) {
 		actions.push({ label: `Pull ${plural(repo.behind, 'commit')}`, command: 'temcoLearn.site.pull', mark: 'sync' });
 	}
+	if (repo.ready) {
+		// Beside the pull, because it is the question the pull answers: is there anything new, really? The figure here is a
+		// comparison against `origin/main`, and that only moves when something fetches.
+		actions.push({ label: 'Refresh', command: 'temcoLearn.site.refresh', mark: 'refresh' });
+	}
 
 	const head = hero({
 		title: SITE_PAGE_TITLE,
@@ -448,6 +497,18 @@ export function html(state: SitePageFacts): string {
 					actions: button('Try again', 'temcoLearn.site.start') + button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link' })
 				})
 			: '',
+		// Activity is second, not last: every act on this page writes here, so the answer to "what happened when I pressed
+		// that?" has to be where the press left the eye instead of below four sections about the machine. The outcome of the
+		// act that opened the page is its first line, and the tabs below it are the whole story.
+		state.report === undefined ? '' : report(state.report),
+		section({
+			title: 'Activity',
+			desc: 'What a clone, a pull, a build or a server printed in this window, and what the last publish attempt said.',
+			actions:
+				button('Clear', 'temcoLearn.site.clearLog', { kind: 'link' }) +
+				button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link', mark: 'output' })
+		}),
+		activity(state),
 		state.focus === 'changes' ? changesSection : '',
 		state.focus === 'add' ? addsSection : '',
 		section({
@@ -477,18 +538,22 @@ export function html(state: SitePageFacts): string {
 			{ tone: repo.built ? 'ok' : 'warn' }
 		)}</div>`,
 		state.focus === 'add' ? '' : addsSection,
-		state.focus === 'changes' ? '' : changesSection,
-		section({
-			title: 'Activity',
-			desc: 'What a clone, a pull, a build or a server printed in this window, and what the last publish attempt said.',
-			actions:
-				button('Clear', 'temcoLearn.site.clearLog', { kind: 'link' }) +
-				button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link', mark: 'output' })
-		}),
-		activity(state)
+		state.focus === 'changes' ? '' : changesSection
 	]
 		.filter((part) => part !== '')
 		.join('\n');
+}
+
+/**
+ * What an act just did: one line, where the eye already is, above the activity area that holds the detail.
+ *
+ * The lines themselves are not repeated here — the console is directly below, and the same four lines twice reads as two
+ * different things having happened. This is the sentence a person needs ("Pulled 16 commits"), with the tone of it.
+ */
+function report(held: Report): string {
+	return `<div class="site-report${held.tone === 'warn' ? ' site-report--warn' : ''}"><span class="site-report__title">${escapeHtml(
+		held.title
+	)}</span></div>`;
 }
 
 /** Where the clone is and what it last did: the facts the title block carries instead of a sentence. */
@@ -503,24 +568,53 @@ function whereLine(repo: RepoFacts): string {
 	return parts.join(' · ');
 }
 
+/**
+ * How many lines the activity area shows before anybody asks for the rest.
+ *
+ * It is the second thing on the page now, so it cannot grow with the log: a build prints hundreds of lines, and a section
+ * that tall would push the machine it is about off the screen. Five is what an act says — "pulling…", "set aside two, removed
+ * two", "success" — and the rest is one press away.
+ */
+const ACTIVITY_LINES = 5;
+
 /** One tabbed activity area: what the module did here, and what the last publish said. Panes switch without a script. */
 function activity(state: SitePageFacts): string {
 	const output = consoleOf(state.log, 'Nothing has been run in this window yet. A clone, a pull, a build and a server all write here.');
 	const publish = consoleOf(state.publish, 'Nothing has been published from this window yet. The Publishing page runs a publish and writes here.');
+	// The fold is a checkbox and two labels, the way the tabs are radios and two labels: nothing on this page needs a script
+	// to say what it is showing, and a `Show more` that needs one would be the only act here that does.
+	const more = cleanLines(state.log).length > ACTIVITY_LINES || cleanLines(state.publish).length > ACTIVITY_LINES;
+	const toggle = more
+		? `<label class="site-tabs__toggle" for="site-more"><span class="site-tabs__toggle-more">${icon('chevron-down')}Show more</span><span class="site-tabs__toggle-less">${icon('chevron-down')}Show less</span></label>`
+		: '';
 	const panes = [
 		`<div class="site-tabs__pane site-tab-pane--output">${output}</div>`,
 		`<div class="site-tabs__pane site-tab-pane--publish">${publish}</div>`
 	];
-	return `<div class="site-tabs"><input type="radio" name="site-tab" id="site-tab-output" class="site-tabs__input" checked><input type="radio" name="site-tab" id="site-tab-publish" class="site-tabs__input"><div class="site-tabs__bar"><label class="site-tabs__label" for="site-tab-output">Output</label><label class="site-tabs__label" for="site-tab-publish">Publish</label></div>${panes.join(
+	return `<div class="site-tabs"><input type="radio" name="site-tab" id="site-tab-output" class="site-tabs__input" checked><input type="radio" name="site-tab" id="site-tab-publish" class="site-tabs__input"><input type="checkbox" id="site-more" class="site-tabs__input"><div class="site-tabs__bar"><label class="site-tabs__label" for="site-tab-output">Output</label><label class="site-tabs__label" for="site-tab-publish">Publish</label>${toggle}</div>${panes.join(
 		''
 	)}</div>`;
 }
 
-/** The console: the lines as a person should read them, on a background of their own and no box around them. */
+/** A log as a person should read it: the lines that say something, in the order they were written. */
+function cleanLines(log: readonly string[]): string[] {
+	return log.map(cleanLine).filter((line) => line !== '');
+}
+
+/**
+ * The console: the lines as a person should read them, on a background of their own and no box around them.
+ *
+ * Two copies while there is more than a fold's worth: the last five, and the whole log. Only one is drawn — the checkbox
+ * above decides which — so the fold costs five duplicated lines rather than a script that measures text.
+ */
 function consoleOf(log: readonly string[], empty: string): string {
-	const lines = log.map(cleanLine).filter((line) => line !== '');
+	const lines = cleanLines(log);
 	if (lines.length === 0) {
 		return `<p class="az-block__note">${escapeHtml(empty)}</p>`;
 	}
-	return `<pre class="site-console">${lines.map((line) => escapeHtml(line)).join('\n')}</pre>`;
+	const tail = `<pre class="site-console site-console--tail">${escapeHtml(lines.slice(-ACTIVITY_LINES).join('\n'))}</pre>`;
+	if (lines.length <= ACTIVITY_LINES) {
+		return tail;
+	}
+	return `${tail}<pre class="site-console site-console--all">${escapeHtml(lines.join('\n'))}</pre>`;
 }
