@@ -39,6 +39,7 @@ import { PANEL_VIEW_TYPE, DocsPanel, DocsPanelState } from './panelView';
 import { statusLine } from './statusLine';
 import { OverviewPage } from './overview';
 import { AREA_CHAPTER, KINDS, PageDeps, PageOperations, registerPageCommands, sourceAt, writePage } from './pageOps';
+import { pageRoots } from './pageAssets';
 import { projects } from './projects';
 import { PreviewPanels } from './previewPanel';
 import { openSource } from './webview';
@@ -1421,6 +1422,9 @@ export function activate(context: vscode.ExtensionContext): TemcoDocsApi {
       }),
     setCaption,
     pagesNear: (pageFsPath: string) => pagesNear(roots, pageFsPath),
+    // The panel's own reading bound. A webview refuses every file it was not given, so a page's `../media/…` needs the
+    // folder above it named — and the rule for how far above is the page's set, not a guess.
+    pageRoots,
   };
 }
 

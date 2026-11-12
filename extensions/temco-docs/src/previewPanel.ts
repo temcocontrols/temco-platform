@@ -10,6 +10,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { pageRoots } from './pageAssets';
 import { escapeHtml, fileColumn } from './ui';
 
 /** The view type the preview tab registers under; one tab per document. */
@@ -78,7 +79,9 @@ export class PreviewPanels implements vscode.Disposable {
 			{
 				enableScripts: true,
 				retainContextWhenHidden: true,
-				localResourceRoots: [vscode.Uri.file(path.dirname(document.uri.fsPath))],
+				// A page's pictures are written `../media/…`, so the panel needs the folder above the page as well as
+				// the page's own — the documentation root, and no further.
+				localResourceRoots: pageRoots(document.uri.fsPath).map((folder) => vscode.Uri.file(folder)),
 			}
 		);
 		this.panels.set(key, panel);

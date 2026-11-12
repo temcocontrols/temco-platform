@@ -7,6 +7,7 @@
 // open, which project is selected, or what the tree is showing — that is the documentation module's model, and lending it
 // out would make two modules responsible for the same answer.
 
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 /** The module whose model this file borrows. Declared in `extensionDependencies`, so it is active before this one. */
@@ -46,6 +47,13 @@ export interface TemcoDocsApi {
 	setCaption(pageFsPath: string, name: string, caption: string): Promise<void>;
 	/** The pages of the set this file is in, for a link a relative path can reach. Empty when the file is in no set. */
 	pagesNear(pageFsPath: string): LinkablePage[];
+	/**
+	 * The folders a page's own files may come from: its own, and the folders above it up to the documentation root.
+	 *
+	 * A webview is given these as `localResourceRoots`. Without them a page's `../media/…` sits outside the one folder
+	 * the panel may read, the loader refuses it, and the picture is simply broken.
+	 */
+	pageRoots(pageFsPath: string): readonly string[];
 }
 
 /**
@@ -61,4 +69,22 @@ export function docsApi(): TemcoDocsApi {
 		throw new Error(`the documentation module (${DOCS_ID}) did not publish its model`);
 	}
 	return api;
+}
+
+/**
+ * The folders this page's pictures may come from, for a webview's `localResourceRoots`.
+ *
+ * A page writes `../media/shot.png`, so the page's own folder is not enough: the documentation root above it has to be
+ * readable too, or the loader refuses the file and the picture is broken with nothing logged. The rule for how far
+ * above belongs to the module that owns the set — the editor only asks.
+ *
+ * A window without that module still opens files, so the page's own folder is the answer when the model is missing:
+ * the same pictures that worked before, rather than an editor that will not start.
+ */
+export function pageRoots(pageFsPath: string): readonly string[] {
+	try {
+		return docsApi().pageRoots(pageFsPath);
+	} catch {
+		return [path.dirname(pageFsPath)];
+	}
 }

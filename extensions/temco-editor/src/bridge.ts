@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
 
 import { existsSync, statSync } from 'fs';
 import { screenshotPng } from './capture';
-import { docsApi, LinkablePage } from './docs';
+import { docsApi, LinkablePage, pageRoots } from './docs';
 
 /** What a bar button may ask the extension to do. */
 type PageAction = 'preview' | 'diff' | 'source' | 'properties' | 'assist' | 'save';
@@ -120,10 +120,11 @@ export abstract class WebviewTextEditor implements vscode.CustomTextEditorProvid
 			enableScripts: true,
 			localResourceRoots: [
 				this.bundleRoot(),
-				// A page's images are relative to the page, so the page's own folder has to be readable.
-				vscode.Uri.file(path.dirname(document.uri.fsPath)),
-			],
-		};
+					// A page's images are relative to the page, so the page's own folder has to be readable — and so does
+					// the documentation root above it, because a page writes `../media/…`: that is what the build resolves.
+					...pageRoots(document.uri.fsPath).map((folder) => vscode.Uri.file(folder)),
+				],
+			};
 		panel.webview.html = this.html(document, panel.webview);
 
 		/** The last text this editor put into the document, so its own write is not read back as an outside change. */

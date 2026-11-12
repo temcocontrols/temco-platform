@@ -22,7 +22,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire, Module } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, parse } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { suite, standalone } from './harness.mts';
 
@@ -30,7 +30,7 @@ const here = fileURLToPath(new URL('../..', import.meta.url));
 const load = createRequire(import.meta.url);
 const out = (...parts: string[]): string => join(here, 'extensions', ...parts, 'out');
 
-if (!existsSync(out('temco-repositories')) || !existsSync(out('temco-learn')) || !existsSync(out('temco-store'))) {
+if (!existsSync(out('temco-repositories')) || !existsSync(out('temco-learn')) || !existsSync(out('temco-store')) || !existsSync(out('temco-docs'))) {
 	throw new Error('the extensions are not compiled — run `npm run test-temco`, which compiles before it tests.');
 }
 
@@ -99,6 +99,7 @@ interface Found {
 
 const place = load(join(out('temco-repositories'), 'workarea.js')) as Place;
 const builds = load(join(out('temco-learn'), 'builds.js')) as { findBuilds(): Promise<Found[]> };
+const pageAssets = load(join(out('temco-docs'), 'pageAssets.js')) as { pageRoots(pageFsPath: string): readonly string[] };
 const site = load(join(out('temco-learn'), 'site.js')) as {
 	slugOf(title: string): string;
 	buildPages(root: string): Promise<{ href: string; title: string; kind?: 'md' | 'build' }[]>;
@@ -283,4 +284,41 @@ test('no view title holds the same command twice, so an icon and its menu entry 
 	assert.deepEqual(doubled, []);
 });
 
-await standalone(import.meta.url, group.cases, 'where a folder goes, which project a build belongs to, and a title bar without twins');
+// ---------- what a panel may read ----------
+//
+// A webview refuses every file outside its `localResourceRoots`, and a page writes `../media/…` — so the page's own
+// folder is never enough. The folders above it, up to the set that names the page, are what a picture needs, and this
+// is the rule that decides how far up. It was wrong once: the tab showed broken images with every file sitting in
+// `docs/media/` the whole time, and nothing logged a word about why.
+test('a page may read its own folder and the set above it, and not the folder above that', () => {
+	const world = mkdtempSync(join(tmpdir(), 'temco-roots-'));
+	try {
+		const set = join(world, 'docs');
+		const chapter = join(set, 'control');
+		const nested = join(chapter, 'inputs');
+		mkdirSync(join(set, 'help'), { recursive: true });
+		mkdirSync(nested, { recursive: true });
+		writeFileSync(join(set, 'help', 'registry.json'), '{"version":1,"areas":{},"pages":{}}');
+		writeFileSync(join(chapter, 'control.md'), '# control');
+		writeFileSync(join(nested, 'x.md'), '# x');
+
+		assert.deepEqual(pageAssets.pageRoots(join(chapter, 'control.md')), [chapter, set], 'the page and its set');
+		assert.deepEqual(
+			pageAssets.pageRoots(join(nested, 'x.md')),
+			[nested, chapter, set],
+			'a chapter deeper in reaches its own folder, its parents, and stops at the set'
+		);
+
+		// A page in no set still gets a few ancestors — `../media` from a loose file — and never the drive it sits on.
+		const loose = join(world, 'notes');
+		mkdirSync(loose, { recursive: true });
+		const roots = pageAssets.pageRoots(join(loose, 'readme.md'));
+		assert.equal(roots[0], loose, 'the page\'s own folder is always first');
+		assert.ok(roots.length >= 2 && roots.length <= 6, `a loose page reached ${roots.length} folders`);
+		assert.ok(!roots.includes(parse(world).root), 'a loose page must never be handed the drive root');
+	} finally {
+		rmSync(world, { recursive: true, force: true });
+	}
+});
+
+await standalone(import.meta.url, group.cases, 'where a folder goes, which project a build belongs to, what a page may read, and a title bar without twins');

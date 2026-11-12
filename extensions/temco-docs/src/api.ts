@@ -60,4 +60,12 @@ export interface TemcoDocsApi {
 	setCaption(pageFsPath: string, name: string, caption: string): Promise<void>;
 	/** The pages of the set this file is in, in reading order. Empty when the file is in no set being read. */
 	pagesNear(pageFsPath: string): LinkablePage[];
+	/**
+	 * The folders a page's own files may come from: its own, and the folders above it up to the documentation root.
+	 *
+	 * A webview is given these as `localResourceRoots`. Without them a page's `../media/…` is outside the one folder
+	 * the panel was allowed to read, so the loader refuses it: the picture shows as a broken image and nothing is
+	 * logged to say why.
+	 */
+	pageRoots(pageFsPath: string): readonly string[];
 }
