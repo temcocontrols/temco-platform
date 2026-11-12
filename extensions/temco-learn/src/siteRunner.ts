@@ -34,6 +34,39 @@ export type Log = (line: string) => void;
 /** The repository's own script, and the words a person reads for each state. */
 const SCRIPT = 'serve';
 
+/**
+ * How many paths one `git restore` is asked for.
+ *
+ * A command line is capped at 32,767 characters on Windows, and a discard of a whole version's pages is 34,000 before the
+ * last path is on it. Forty is far below that and still one command for the ordinary case of a handful of paths.
+ */
+const PATHS_PER_COMMAND = 40;
+
+/**
+ * A command as a person should read it.
+ *
+ * A hundred paths are not a command line, they are a wall a person scrolls past to find the line that says what happened —
+ * so the paths after `--` are summarised once there are more than a few, and the count is kept because it is the number
+ * that matters.
+ */
+export function commandOf(args: readonly string[]): string {
+	const separator = args.indexOf('--');
+	const paths = separator === -1 ? [] : args.slice(separator + 1);
+	if (paths.length <= 4) {
+		return args.join(' ');
+	}
+	return [...args.slice(0, separator + 1), ...paths.slice(0, 3), `… and ${paths.length - 3} more paths`].join(' ');
+}
+
+/** A list cut into the pieces one command can carry. */
+export function batchOf<T>(items: readonly T[], size = PATHS_PER_COMMAND): T[][] {
+	const batches: T[][] = [];
+	for (let at = 0; at < items.length; at += size) {
+		batches.push(items.slice(at, at + size));
+	}
+	return batches;
+}
+
 export function describe(status: SiteStatus, port = sitePort()): string {
 	switch (status.state) {
 		case 'running':
@@ -249,7 +282,7 @@ export class SiteRunner implements vscode.Disposable {
 	/** Run one git command in the clone (or beside it), streaming what it says. The exit code is the answer. */
 	async git(args: readonly string[], log: Log, cwd = this.read()): Promise<number> {
 		return new Promise((resolve) => {
-			log('[git] git ' + args.join(' '));
+			log('[git] git ' + commandOf(args));
 			const child = spawn('git', [...args], { cwd, windowsHide: true, env: process.env });
 			child.stdout?.on('data', (chunk: Buffer) => log(String(chunk).trimEnd()));
 			child.stderr?.on('data', (chunk: Buffer) => log(String(chunk).trimEnd()));
@@ -264,6 +297,24 @@ export class SiteRunner implements vscode.Disposable {
 	/** Fetch and fast-forward the clone. Never a merge and never a force: a clone that has diverged is a person's problem. */
 	async pull(log: Log): Promise<number> {
 		return this.git(['pull', '--ff-only'], log);
+	}
+
+	/**
+	 * Put a set of paths back to the last commit, in as many commands as the command line allows.
+	 *
+	 * Windows caps a command line at 32,767 characters, and "discard all" on a clone holding a whole version's pages is
+	 * 34,000 before the last path is on it: the command never starts, so nothing is restored and the page keeps showing the
+	 * changes it was told to clear. Batching is the fix, and the batch is small enough to leave room for long paths in a
+	 * deep checkout. The first refusal is the answer — a rest that half-succeeds is worse than one that stops.
+	 */
+	async restore(paths: readonly string[], log: Log): Promise<number> {
+		for (const batch of batchOf(paths)) {
+			const code = await this.git(['restore', '--', ...batch], log);
+			if (code !== 0) {
+				return code;
+			}
+		}
+		return 0;
 	}
 
 	/** Clone the site beside nothing else, into the folder the module is pointed at. */

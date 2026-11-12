@@ -1,4 +1,4 @@
-﻿// Temco Learn - the site, from the inside.
+// Temco Learn - the site, from the inside.
 //
 // The site is its own repository (`temcocontrols/temco-learn`): React, Fluent UI, Markdown, built by Vite, published to
 // GitHub Pages. This module is a client of that checkout and owns none of it - it runs the site's servers, builds it,
@@ -63,10 +63,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	// The clone's own commands — clone, pull, install, build, serve — write to one bounded log the Site page reads, and to
 	// the output channel for anyone who wants the whole thing.
 	const siteLog = new SiteLog();
-	const log = (line: string): void => {
-		siteLog.append(line);
+	const record = (line: string, tone: 'plain' | 'action' | 'warn' = 'plain'): void => {
+		siteLog.append(line, tone);
 		output.appendLine(line);
 	};
+	const log = (line: string): void => record(line);
 	// Build outputs are static folders on disk and have nothing to do with the site's servers: one loopback server for a
 	// look at a file, stopped when the panel closes.
 	const server = new Server();
@@ -242,13 +243,13 @@ export function activate(context: vscode.ExtensionContext): void {
 	 * belongs in the page that owns the button: the activity area, and the output channel for anyone who wants it whole.
 	 */
 	const say = (text: string): void => {
-		log(text);
+		record(text, 'action');
 		sitePage.refresh();
 	};
 
-	/** A failure: the same line, and the page that holds it comes forward. */
+	/** A failure: the same line, in the warning tone, and the page that holds it comes forward. */
 	const complain = (text: string): void => {
-		log(text);
+		record(text, 'warn');
 		sitePage.open();
 	};
 
@@ -604,16 +605,34 @@ export function activate(context: vscode.ExtensionContext): void {
 		return gone;
 	};
 
-	/** The question a discard asks when part of it cannot be undone: what git cannot put back, by name. */
-	const askToRemove = async (count: number, remove: readonly string[]): Promise<boolean> => {
-		const them = remove.length === 1 ? 'it is' : 'they are';
+	/**
+	 * The question a discard asks when part of it cannot be undone.
+	 *
+	 * Two kinds of loss, and they are not the same: a path somebody edited is gone for good, while a path the build wrote is
+	 * written again by the next build. Both are named by count, and the paths that cannot be recovered are listed — a
+	 * "Discard all" over five hundred paths deserves to say which five hundred.
+	 */
+	const confirmDiscard = async (edits: number, remove: readonly string[], total: number): Promise<boolean> => {
+		if (edits === 0 && remove.length === 0) {
+			return true;
+		}
+		const lines: string[] = [];
+		if (edits > 0) {
+			lines.push(`${plural(edits, 'path')} ${edits === 1 ? 'is' : 'are'} your own work, and discarded for good`);
+		}
+		if (remove.length > 0) {
+			lines.push(
+				`${plural(remove.length, 'path')} ${remove.length === 1 ? 'is' : 'are'} not in the last commit, so ` +
+					`${remove.length === 1 ? 'it is' : 'they are'} deleted from disk`
+			);
+		}
 		const answer = await vscode.window.showWarningMessage(
-			`Discard ${plural(count, 'path')}? ${plural(remove.length, 'path')} ${them} not in the last commit, so ${
-				remove.length === 1 ? 'it is' : 'they are'
-			} deleted from disk. The build writes ${remove.length === 1 ? 'it' : 'them'} again.`,
+			`Discard ${plural(total, 'path')}?`,
 			{
 				modal: true,
-				detail: remove.slice(0, 6).join('\n') + (remove.length > 6 ? `\n… and ${remove.length - 6} more` : '')
+				detail: [lines.join('\n'), remove.length === 0 ? '' : '', remove.slice(0, 6).join('\n')]
+					.filter((part) => part !== '')
+					.join('\n\n')
 			},
 			'Discard'
 		);
@@ -645,13 +664,14 @@ export function activate(context: vscode.ExtensionContext): void {
 			return;
 		}
 		const { restore, remove } = discardOf(chosen);
-		if (remove.length > 0 && !(await askToRemove(chosen.length, remove))) {
+		const edited = chosen.filter((change) => change.kind === 'edit').length;
+		if (!(await confirmDiscard(edited, remove, chosen.length))) {
 			say('Nothing was discarded.');
 			sitePage.report({ title: 'Nothing was discarded', tone: 'warn' });
 			return;
 		}
 		if (restore.length > 0) {
-			const code = await runner.git(['restore', '--', ...restore], log);
+			const code = await runner.restore(restore, log);
 			if (code !== 0) {
 				say('Nothing was discarded — the log says what git refused.');
 				sitePage.report({ title: 'Nothing was discarded', tone: 'warn' });
@@ -736,13 +756,15 @@ export function activate(context: vscode.ExtensionContext): void {
 		// file over an untracked one of the same name.
 		const disposable = facts.changes.filter((change) => change.kind !== 'edit');
 		const { restore, remove } = discardOf(disposable);
-		if (remove.length > 0 && !(await askToRemove(disposable.length, remove))) {
+		// Build output only, so nothing of a person's is in this question — but a path the commit does not have still has to
+		// be deleted for a pull to write the committed copy, and deleting is not something to do quietly.
+		if (!(await confirmDiscard(0, remove, disposable.length))) {
 			say('Nothing was pulled: the build output is still there, and git will not write over it.');
 			sitePage.report({ title: 'Nothing was pulled', tone: 'warn' });
 			return;
 		}
 		if (restore.length > 0) {
-			const restored = await runner.git(['restore', '--', ...restore], log);
+			const restored = await runner.restore(restore, log);
 			if (restored !== 0) {
 				complain('The build output could not be set aside, so nothing was pulled — the log says why.');
 				sitePage.report({ title: 'Nothing was pulled', tone: 'warn' });

@@ -104,6 +104,10 @@ const pageAssets = load(join(out('temco-docs'), 'pageAssets.js')) as { pageRoots
 const repo = load(join(out('temco-learn'), 'siteRepo.js')) as {
 	pageUrl(base: string, project?: string, version?: string, href?: string): string;
 };
+const runner = load(join(out('temco-learn'), 'siteRunner.js')) as {
+	commandOf(args: readonly string[]): string;
+	batchOf<T>(items: readonly T[], size?: number): T[][];
+};
 const facts = load(join(out('temco-learn'), 'siteFacts.js')) as {
 	classifyChanges(status: string, numstat: string): { code: string; path: string; untracked: boolean; kind: string }[];
 	discardOf(changes: readonly { path: string; untracked: boolean }[]): { restore: string[]; remove: string[] };
@@ -346,6 +350,32 @@ test('a page address is a path the site routes, never a fragment', () => {
 			'http://localhost:1025/'
 		],
 		'a nested page keeps its slashes, a project keeps the mount point, and the site itself is still its own address'
+	);
+});
+
+// ---------- a command a person can read, and one Windows will run ----------
+//
+// "Discard all" on a clone holding a version's pages is 551 paths, and 34,463 characters — past the 32,767 a command line
+// may carry on Windows, so `git restore` never started: nothing was discarded, the page kept its changes, and the log held
+// one wall of paths with no line saying what happened.
+test('a restore is split into commands that can run, and the echo of one says what it is', () => {
+	const paths = Array.from({ length: 551 }, (_, index) => `content/t3000/1.0/page-${index + 1}.md`);
+	const batches = runner.batchOf(paths);
+	assert.equal(batches.length, 14, '551 paths are not split into commands a command line can carry');
+	assert.deepEqual(batches.map((batch) => batch.length).slice(0, 2), [40, 40], 'the batches are not the size that fits');
+	assert.equal(batches.at(-1)?.length, 31, 'the last batch is not what is left');
+	assert.equal(batches.flat().length, paths.length, 'batching lost a path');
+
+	assert.match(
+		runner.commandOf(['restore', '--', ...paths.slice(0, 40)]),
+		/^restore -- content\/t3000\/1\.0\/page-1\.md content\/t3000\/1\.0\/page-2\.md content\/t3000\/1\.0\/page-3\.md … and 37 more paths$/u,
+		'a forty-path command is echoed as a wall'
+	);
+	assert.equal(runner.commandOf(['pull', '--ff-only']), 'pull --ff-only', 'a command with no paths is not echoed as it is');
+	assert.equal(
+		runner.commandOf(['restore', '--', 'a.md', 'b.md']),
+		'restore -- a.md b.md',
+		'a short list of paths is shortened for no reason'
 	);
 });
 

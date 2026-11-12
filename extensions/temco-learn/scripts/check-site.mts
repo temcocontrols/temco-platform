@@ -97,6 +97,10 @@ const facts = (overrides: Record<string, unknown> = {}) => ({
 	...overrides
 });
 
+/** Log lines as the module records them: the text, and how it should read. */
+const lines = (texts: readonly string[], tone: 'plain' | 'action' | 'warn' = 'plain') =>
+	texts.map((text) => ({ text, tone }));
+
 const cases: { name: string; run: () => void }[] = [];
 const test = (name: string, run: () => void): void => {
 	cases.push({ name, run });
@@ -181,10 +185,23 @@ test('the changes are grouped by what wrote them, because "commit or discard the
 	]);
 	assert.match(html, /Commit and push 1 edit/u, 'the commit act does not say what it will carry');
 	assert.equal((html.match(/data-command="temcoLearn\.site\.diff"/gu) ?? []).length, 4, 'a row does not offer its difference');
-	// A discard for each of the four rows, one for the two groups the build wrote, and one for the whole list of them —
-	// and none of them is offered for "Yours" as a group.
-	assert.equal((html.match(/data-command="temcoLearn\.site\.discard"/gu) ?? []).length, 7, 'the discard acts are not where they belong');
+	// A discard for each of the four rows, one for the two groups the build wrote, and one for the whole list — the last of
+	// which is the only way to clear somebody's own edits in bulk, because "Yours" never offers a group discard — and none of
+	// them is offered for "Yours" as a group.
+	assert.equal((html.match(/data-command="temcoLearn\.site\.discard"/gu) ?? []).length, 8, 'the discard acts are not where they belong');
 	assert.match(html, /Discard 3 build paths/u);
+	assert.match(html, /Discard all 4 paths/u, 'the section does not offer to clear the whole list');
+	const discardButtons = [
+		...html.matchAll(/<button[^>]*data-command="temcoLearn\.site\.discard"[^>]*data-args="([^"]+)"[^>]*>([\s\S]*?)<\/button>/gu)
+	].map((match) => ({
+		paths: (JSON.parse(match[1].replace(/&quot;/gu, '"')) as { paths?: string[] }).paths ?? [],
+		label: match[2].replace(/<[^>]+>/gu, '')
+	}));
+	assert.deepEqual(
+		discardButtons.find((one) => one.label.startsWith('Discard all'))?.paths,
+		['.gitignore', 'public/catalog.json', 'public/search.json', 'public/content/t3000/1.0.json'],
+		'Discard all does not carry every path in the clone'
+	);
 	// The header of the group of edits carries no bulk discard: those are the paths somebody has to decide about.
 	const yoursHeader = /site-changes__kind">Yours<\/span>(?:(?!<\/div>)[\s\S])*<\/div>/u.exec(html)?.[0] ?? '';
 	assert.ok(yoursHeader.startsWith('site-changes__kind">Yours'), 'the group of edits was not found');
@@ -218,27 +235,35 @@ test('Refresh sits beside Pull, and only the one with something to do is promise
 	);
 });
 
-test('an act that just finished says what it did, in one line, above the activity area', () => {
+test('an act that just finished says what it did, in one line, with the way to the log', () => {
 	const html = site.html(facts({ report: { title: 'Pulled 16 commits', tone: 'ok' } }));
 	const at = (needle: string): number => html.indexOf(needle);
 	assert.ok(at('site-report') > 0, 'the page says nothing about the act that opened it');
-	assert.ok(at('site-report') < at('Activity'), 'the outcome sits below the log it belongs to');
-	assert.ok(at('Activity') < at('This machine'), 'Activity is not the first thing after the title, so a press reports off-screen');
+	assert.ok(at('site-report') < at('This machine'), 'the outcome sits below the machine it is about');
 	assert.match(html, /site-report__title">Pulled 16 commits</u, 'the outcome is not named');
 	assert.equal(html.includes('site-report--warn'), false, 'a good outcome is drawn as a warning');
 	assert.match(html, /data-command="temcoLearn\.site\.showLog"/u, 'the page does not lead to the whole log');
 });
 
+/** The lines of one console pane, as text: the tone spans are markup, and the check is about what a person reads. */
+const consoleLines = (html: string, cls: string): string[] => {
+	const body = new RegExp(`<pre class="site-console ${cls}">([\\s\\S]*?)</pre>`, 'u').exec(html)?.[1] ?? '';
+	return body.split('\n').map((line) => line.replace(/<[^>]+>/gu, ''));
+};
+
 test('the activity area shows the last five lines, with one press for the rest', () => {
-	const log = Array.from({ length: 12 }, (_, index) => `line ${index + 1}`);
+	const log = lines(Array.from({ length: 12 }, (_, index) => `line ${index + 1}`));
 	const html = site.html(facts({ log }));
-	const pre = (cls: string): string => new RegExp(`<pre class="site-console ${cls}">([\\s\\S]*?)</pre>`, 'u').exec(html)?.[1] ?? '';
-	const tail = pre('site-console--tail');
-	const all = pre('site-console--all');
-	assert.equal(tail.split('\n').length, 5, 'the fold is not five lines');
-	assert.match(tail, /^line 8\n/gu, 'the fold does not start where the last five do');
-	assert.match(tail, /line 12$/u, 'the fold hides the newest lines instead of the oldest');
-	assert.equal(all.split('\n').length, 12, 'the whole log is not there to unfold');
+	assert.deepEqual(
+		consoleLines(html, 'site-console--tail'),
+		['line 8', 'line 9', 'line 10', 'line 11', 'line 12'],
+		'the fold does not hold the last five lines, newest included'
+	);
+	assert.deepEqual(
+		consoleLines(html, 'site-console--all'),
+		Array.from({ length: 12 }, (_, index) => `line ${index + 1}`),
+		'the whole log is not there to unfold'
+	);
 	assert.match(html, /<label class="site-tabs__toggle" for="site-more">/u, 'there is no way to ask for the rest');
 	assert.match(html, /Show more/u);
 	assert.match(html, /Show less/u);
@@ -246,10 +271,10 @@ test('the activity area shows the last five lines, with one press for the rest',
 });
 
 test('a log with nothing hidden has no fold, and no second copy of itself', () => {
-	const html = site.html(facts({ log: ['one', 'two', 'three'] }));
+	const html = site.html(facts({ log: lines(['one', 'two', 'three']) }));
 	assert.equal(html.includes('site-tabs__toggle'), false, 'the page offers to unfold three lines');
 	assert.equal(html.includes('site-console--all'), false, 'the same three lines are drawn twice');
-	assert.match(html, /site-console--tail">one\ntwo\nthree</u, 'the lines are not the log');
+	assert.deepEqual(consoleLines(html, 'site-console--tail'), ['one', 'two', 'three'], 'the lines are not the log');
 });
 
 test('every glyph the page asks for is one the shared sprite draws', () => {
@@ -266,6 +291,30 @@ test('every glyph the page asks for is one the shared sprite draws', () => {
 		[],
 		'named a glyph the sprite does not draw'
 	);
+});
+
+test('an act reads differently from the output around it, so a refusal is not the same grey as a build', () => {
+	const html = site.html(
+		facts({
+			log: [
+				{ text: '12:01:02  $ git restore -- public/catalog.json', tone: 'plain' },
+				{ text: "12:01:02  Nothing was pulled: 551 paths here are yours, not the build's", tone: 'warn' },
+				{ text: '12:01:03  Set aside 2 paths the last build wrote.', tone: 'action' }
+			]
+		})
+	);
+	assert.match(html, /site-console__line--plain">12:01:02/u, 'raw output is not drawn as raw output');
+	assert.match(html, /site-console__line--warn">12:01:02  Nothing was pulled/u, 'a refusal looks like the rest of the log');
+	assert.match(html, /site-console__line--action">12:01:03  Set aside/u, 'the module saying what it did looks like raw output');
+	assert.equal((html.match(/site-console__line--/gu) ?? []).length, 3, 'the log is drawn without its tones');
+});
+
+test('the log is the last section, and the outcome of an act says where it is', () => {
+	const html = site.html(facts({ report: { title: 'Pulled 16 commits', tone: 'ok' } }));
+	const at = (needle: string): number => html.indexOf(needle);
+	assert.ok(at('site-report') < at('This machine'), 'the outcome sits below the machine it is about');
+	assert.ok(at('Changes in the clone') < at('Activity'), 'Activity is not the last thing on the page');
+	assert.match(html, /site-report[\s\S]*?data-command="temcoLearn\.site\.showLog"/u, 'the outcome does not lead to the log it is about');
 });
 
 test('a failure is the same line, in the warning tone, and nothing at all when nothing happened', () => {

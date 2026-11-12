@@ -12,6 +12,7 @@
 import * as vscode from 'vscode';
 import { RepoFacts } from './siteFacts';
 import { SiteStatus } from './siteRunner';
+import { LogLine, Tone } from './siteLog';
 import { siteUrl } from './siteRepo';
 import { ago } from './state';
 import { callout, commandScript, escapeHtml, hero, icon, page, pageColumn, runCommand, section } from './ui';
@@ -74,6 +75,9 @@ export const PAGE_STYLE = `
 #site-tab-publish:checked ~ .site-tab-pane--publish { display: block; }
 .site-console { margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); background: color-mix(in srgb, var(--az-blue, #0078d4) 3%, var(--surface-card)); color: var(--ink-2); font-family: var(--font-mono); font-size: 11.5px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .site-console--all { max-height: 260px; overflow-y: auto; }
+.site-console__line--plain { color: var(--ink-2); }
+.site-console__line--action { color: var(--vscode-textLink-foreground, #3794ff); }
+.site-console__line--warn { color: var(--vscode-charts-yellow, #d29922); }
 .site-add { display: grid; gap: 2px; padding: var(--sp-2) var(--sp-4); border-radius: var(--r-2); background: var(--surface-card); background: color-mix(in srgb, var(--az-blue, #0078d4) 4%, var(--surface-card)); }
 .site-add--focus { outline: 1px solid var(--az-blue, #0078d4); outline-offset: 1px; }
 .site-add__row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--sp-3); padding: var(--sp-1) 0; }
@@ -113,7 +117,7 @@ export interface PendingBuild {
 export interface SitePageFacts {
 	repo: RepoFacts;
 	status: SiteStatus;
-	log: readonly string[];
+	log: readonly LogLine[];
 	/** What the last publish attempt printed, for the second tab of the activity area. */
 	publish: readonly string[];
 	/** Whether the folder the module is pointed at is the site, or merely a folder somebody chose. */
@@ -367,10 +371,20 @@ function changes(state: SitePageFacts): string {
 			title: 'Changes in the clone',
 			desc: 'Everything git reports as different from the last commit, grouped by what wrote it.',
 			actions:
+				button('Refresh', 'temcoLearn.site.refresh', { kind: 'link', mark: 'refresh' }) +
 				button(edits === 0 ? 'Commit and push' : `Commit and push ${plural(edits, 'edit')}`, 'temcoLearn.site.commit', { kind: 'link', mark: 'upload' }) +
 				(disposable.length === 0
 					? ''
-					: button(`Discard ${plural(disposable.length, 'build path')}`, 'temcoLearn.site.discard', { kind: 'link', args: { paths: disposable } }))
+					: button(`Discard ${plural(disposable.length, 'build path')}`, 'temcoLearn.site.discard', { kind: 'link', args: { paths: disposable } })) +
+				// The whole list, edits included — the one act the per-group buttons deliberately do not offer, because a group of
+				// somebody's own work has no bulk discard in its header. It is here, at the top, where it reads as what it is: the
+				// last resort before a pull, and the reason a pull is refused.
+				(repo.changes.length === 0
+					? ''
+					: button(`Discard all ${plural(repo.changes.length, 'path')}`, 'temcoLearn.site.discard', {
+							kind: 'link',
+							args: { paths: repo.changes.map((change) => change.path) }
+						}))
 		}),
 		`<div class="site-changes${state.focus === 'changes' ? ' site-changes--focus' : ''}">${body}</div>`
 	].join('\n');
@@ -497,18 +511,9 @@ export function html(state: SitePageFacts): string {
 					actions: button('Try again', 'temcoLearn.site.start') + button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link' })
 				})
 			: '',
-		// Activity is second, not last: every act on this page writes here, so the answer to "what happened when I pressed
-		// that?" has to be where the press left the eye instead of below four sections about the machine. The outcome of the
-		// act that opened the page is its first line, and the tabs below it are the whole story.
+		// The outcome of the act that opened the page: one line, where the eye already is, with the way to the rest — the log
+		// itself is the last section, so this is what a press leaves behind without a scroll.
 		state.report === undefined ? '' : report(state.report),
-		section({
-			title: 'Activity',
-			desc: 'What a clone, a pull, a build or a server printed in this window, and what the last publish attempt said.',
-			actions:
-				button('Clear', 'temcoLearn.site.clearLog', { kind: 'link' }) +
-				button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link', mark: 'output' })
-		}),
-		activity(state),
 		state.focus === 'changes' ? changesSection : '',
 		state.focus === 'add' ? addsSection : '',
 		section({
@@ -538,22 +543,35 @@ export function html(state: SitePageFacts): string {
 			{ tone: repo.built ? 'ok' : 'warn' }
 		)}</div>`,
 		state.focus === 'add' ? '' : addsSection,
-		state.focus === 'changes' ? '' : changesSection
+		state.focus === 'changes' ? '' : changesSection,
+		// The log is last: it is the evidence, and it is as long as a build. What a press did is said at the top of the page
+		// in one line, so nothing has to be read here to know that something happened.
+		section({
+			title: 'Activity',
+			desc: 'What a clone, a pull, a build or a server printed in this window, and what the last publish attempt said.',
+			actions:
+				button('Clear', 'temcoLearn.site.clearLog', { kind: 'link' }) +
+				button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link', mark: 'output' })
+		}),
+		activity(state)
 	]
 		.filter((part) => part !== '')
 		.join('\n');
 }
 
 /**
- * What an act just did: one line, where the eye already is, above the activity area that holds the detail.
+ * What an act just did: one line under the title, with the way to the log that holds the detail.
  *
- * The lines themselves are not repeated here — the console is directly below, and the same four lines twice reads as two
+ * The lines themselves are not repeated here — they are in the activity area, and the same four lines twice reads as two
  * different things having happened. This is the sentence a person needs ("Pulled 16 commits"), with the tone of it.
  */
 function report(held: Report): string {
-	return `<div class="site-report${held.tone === 'warn' ? ' site-report--warn' : ''}"><span class="site-report__title">${escapeHtml(
-		held.title
-	)}</span></div>`;
+	return [
+		`<div class="site-report${held.tone === 'warn' ? ' site-report--warn' : ''}">`,
+		`<span class="site-report__title">${escapeHtml(held.title)}</span>`,
+		button('Open the full log', 'temcoLearn.site.showLog', { kind: 'link', mark: 'output' }),
+		'</div>'
+	].join('');
 }
 
 /** Where the clone is and what it last did: the facts the title block carries instead of a sentence. */
@@ -580,10 +598,12 @@ const ACTIVITY_LINES = 5;
 /** One tabbed activity area: what the module did here, and what the last publish said. Panes switch without a script. */
 function activity(state: SitePageFacts): string {
 	const output = consoleOf(state.log, 'Nothing has been run in this window yet. A clone, a pull, a build and a server all write here.');
-	const publish = consoleOf(state.publish, 'Nothing has been published from this window yet. The Publishing page runs a publish and writes here.');
+	// The publish pane is a channel's own text, so it carries no tones: every line reads the way it always did.
+	const published: LogLine[] = state.publish.map((text) => ({ text, tone: 'plain' }));
+	const publish = consoleOf(published, 'Nothing has been published from this window yet. The Publishing page runs a publish and writes here.');
 	// The fold is a checkbox and two labels, the way the tabs are radios and two labels: nothing on this page needs a script
 	// to say what it is showing, and a `Show more` that needs one would be the only act here that does.
-	const more = cleanLines(state.log).length > ACTIVITY_LINES || cleanLines(state.publish).length > ACTIVITY_LINES;
+	const more = cleanLines(state.log).length > ACTIVITY_LINES || cleanLines(published).length > ACTIVITY_LINES;
 	const toggle = more
 		? `<label class="site-tabs__toggle" for="site-more"><span class="site-tabs__toggle-more">${icon('chevron-down')}Show more</span><span class="site-tabs__toggle-less">${icon('chevron-down')}Show less</span></label>`
 		: '';
@@ -596,25 +616,33 @@ function activity(state: SitePageFacts): string {
 	)}</div>`;
 }
 
-/** A log as a person should read it: the lines that say something, in the order they were written. */
-function cleanLines(log: readonly string[]): string[] {
-	return log.map(cleanLine).filter((line) => line !== '');
-}
-
 /**
  * The console: the lines as a person should read them, on a background of their own and no box around them.
+ *
+ * Each line keeps the tone it was written with: the module's own sentences ("Set aside two paths", "Pulled sixteen
+ * commits") read as actions, a refusal reads as a warning, and everything a command printed stays quiet. A pull that did
+ * nothing says why in one of those lines, and a wall of the same grey makes it the hardest one to find.
  *
  * Two copies while there is more than a fold's worth: the last five, and the whole log. Only one is drawn — the checkbox
  * above decides which — so the fold costs five duplicated lines rather than a script that measures text.
  */
-function consoleOf(log: readonly string[], empty: string): string {
+function consoleOf(log: readonly LogLine[], empty: string): string {
 	const lines = cleanLines(log);
 	if (lines.length === 0) {
 		return `<p class="az-block__note">${escapeHtml(empty)}</p>`;
 	}
-	const tail = `<pre class="site-console site-console--tail">${escapeHtml(lines.slice(-ACTIVITY_LINES).join('\n'))}</pre>`;
+	const body = (shown: readonly { text: string; tone: Tone }[]): string =>
+		shown.map((line) => `<span class="site-console__line site-console__line--${line.tone}">${escapeHtml(line.text)}</span>`).join('\n');
+	const tail = `<pre class="site-console site-console--tail">${body(lines.slice(-ACTIVITY_LINES))}</pre>`;
 	if (lines.length <= ACTIVITY_LINES) {
 		return tail;
 	}
-	return `${tail}<pre class="site-console site-console--all">${escapeHtml(lines.join('\n'))}</pre>`;
+	return `${tail}<pre class="site-console site-console--all">${body(lines)}</pre>`;
+}
+
+/** A log as a person should read it: the lines that say something, in the order they were written, with their tone. */
+function cleanLines(log: readonly LogLine[]): { text: string; tone: Tone }[] {
+	return log
+		.map((line) => ({ text: cleanLine(line.text), tone: line.tone }))
+		.filter((line) => line.text !== '');
 }
