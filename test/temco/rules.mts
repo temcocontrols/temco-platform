@@ -19,6 +19,7 @@
 // Needs `out/`, so compile first (`npm run test-temco` does). Run from the repository root.
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire, Module } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
@@ -238,6 +239,51 @@ test('a Markdown page is listed without its extension, so it reads like a page a
 				{ href: 'control/inputs', title: 'Inputs', kind: 'md' }
 			]
 		);
+	} finally {
+		rmSync(world.keep, { recursive: true, force: true });
+	}
+});
+
+test('a Markdown build is found by the front page a site reads a version by', async () => {
+	const world = space();
+	try {
+		write(join(world.root, 't3000', 'dist', 'docs', '00-index.md'), markdown('T3000'));
+		write(join(world.root, 't3000', 'dist', 'docs', 'control', 'inputs.md'), markdown('Inputs'));
+		const [build] = await builds.findBuilds();
+		assert.deepEqual({ id: build?.id, title: build?.title }, { id: 't3000', title: 'T3000' }, '`00-index.md` is a front page, not a folder of pages with none');
+	} finally {
+		rmSync(world.keep, { recursive: true, force: true });
+	}
+});
+
+test('the generator\'s own build obeys the site\'s content rules, so a new project is publishable as it stands', () => {
+	const world = space();
+	try {
+		const project = join(world.root, 'guide');
+		write(
+			join(project, 'scripts', 'docs-site.mjs'),
+			readFileSync(join(here, 'extensions', 'temco-projects', 'templates', 'user-guide', 'scripts', 'docs-site.mjs.txt'), 'utf8')
+		);
+		write(join(project, 'package.json'), JSON.stringify({ name: 'Guide', version: '1.0', description: 'A guide to the guide.' }));
+		write(
+			join(project, 'docs', 'help', 'registry.json'),
+			JSON.stringify({ areas: {}, pages: { overview: { title: 'Overview', order: 10 }, 'overview/start': { title: 'Getting Started', order: 20 } } })
+		);
+		write(join(project, 'docs', 'overview.md'), '# Overview\n\nWhere to begin.\n');
+		write(join(project, 'docs', 'overview', 'start.md'), '# Getting going\n\nFirst steps.\n');
+		execFileSync(process.execPath, ['scripts/docs-site.mjs'], { cwd: project, stdio: 'pipe' });
+
+		const built = join(project, 'dist', 'docs');
+		assert.deepEqual(
+			readdirSync(built).filter((name) => /index\.md$/u.test(name)),
+			['00-index.md'],
+			'one front page, under the name the site looks for'
+		);
+		// The site draws a page's title from its front matter, so a body that repeats it as `#` prints the title twice.
+		const prose = (file: string): string => readFileSync(join(built, file), 'utf8').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, '');
+		const offenders = ['00-index.md', 'overview.md', 'overview/start.md'].filter((file) => /^#\s/mu.test(prose(file)));
+		assert.deepEqual(offenders, [], 'no page, the front page included, starts a heading at "#"');
+		assert.match(prose('overview/start.md'), /^## Getting going$/mu, 'a heading that is not the title stays, one level down');
 	} finally {
 		rmSync(world.keep, { recursive: true, force: true });
 	}

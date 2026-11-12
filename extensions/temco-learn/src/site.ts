@@ -271,13 +271,16 @@ export async function buildPages(root: string, under = ''): Promise<SitePage[]> 
 			found.push({ href: next.replace(/\.md$/iu, ''), title: (await titleOf(path.join(root, next))) ?? next, kind: 'md' });
 		}
 	}
-	const first = (page: SitePage): number => (/^index(\.html)?$/iu.test(page.href) ? -1 : 0);
+	const first = (page: SitePage): number => (/^(00-)?index(\.html)?$/iu.test(page.href) ? -1 : 0);
 	return found.sort((one, other) => first(one) - first(other) || one.href.localeCompare(other.href));
 }
 
 /** The name a build gives itself: the `<title>` of its index, or the front matter of a Markdown one. */
 export async function projectNameOf(build: string): Promise<string | undefined> {
-	const title = (await titleOf(path.join(build, 'index.html'))) ?? (await titleOf(path.join(build, 'index.md')));
+	const title =
+		(await titleOf(path.join(build, 'index.html'))) ??
+		(await titleOf(path.join(build, '00-index.md'))) ??
+		(await titleOf(path.join(build, 'index.md')));
 	return title === undefined ? undefined : shortName(title);
 }
 

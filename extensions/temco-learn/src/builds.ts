@@ -47,8 +47,9 @@ export async function findBuilds(): Promise<Build[]> {
 	const found: Build[] = [];
 	for (const root of roots) {
 		for (const folder of await buildFolders(root)) {
-			// A build names its front page one of two ways: HTML a generator rendered, or the Markdown a project wrote.
-			if (!fs.existsSync(path.join(folder, 'index.html')) && !fs.existsSync(path.join(folder, 'index.md'))) {
+			// A build names its front page one of three ways: HTML a generator rendered, the Markdown a project wrote, or the
+			// `00-` name a site reads a version by, which sorts the front page first wherever the folder is listed by name.
+			if (!['index.html', '00-index.md', 'index.md'].some(name => fs.existsSync(path.join(folder, name)))) {
 				continue;
 			}
 			const fallback = path.basename(path.dirname(path.dirname(folder)));

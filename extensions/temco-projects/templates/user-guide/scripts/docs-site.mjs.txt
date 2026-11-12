@@ -34,7 +34,9 @@ for (const page of pages) {
 	writeFileSync(file, frontMatter(page) + withoutTitle(body, page.title ?? page.id));
 }
 
-writeFileSync(join(out, 'index.md'), landing(pages));
+// `00-index.md` and not `index.md`: the site serves a version from one file it knows by that name, and the `00-` keeps
+// the front page first wherever the folder is listed by name.
+writeFileSync(join(out, '00-index.md'), landing(pages));
 
 // The reading order, as a file: a folder walk cannot know that "6.1 Graphic Screens" comes before "6.2 Programs", and
 // the order lives in the registry rather than in the pages. This is the only place it is written down.
@@ -84,20 +86,32 @@ function withoutTitle(body, title) {
 	while (lines.length > 0 && lines[0].trim() === '') {
 		lines.shift();
 	}
-	const first = lines[0] ?? '';
-	if (/^#\s+/u.test(first) && first.replace(/^#\s+/u, '').trim() === String(title).trim()) {
+	// The site reads the title from front matter, so a body that opens with `#` prints it twice. A heading that says the
+	// same thing goes; one that says something else becomes the page's first section instead of a second H1.
+	const heading = /^#\s+(?<text>.*)$/u.exec(lines[0] ?? '');
+	if (heading !== null) {
 		lines.shift();
 		while (lines.length > 0 && lines[0].trim() === '') {
 			lines.shift();
+		}
+		const text = (heading.groups?.text ?? '').trim();
+		if (text !== '' && !sameText(text, title)) {
+			lines.unshift('## ' + text, '');
 		}
 	}
 	return lines.join('\n').replace(/\s*$/u, '') + '\n';
 }
 
+/** Whether two headings are the same words, so the second one is a repeat: case and spacing are the writer's, not a difference. */
+function sameText(left, right) {
+	const flatten = (text) => String(text).replace(/\s+/gu, ' ').trim().toLowerCase();
+	return flatten(left) === flatten(right);
+}
+
 /** The build's front page: what is here, in the order a reader would walk it. */
 function landing(pages) {
 	const name = String(pkg.name ?? 'Documentation');
-	const lines = ['---', 'title: ' + JSON.stringify(name), 'order: 0', '---', '', '# ' + name, ''];
+	const lines = ['---', 'title: ' + JSON.stringify(name), 'order: 0', '---', ''];
 	if (typeof pkg.description === 'string' && pkg.description !== '') {
 		lines.push(pkg.description, '');
 	}
