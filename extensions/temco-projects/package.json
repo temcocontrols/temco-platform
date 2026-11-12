@@ -45,6 +45,12 @@
         "icon": "$(new-folder)"
       },
       {
+        "command": "temcoProjects.discover",
+        "title": "Find Projects on Disk",
+        "category": "Temco",
+        "icon": "$(search)"
+      },
+      {
         "command": "temcoProjects.returnToNewProject",
         "title": "Back to the New Project Form",
         "icon": "$(arrow-left)"
@@ -115,6 +121,11 @@
           "group": "navigation@0"
         },
         {
+          "command": "temcoProjects.discover",
+          "when": "view == temcoProjects.projects",
+          "group": "navigation@1"
+        },
+        {
           "command": "temcoProjects.removeAllProjects",
           "when": "view == temcoProjects.projects",
           "group": "navigation@2"
@@ -160,6 +171,12 @@
           "command": "temcoProjects.removeProject",
           "when": "view == temcoProjects.projects && viewItem =~ /^project(\\.current)?$/",
           "group": "2_acts@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "temcoProjects.discover",
+          "when": "view != temcoProjects.projects"
         }
       ]
     }

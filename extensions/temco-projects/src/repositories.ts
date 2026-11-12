@@ -48,6 +48,7 @@ interface TemcoRepositoriesApi {
 	readonly offeredScripts: readonly OfferedScript[];
 	tree(source: RepositorySource): Promise<{ files: RepositoryFile[]; note?: string } | { error: string }>;
 	readMaterials(source: RepositorySource, files: readonly string[], limit?: number): Promise<RepositoryMaterial>;
+	projectsRoot(): string;
 }
 
 const extension = vscode.extensions.getExtension<TemcoRepositoriesApi>(REPOSITORIES_EXTENSION_ID);
@@ -71,3 +72,11 @@ export const repositoryMaterial = (
 	files: readonly string[],
 	limit?: number
 ): Promise<RepositoryMaterial> => api.readMaterials(source, files, limit);
+
+/**
+ * The folder projects are made in — the repositories module owns the rule, this module only asks.
+ *
+ * A project that exists on disk but not in the catalog is found by looking here, so the answer has to be the same
+ * one the create form used. It is a path and nothing more: nothing is created by asking.
+ */
+export const projectsRoot = (): string => api.projectsRoot();

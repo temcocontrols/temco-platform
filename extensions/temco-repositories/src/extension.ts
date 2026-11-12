@@ -29,7 +29,7 @@ import { restore } from './ui';
 import { OFFERED_SCRIPTS, OfferedScript } from './scripts';
 import { registerSourcesView } from './sourcesView';
 import { Catalog, selection, slugOf } from './store';
-import { cloneFolder, hasClone, registerWorkareaCommands } from './workarea';
+import { cloneFolder, hasClone, projectsRoot, registerWorkareaCommands } from './workarea';
 
 /** What this module offers the rest of the platform. */
 export interface TemcoRepositoriesApi {
@@ -43,6 +43,13 @@ export interface TemcoRepositoriesApi {
 	readMaterials(source: RepositorySource, files: readonly string[], limit?: number): Promise<Material>;
 	/** The repository's own documentation scripts: a vocabulary, not a runner. */
 	readonly offeredScripts: readonly OfferedScript[];
+	/**
+	 * The folder a project's own folder is made in: `temcoRepositories.projectsFolder`, or `<working area>/projects`.
+	 *
+	 * Published because the module that *lists* projects is not this one, and a second copy of this rule is a second
+	 * answer to "where are the projects". It is a path, not a state: reading it creates nothing.
+	 */
+	projectsRoot(): string;
 }
 
 export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi {
@@ -210,6 +217,7 @@ export function activate(context: vscode.ExtensionContext): TemcoRepositoriesApi
 		tree: (source) => sourceTree(context, source),
 		readMaterials: (source, files, limit) => readMaterials(context, source, files, limit),
 		offeredScripts: OFFERED_SCRIPTS,
+		projectsRoot: () => projectsRoot(),
 	};
 }
 

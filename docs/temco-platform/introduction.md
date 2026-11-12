@@ -681,6 +681,7 @@ The buttons you will go looking for, grouped by where they live: the activity ba
 | Button | Where | Command |
 |---|---|---|
 | **Create a Project** | `Projects` view title `+` | `temcoProjects.newProject` |
+| **Find Projects on Disk** | `Projects` view title 🔍, or the row naming the folders it found | `temcoProjects.discover` |
 | **Open the Project Page** | `Projects` view title | `temcoProjects.openProjectPage` |
 | **Remove All Projects** | `Projects` view title | `temcoProjects.removeAllProjects` |
 | **Start** (open a project) | right-click a project row | `temcoProjects.openProject` |

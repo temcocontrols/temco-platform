@@ -14,9 +14,9 @@
 // the module changes.
 
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire, Module } from 'node:module';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { suite, standalone } from './harness.mts';
@@ -150,6 +150,19 @@ const build = load(join(out('temco-projects'), 'projectBuild.js')) as Build;
 const flow = load(join(out('temco-projects'), 'projectFlow.js')) as Flow;
 const versions = load(join(out('temco-projects'), 'versionName.js')) as Versions;
 
+interface Scan {
+	findProjects(root: string, slugOf: (text: string) => string): readonly {
+		folder: string;
+		slug: string;
+		name: string;
+		version?: string;
+	}[];
+	PROJECT_MARKER: string;
+}
+
+const scan = load(join(out('temco-projects'), 'projectScan.js')) as Scan;
+const storeNames = load(join(out('temco-store'), 'names.js')) as { slugOf(text: string): string };
+
 const group = suite();
 const test = (name: string, run: () => Promise<void> | void): void => group.test(name, run);
 
@@ -269,6 +282,52 @@ test('a version is a folder and an address, so the rules that name it live in on
 test('the address a version gives a project is the one the form shows while it is typed', () => {
 	assert.equal(versions.versionAddress('t3000-platform', '1.0'), '/t3000-platform/1.0/');
 	assert.equal(versions.versionAddress('t3000', '2026.01'), '/t3000/2026.01/');
+});
+
+// ---------- what counts as a project on disk ----------
+
+test('a folder is a project when it carries the registry, and the scan names it the way the create form would', () => {
+	// A real folder tree, because the rule is about what is on disk: the catalog is a list of rows, and this is the
+	// only thing that says which rows *should* exist.
+	const root = mkdtempSync(join(tmpdir(), 'temco-scan-'));
+	writeFileSync(join(root, 'not-a-project.txt'), 'a file in the projects folder is not a project');
+	mkdirSync(join(root, 'empty-folder'), { recursive: true });
+	mkdirSync(join(root, 'docs-only', 'docs'), { recursive: true });
+	mkdirSync(join(root, '.hidden', 'docs', 'help'), { recursive: true });
+	writeFileSync(join(root, '.hidden', 'docs', 'help', 'registry.json'), '{}');
+
+	// One with a manifest: the manifest names it and versions it.
+	mkdirSync(join(root, 'proj-a', 'docs', 'help'), { recursive: true });
+	writeFileSync(join(root, 'proj-a', 'docs', 'help', 'registry.json'), '{}');
+	writeFileSync(join(root, 'proj-a', 'package.json'), JSON.stringify({ name: 'T3000', version: '2026.01' }));
+
+	// One without: the folder's own name is the name, and the version is left to the form's default.
+	mkdirSync(join(root, 'tstat8', 'docs', 'help'), { recursive: true });
+	writeFileSync(join(root, 'tstat8', 'docs', 'help', 'registry.json'), '{}');
+
+	// One whose manifest is not JSON: still a project, still named by its folder.
+	mkdirSync(join(root, 'broken-manifest', 'docs', 'help'), { recursive: true });
+	writeFileSync(join(root, 'broken-manifest', 'docs', 'help', 'registry.json'), '{}');
+	writeFileSync(join(root, 'broken-manifest', 'package.json'), '{ not json');
+
+	try {
+		const found = scan.findProjects(root, storeNames.slugOf);
+		assert.deepEqual(
+			found.map((project) => ({ slug: project.slug, name: project.name, version: project.version })),
+			[
+				{ slug: 'broken-manifest', name: 'broken-manifest', version: undefined },
+				{ slug: 't3000', name: 'T3000', version: '2026.01' },
+				{ slug: 'tstat8', name: 'tstat8', version: undefined }
+			],
+			'the marker decides, the manifest only names'
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test('a projects folder that is not there yet is a first run, not a failure', () => {
+	assert.deepEqual(scan.findProjects(join(tmpdir(), 'temco-scan-does-not-exist'), storeNames.slugOf), []);
 });
 
 // ---------- the cases ----------

@@ -51,7 +51,7 @@ Editor:
 |---|---|---|---|
 | Start from nothing | local project | **have it** (Basics step) | — |
 | Start from a template | templates in all languages | no | a template is a repository-shaped skeleton; cheap and high value |
-| Start from existing material | Word, RTF, CHM, HLP, HTML, folder | no | **the biggest gap** |
+| Start from existing material | Word, RTF, CHM, HLP, HTML, folder | **a folder the platform can already read is now adoptable** (`temcoProjects.discover`); Word, RTF, CHM, HLP and loose HTML are still not | still **the biggest gap**, and smaller by one case |
 | Shared / checkout | server + checkout | git remote + clone exists in `temco-repositories`, not in the project flow | map to git, do not build a server |
 | Topic tree editing | drag, renumber, nest | tree view + `order` field | add reorder → `order` write |
 | Per-topic properties | full panel | registry fields, but no form | **form over `registryEdit`** |

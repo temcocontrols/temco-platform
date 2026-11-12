@@ -15,6 +15,7 @@
 // left behind, never by an exit code, and the deploying form of the help build is never invoked.
 
 import * as vscode from 'vscode';
+import { registerDiscoverCommand } from './discover';
 import { registerProjectCommands } from './project';
 import { registerProjectBuildCommands } from './projectBuild';
 import { selection } from './store';
@@ -32,8 +33,11 @@ export function activate(context: vscode.ExtensionContext): TemcoProjectsApi {
 	context.subscriptions.push(output, changed);
 	const refresh = (): void => changed.fire();
 
-	// The project's own acts: create, edit, remove, work on one, add a source to it.
-	registerProjectCommands(context, selection, refresh);
+	// The project's own acts: create, edit, remove, work on one, add a source to it. The redraw it hands back is the
+	// one that repaints the list, which is why it is passed on rather than the module's own signal.
+	const projects = registerProjectCommands(context, selection, refresh);
+	// Finding the projects that exist on disk but not in the catalog: a folder made by another build, or copied in.
+	registerDiscoverCommand(context, projects.redraw);
 	// Building a project's outputs, invoked in the source repository that owns the script.
 	registerProjectBuildCommands(context, output);
 

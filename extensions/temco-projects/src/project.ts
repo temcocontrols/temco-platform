@@ -26,7 +26,7 @@ export function registerProjectCommands(
   context: vscode.ExtensionContext,
   selection: Selection,
   refresh: () => void
-): void {
+): { redraw: () => void } {
   // The Dashboard's list of projects. A row opens the page; the two inline actions are on the row's context menu.
   const list = new ProjectList(context);
   const tree = vscode.window.createTreeView('temcoProjects.projects', { treeDataProvider: list });
@@ -118,6 +118,10 @@ export function registerProjectCommands(
     ),
     vscode.commands.registerCommand('temcoProjects.clearProject', () => selection.select(undefined))
   );
+
+  // Handed back so a command registered by another file — the discovery — repaints the tree it changed, rather than
+  // firing only the signal the documentation panel listens to and leaving the list showing the row it just removed.
+  return { redraw };
 }
 
 /**

@@ -7,7 +7,9 @@
 
 import * as fs from 'fs';
 import * as vscode from 'vscode';
+import { scanProjects } from './discover';
 import { Catalog, DocumentRow, selection } from './store';
+import { projectsRoot } from './repositories';
 
 /** A project row, carrying the record it was drawn from so its children can be read when it opens. */
 interface ProjectNode extends vscode.TreeItem {
@@ -40,15 +42,16 @@ export class ProjectList implements vscode.TreeDataProvider<vscode.TreeItem> {
 			// Held in a const of its own: the folder check runs inside the `map` callback below, where the narrowing
 			// of a `let` that was only just assigned does not survive.
 			const store = catalog;
+			const items: vscode.TreeItem[] = [];
 			if (rows.length === 0) {
 				const empty = new vscode.TreeItem('No project yet', vscode.TreeItemCollapsibleState.None);
 				empty.iconPath = new vscode.ThemeIcon('plus');
 				empty.description = 'create one to start';
 				empty.tooltip = 'A project is what a documentation set is managed as: it cites sources and produces a site.';
 				empty.command = { command: 'temcoProjects.newProject', title: 'New Project' };
-				return [empty];
+				items.push(empty);
 			}
-			return rows.map((row) => {
+			items.push(...rows.map((row) => {
 				// The row opens the project page; the chevron opens what the row cannot say in a 200px column —
 				// the facts about the project, and the three things that can be done to it. The one being worked on is
 				// the one whose chevron is already open: the side bar should answer "where am I" before it is asked.
@@ -67,7 +70,25 @@ export class ProjectList implements vscode.TreeDataProvider<vscode.TreeItem> {
 				project.contextValue = current ? 'project.current' : 'project';
 				project.command = { command: 'temcoProjects.openProjectPage', title: 'Open the Project', arguments: [row.slug] };
 				return project;
-			});
+			}));
+			// A folder the platform can read but the catalog has no row for. The list is rows, so a project made
+			// another way — copied in, made by an earlier build — is invisible until it is named: this row names it
+			// and offers the one act that records it, rather than writing rows at start-up that nobody asked for.
+			const known = new Set(rows.map((row) => row.slug));
+			const unknown = scanProjects(projectsRoot()).filter((project) => !known.has(project.slug));
+			if (unknown.length > 0) {
+				const discover = new vscode.TreeItem(
+					`${unknown.length} project${unknown.length === 1 ? '' : 's'} on disk, not in the catalog`,
+					vscode.TreeItemCollapsibleState.None
+				);
+				discover.iconPath = new vscode.ThemeIcon('search');
+				discover.description = 'find them';
+				discover.tooltip = `${unknown.map((project) => project.folder).join('\n')}`;
+				discover.command = { command: 'temcoProjects.discover', title: 'Find Projects on Disk' };
+				discover.contextValue = 'project.unregistered';
+				items.push(discover);
+			}
+			return items;
 		} catch {
 			// A catalog that cannot be opened is not a list of nothing to say: the Dashboard has other rows, and the
 			// projects page is where the reason is shown.
